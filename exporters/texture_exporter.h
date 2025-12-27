@@ -8,6 +8,7 @@ class TextureExporter : public ResourceExporter {
 	Error _convert_tex(const String &p_path, const String &p_dst, bool lossy, String &image_format, Ref<ExportReport> report = nullptr);
 	Error _convert_atex(const String &p_path, const String &p_dst, bool lossy, String &image_format, Ref<ExportReport> report = nullptr);
 	Error _convert_bitmap(const String &p_path, const String &p_dst, bool lossy, Ref<ExportReport> report = nullptr);
+	Error _convert_svg(const String &p_path, const String &p_dst, Ref<ExportReport> report = nullptr);
 
 	static Ref<Image> load_image_from_bitmap(const String p_path, Error *r_err);
 	Error _convert_3d(const String &p_path, const String &p_dst, bool lossy, String &image_format, Ref<ExportReport> report = nullptr);
@@ -24,5 +25,6 @@ public:
 	virtual void get_handled_importers(List<String> *out) const override;
 	virtual String get_name() const override;
 	virtual String get_default_export_extension(const String &res_path) const override;
+	virtual Vector<String> get_export_extensions(const String &res_path) const override;
 	virtual Error test_export(const Ref<ExportReport> &export_report, const String &original_project_dir) const override;
 };

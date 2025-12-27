@@ -4,6 +4,7 @@
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
 #include "core/variant/variant.h"
+#include "core/version_generated.gen.h"
 #include "exporters/export_report.h"
 #include "exporters/obj_exporter.h"
 #include "external/tinygltf/tiny_gltf.h"
@@ -12,25 +13,28 @@
 #include "modules/gltf/structures/gltf_node.h"
 #include "modules/regex/regex.h"
 #include "scene/3d/mesh_instance_3d.h"
+#include "scene/3d/navigation/navigation_region_3d.h"
 #include "scene/3d/occluder_instance_3d.h"
+#include "scene/3d/physics/area_3d.h"
 #include "scene/3d/physics/rigid_body_3d.h"
 #include "scene/3d/physics/static_body_3d.h"
 #include "scene/resources/3d/box_shape_3d.h"
 #include "scene/resources/3d/capsule_shape_3d.h"
 #include "scene/resources/3d/cylinder_shape_3d.h"
 #include "scene/resources/3d/sphere_shape_3d.h"
+#include "scene/resources/surface_tool.h"
 #include "scene/resources/texture.h"
 #include "utility/common.h"
 #include "utility/gdre_config.h"
 #include "utility/gdre_logger.h"
 #include "utility/gdre_settings.h"
 
-#include "core/crypto/crypto_core.h"
 #include "core/error/error_list.h"
 #include "core/error/error_macros.h"
 #include "main/main.h"
 #include "scene/resources/compressed_texture.h"
 #include "scene/resources/packed_scene.h"
+#include "servers/navigation_3d/navigation_server_3d.h"
 #include "utility/task_manager.h"
 
 #ifndef MAKE_GLTF_COPY
@@ -676,6 +680,8 @@ String GLBExporterInstance::add_errors_to_report(Error p_err, const String &err_
 		err_message = "Export was cancelled";
 	} else if (p_err == ERR_TIMEOUT) {
 		err_message = "Export timed out";
+	} else if (p_err == OK) {
+		err_message = "";
 	}
 	if (!err_msg.is_empty()) {
 		err_message += ":\n  " + err_msg;
@@ -685,6 +691,10 @@ String GLBExporterInstance::add_errors_to_report(Error p_err, const String &err_
 	}
 	error_statement = err_message;
 	Vector<String> errors;
+	if (scene_loading_error_messages.size() > 0) {
+		errors.append("** Errors during scene loading:");
+		errors.append_array(scene_loading_error_messages);
+	}
 	if (scene_instantiation_error_messages.size() > 0) {
 		errors.append("** Errors during scene instantiation:");
 		errors.append_array(scene_instantiation_error_messages);
@@ -718,8 +728,9 @@ String GLBExporterInstance::add_errors_to_report(Error p_err, const String &err_
 			}
 		}
 		report->set_message(error_statement + "\n");
-		report->append_message_detail({ "Dependencies:" });
-		report->append_message_detail(dependency_resolution_list);
+		Dictionary extra_info = report->get_extra_info();
+		extra_info["dependencies"] = dependency_resolution_list;
+		report->set_extra_info(extra_info);
 		report->set_error(p_err);
 		report->append_error_messages(errors);
 	}
@@ -763,15 +774,14 @@ void GLBExporterInstance::set_cache_res(const dep_info &info, const Ref<Resource
 }
 
 String GLBExporterInstance::get_name_res(const Dictionary &dict, const Ref<Resource> &res, int64_t idx) {
-	String name = dict.get("name", String());
+	String name;
+	name = dict.get("name", String());
 	if (name.is_empty()) {
 		name = res->get_name();
 		if (name.is_empty()) {
 			Ref<ResourceInfo> info = ResourceInfo::get_info_from_resource(res);
 			if (info.is_valid() && !info->resource_name.is_empty()) {
 				name = info->resource_name;
-			} else {
-				// name = res->get_class() + "_" + String::num_int64(idx);
 			}
 		}
 	}
@@ -880,6 +890,7 @@ void GLBExporterInstance::_initial_set(const String &p_src_path, Ref<ExportRepor
 }
 
 Error GLBExporterInstance::_load_deps() {
+	other_error_messages.append_array(_get_logged_error_messages());
 	get_deps_recursive(source_path, get_deps_map);
 
 	for (auto &E : get_deps_map) {
@@ -949,6 +960,7 @@ Error GLBExporterInstance::_load_deps() {
 		}
 		if (!FileAccess::exists(info.remap) && !FileAccess::exists(info.dep)) {
 			if (ignore_missing_dependencies) {
+				missing_dependencies.push_back(info.dep);
 				WARN_PRINT(vformat("%s: Dependency %s -> %s does not exist.", source_path, info.dep, info.remap));
 				continue;
 			}
@@ -983,6 +995,7 @@ Error GLBExporterInstance::_load_deps() {
 							ResourceFormatLoader::CACHE_MODE_IGNORE); // not ignore deep, we want to reuse dependencies if they exist
 					if (err || texture.is_null()) {
 						if (ignore_missing_dependencies) {
+							missing_dependencies.push_back(info.dep);
 							WARN_PRINT(vformat("%s: Dependency %s:%s failed to load.", source_path, info.dep, info.remap));
 							continue;
 						}
@@ -1029,6 +1042,7 @@ Error GLBExporterInstance::_load_deps() {
 		report->set_loss_type(ImportInfo::STORED_LOSSY);
 	}
 
+	scene_loading_error_messages.append_array(_get_logged_error_messages());
 	return OK;
 }
 
@@ -1093,9 +1107,9 @@ Dictionary get_default_node_options() {
 
 	// INTERNAL_IMPORT_CATEGORY_MESH_3D_NODE
 	dict["generate/physics"] = false;
-	dict["generate/navmesh"] = 0;
-	dict["physics/body_type"] = 0;
-	dict["physics/shape_type"] = 7;
+	dict["generate/navmesh"] = SceneExporterEnums::NAVMESH_DISABLED;
+	dict["physics/body_type"] = SceneExporterEnums::BODY_TYPE_STATIC;
+	dict["physics/shape_type"] = SceneExporterEnums::SHAPE_TYPE_AUTOMATIC;
 	dict["physics/physics_material_override"] = Variant();
 	dict["physics/layer"] = 1;
 	dict["physics/mask"] = 1;
@@ -1134,7 +1148,7 @@ Dictionary get_default_node_options() {
 	dict["primitive/position"] = Vector3();
 	dict["primitive/rotation"] = Vector3();
 
-	dict["generate/occluder"] = 0;
+	dict["generate/occluder"] = SceneExporterEnums::OCCLUDER_DISABLED;
 	dict["occluder/simplification_distance"] = 0.1f;
 
 	// animation node
@@ -1157,20 +1171,55 @@ Dictionary get_default_node_options() {
 	return dict;
 }
 
-Dictionary get_node_options(Node *p_node) {
+bool is_auto_generated_node(Node *p_node) {
+	ERR_FAIL_NULL_V(p_node, false);
+	RigidBody3D *parent_rigid_body = Object::cast_to<RigidBody3D>(p_node);
+	if (parent_rigid_body) {
+		for (auto &child : p_node->get_children()) {
+			if (Object::cast_to<MeshInstance3D>(child)) {
+				return true;
+			}
+		}
+	}
+	Node *parent = p_node->get_parent();
+	Node *parent_parent = parent ? parent->get_parent() : nullptr;
+	if (parent && p_node->get_owner() != parent->get_owner()) {
+		parent_parent = nullptr;
+	}
+	bool parent_is_mesh_instance = parent ? !!Object::cast_to<MeshInstance3D>(parent) : false;
+	bool parent_is_root_and_node3d = parent && parent_parent == nullptr && parent->get_class() == "Node3D";
+	if (Object::cast_to<StaticBody3D>(p_node) && (!parent || parent_is_root_and_node3d || parent_is_mesh_instance || Object::cast_to<Area3D>(parent))) {
+		return true;
+	}
+	if (!parent || parent_is_mesh_instance || parent_is_root_and_node3d) {
+		if (Object::cast_to<NavigationRegion3D>(p_node)) {
+			return true;
+		}
+		if (Object::cast_to<OccluderInstance3D>(p_node)) {
+			return true;
+		}
+	}
+	if (parent && Object::cast_to<CollisionShape3D>(p_node)) {
+		if (Object::cast_to<Area3D>(parent)) {
+			return true;
+		}
+		return is_auto_generated_node(parent);
+	}
+	return false;
+}
+
+Dictionary get_node_options(Node *p_node, Node *original_node = nullptr) {
+	ERR_FAIL_NULL_V(p_node, Dictionary());
 	Dictionary node_options_dict = Dictionary();
 
 	MeshInstance3D *mesh_instance = Object::cast_to<MeshInstance3D>(p_node);
 	AnimationPlayer *animation_player = Object::cast_to<AnimationPlayer>(p_node);
+	Skeleton3D *skeleton = Object::cast_to<Skeleton3D>(p_node);
 	Ref<Script> script = p_node->get_script();
-	if (!mesh_instance && !animation_player) {
+	if (!mesh_instance && !animation_player && !skeleton && !is_auto_generated_node(p_node)) {
 		String type_name;
 		if (script.is_valid()) {
 			type_name = script->get_global_name();
-			// TODO: fix FakeScript to not put the path in the global name if it doesn't have a class_name
-			if (type_name.begins_with("res://")) {
-				type_name = "";
-			}
 		}
 		if (type_name.is_empty()) {
 			type_name = p_node->get_class();
@@ -1210,21 +1259,35 @@ Dictionary get_node_options(Node *p_node) {
 			body_type = SceneExporterEnums::BODY_TYPE_DYNAMIC;
 		}
 		for (auto &child : p_node->get_children()) {
-			if (Object::cast_to<StaticBody3D>(child)) {
-				auto static_body = Object::cast_to<StaticBody3D>(child);
+			if (auto static_body = Object::cast_to<StaticBody3D>(child); static_body) {
 				physics_body_node = static_body;
 				physics_material_override = static_body->get_physics_material_override();
 				body_type = SceneExporterEnums::BODY_TYPE_STATIC;
 				mesh_physics_mode = SceneExporterEnums::MESH_PHYSICS_MESH_AND_STATIC_COLLIDER;
 			}
 			// navmesh
-			if (Object::cast_to<NavigationMesh>(child)) {
+			if (auto navmesh = Object::cast_to<NavigationRegion3D>(child); navmesh) {
 				navmesh_mode = SceneExporterEnums::NAVMESH_MESH_AND_NAVMESH;
 			}
 			// occluder
 			if (auto occluder_instance = Object::cast_to<OccluderInstance3D>(child); occluder_instance) {
 				occlusion_simplification_distance = occluder_instance->get_bake_simplification_distance();
 				occluder_mode = SceneExporterEnums::OCCLUDER_MESH_AND_OCCLUDER;
+			}
+		}
+
+		if (original_node) {
+			if (auto area_3d = Object::cast_to<Area3D>(original_node); area_3d) {
+				mesh_physics_mode = SceneExporterEnums::MESH_PHYSICS_AREA_ONLY;
+			} else {
+				if (auto navigation_region = Object::cast_to<NavigationRegion3D>(original_node); navigation_region) {
+					navmesh_mode = SceneExporterEnums::NAVMESH_NAVMESH_ONLY;
+				} else if (auto occluder_instance = Object::cast_to<OccluderInstance3D>(original_node); occluder_instance) {
+					occluder_mode = SceneExporterEnums::OCCLUDER_OCCLUDER_ONLY;
+				}
+				if (mesh_physics_mode == SceneExporterEnums::MESH_PHYSICS_MESH_AND_STATIC_COLLIDER) {
+					mesh_physics_mode = SceneExporterEnums::MESH_PHYSICS_STATIC_COLLIDER_ONLY;
+				}
 			}
 		}
 
@@ -1235,35 +1298,35 @@ Dictionary get_node_options(Node *p_node) {
 		if (physics_body_node) {
 			physics_layer_bits = physics_body_node->get_collision_layer();
 			physics_mask_bits = physics_body_node->get_collision_mask();
-			TypedArray<Node> physics_nodes = p_node->find_children("*", "CollisionObject3D");
+			TypedArray<Node> physics_nodes = physics_body_node->find_children("*", "CollisionShape3D", true);
 			if (physics_nodes.size() > 1) {
 				// easy, it's decomposing convex
 				shape_type = SceneExporterEnums::SHAPE_TYPE_DECOMPOSE_CONVEX;
 			} else if (physics_nodes.size() == 1) {
-				CollisionObject3D *physics_node = Object::cast_to<CollisionObject3D>(physics_nodes[0]);
+				CollisionShape3D *physics_node = Object::cast_to<CollisionShape3D>(physics_nodes[0]);
 				if (physics_node) {
-					auto shape = physics_node->get("shape");
-					if (auto convex_shape = Object::cast_to<ConvexPolygonShape3D>(shape); convex_shape) {
+					auto shape = physics_node->get_shape();
+					if (Ref<ConvexPolygonShape3D> convex_shape = shape; convex_shape.is_valid()) {
 						shape_type = SceneExporterEnums::SHAPE_TYPE_SIMPLE_CONVEX;
-					} else if (auto concave_shape = Object::cast_to<ConcavePolygonShape3D>(shape); concave_shape) {
+					} else if (Ref<ConcavePolygonShape3D> concave_shape = shape; concave_shape.is_valid()) {
 						shape_type = SceneExporterEnums::SHAPE_TYPE_TRIMESH;
-					} else if (auto box_shape = Object::cast_to<BoxShape3D>(shape); box_shape) {
+					} else if (Ref<BoxShape3D> box_shape = shape; box_shape.is_valid()) {
 						shape_type = SceneExporterEnums::SHAPE_TYPE_BOX;
 						primtive_options_dict["primitive/size"] = box_shape->get_size();
 						primtive_options_dict["primitive/position"] = physics_node->get_position();
 						primtive_options_dict["primitive/rotation"] = physics_node->get_rotation();
-					} else if (auto sphere_shape = Object::cast_to<SphereShape3D>(shape); sphere_shape) {
+					} else if (Ref<SphereShape3D> sphere_shape = shape; sphere_shape.is_valid()) {
 						shape_type = SceneExporterEnums::SHAPE_TYPE_SPHERE;
 						primtive_options_dict["primitive/radius"] = sphere_shape->get_radius();
 						primtive_options_dict["primitive/position"] = physics_node->get_position();
 						primtive_options_dict["primitive/rotation"] = physics_node->get_rotation();
-					} else if (auto cylinder_shape = Object::cast_to<CylinderShape3D>(shape); cylinder_shape) {
+					} else if (Ref<CylinderShape3D> cylinder_shape = shape; cylinder_shape.is_valid()) {
 						shape_type = SceneExporterEnums::SHAPE_TYPE_CYLINDER;
 						primtive_options_dict["primitive/height"] = cylinder_shape->get_height();
 						primtive_options_dict["primitive/radius"] = cylinder_shape->get_radius();
 						primtive_options_dict["primitive/position"] = physics_node->get_position();
 						primtive_options_dict["primitive/rotation"] = physics_node->get_rotation();
-					} else if (auto capsule_shape = Object::cast_to<CapsuleShape3D>(shape); capsule_shape) {
+					} else if (Ref<CapsuleShape3D> capsule_shape = shape; capsule_shape.is_valid()) {
 						shape_type = SceneExporterEnums::SHAPE_TYPE_CAPSULE;
 						primtive_options_dict["primitive/height"] = capsule_shape->get_height();
 						primtive_options_dict["primitive/radius"] = capsule_shape->get_radius();
@@ -1304,6 +1367,10 @@ Dictionary get_node_options(Node *p_node) {
 			node_options_dict["occluder/simplification_distance"] = occlusion_simplification_distance;
 		}
 	}
+	// AnimationPlayer options modify the imported animations, they all have to do with optimizing and culling tracks,
+	// so we want the default options.
+	// Skeleton3D options modify the imported skeleton and it will be exported according to those modifications
+	// e.g. a retargeted skeleton will be exported with the retargeted bones, so we want the default options so as to leave it as is.
 
 	return node_options_dict;
 }
@@ -1319,21 +1386,95 @@ NodePath get_node_path(Node *p_node) {
 	}
 
 	path.reverse();
+	if (path.is_empty()) {
+		return NodePath(".");
+	}
 
 	return NodePath(path, true);
 }
 
-void GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
+// disabled in debug builds, so we have to copy-and-paste it here.
+Ref<ArrayMesh> get_nav_array_debug_mesh(const Ref<NavigationMesh> navmesh) {
+	Ref<ArrayMesh> debug_mesh;
+	debug_mesh.instantiate();
+	Vector<Vector3> vertices = navmesh->get_vertices();
+
+	if (vertices.is_empty()) {
+		return debug_mesh;
+	}
+
+	int polygon_count = navmesh->get_polygon_count();
+
+	if (polygon_count < 1) {
+		// no face, no play
+		return debug_mesh;
+	}
+
+	// build geometry face surface
+	Vector<Vector3> face_vertex_array;
+	face_vertex_array.resize(polygon_count * 3);
+
+	for (int i = 0; i < polygon_count; i++) {
+		Vector<int> polygon = navmesh->get_polygon(i);
+
+		face_vertex_array.push_back(vertices[polygon[0]]);
+		face_vertex_array.push_back(vertices[polygon[1]]);
+		face_vertex_array.push_back(vertices[polygon[2]]);
+	}
+
+	Array face_mesh_array;
+	face_mesh_array.resize(Mesh::ARRAY_MAX);
+	face_mesh_array[Mesh::ARRAY_VERTEX] = face_vertex_array;
+
+	// if enabled add vertex colors to colorize each face individually
+	static constexpr bool enabled_geometry_face_random_color = false;
+	static const Color debug_navigation_geometry_face_color = Color(0.5, 1.0, 1.0, 0.4);
+	if (enabled_geometry_face_random_color) {
+		Color polygon_color = debug_navigation_geometry_face_color;
+
+		Vector<Color> face_color_array;
+		face_color_array.resize(polygon_count * 3);
+
+		for (int i = 0; i < polygon_count; i++) {
+			polygon_color = debug_navigation_geometry_face_color * (Color(Math::randf(), Math::randf(), Math::randf()));
+
+			face_color_array.push_back(polygon_color);
+			face_color_array.push_back(polygon_color);
+			face_color_array.push_back(polygon_color);
+		}
+		face_mesh_array[Mesh::ARRAY_COLOR] = face_color_array;
+	}
+
+	debug_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, face_mesh_array);
+	Ref<StandardMaterial3D> face_material;
+	face_material = Ref<StandardMaterial3D>(memnew(StandardMaterial3D));
+	face_material->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
+	face_material->set_transparency(StandardMaterial3D::TRANSPARENCY_ALPHA);
+	face_material->set_albedo(debug_navigation_geometry_face_color);
+	face_material->set_cull_mode(StandardMaterial3D::CULL_DISABLED);
+	face_material->set_flag(StandardMaterial3D::FLAG_DISABLE_FOG, true);
+	if (enabled_geometry_face_random_color) {
+		face_material->set_flag(StandardMaterial3D::FLAG_SRGB_VERTEX_COLOR, true);
+		face_material->set_flag(StandardMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+	}
+	debug_mesh->surface_set_material(0, face_material);
+
+	return debug_mesh;
+}
+
+Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 	root_type = root->get_class();
 	root_name = root->get_name();
 
 	TypedArray<Node> animation_player_nodes = root->find_children("*", "AnimationPlayer");
 	TypedArray<Node> mesh_instances = root->find_children("*", "MeshInstance3D");
 	HashSet<Node *> skinned_mesh_instances;
+	HashSet<Node *> generated_mesh_instance_parents;
+	HashMap<Ref<ShaderMaterial>, Ref<BaseMaterial3D>> shader_material_to_base_material_map;
+
 	HashSet<Ref<Mesh>> meshes_in_mesh_instances;
-	for (auto &E : mesh_instances) {
-		MeshInstance3D *mesh_instance = Object::cast_to<MeshInstance3D>(E);
-		ERR_CONTINUE(!mesh_instance);
+
+	auto process_mesh_instance = [&](MeshInstance3D *mesh_instance) {
 		auto skin = mesh_instance->get_skin();
 		if (skin.is_valid()) {
 			has_skinned_meshes = true;
@@ -1347,102 +1488,265 @@ void GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 				mesh_path_to_instance_map[path] = mesh_instance;
 			}
 		}
-		if (updating_import_info) {
-			auto node_path = get_node_path(mesh_instance);
-			if (!node_path.is_empty()) {
-				node_options[node_path.operator String()] = get_node_options(mesh_instance);
-			}
-		}
-	}
-	TypedArray<Node> physics_nodes = root->find_children("*", "CollisionObject3D");
-	TypedArray<Node> physics_shapes = root->find_children("*", "CollisionShape3D");
-	has_physics_nodes = physics_nodes.size() > 0 || physics_shapes.size() > 0;
-
-	if (has_script) {
-		TypedArray<Node> nodes = { root };
-		nodes.append_array(root->get_children());
-		for (int i = 0; i < nodes.size(); i++) {
-			auto &E = nodes[i];
-			Node *node = static_cast<Node *>(E.operator Object *());
-			ScriptInstance *si = node->get_script_instance();
-			List<PropertyInfo> properties;
-			if (si) {
-				if (updating_import_info) {
-					node_options[get_node_path(node).operator String()] = get_node_options(node);
-				}
-				si->get_property_list(&properties);
-				HashSet<Variant> other_values;
-				Vector<MeshInstance3D *> mesh_instances;
-				HashSet<Ref<Skin>> skins;
-				HashSet<NodePath> skeleton_paths;
-				for (auto &prop : properties) {
-					Variant value;
-					if (si->get(prop.name, value)) {
-						// check if it's a mesh instance
-						Ref<Mesh> mesh = value;
-						if (mesh.is_valid() && !meshes_in_mesh_instances.has(mesh)) {
-							// create a new mesh instance
-							auto mesh_instance = memnew(MeshInstance3D());
-							mesh_instance->set_mesh(mesh);
-							String name = mesh->get_name();
-							String path = mesh->get_path();
-
-							if (name.is_empty()) {
-								name = demangle_name(path.get_file().get_basename());
-								if (name.is_empty() || path.contains("::")) {
-									name = ("Mesh_" + String::num_int64(i));
-								}
-								mesh->set_name(name);
-							}
-							if (!path.is_empty()) {
-								mesh_path_to_instance_map[path] = mesh_instance;
-							}
-							mesh_instance->set_name(name);
-							node->add_child(mesh_instance);
-							mesh_instances.push_back(mesh_instance);
-							// meshes_in_mesh_instances.insert(mesh);
-						}
-					}
-				}
-				for (auto &mesh_instance : mesh_instances) {
-					bool set_skin = false;
-					bool set_skeleton = false;
-					for (auto &prop : properties) {
-						Variant value;
-						if (si->get(prop.name, value) && !skins.has(value) && !skeleton_paths.has(value)) {
-							Ref<Skin> skin = value;
-							if (skin.is_valid() && !set_skin) {
-								has_skinned_meshes = true;
-								skinned_mesh_instances.insert(mesh_instance);
-								mesh_instance->set_skin(skin);
-								set_skin = true;
-								skins.insert(skin);
-							} else if (!set_skeleton) {
-								NodePath skeleton_path = value;
-								if (!skeleton_path.is_empty()) {
-									// we need to check to see if this is actually a skeleton
-									Node *skeleton = node->get_node(skeleton_path);
-									Skeleton3D *skeleton3d = skeleton ? Object::cast_to<Skeleton3D>(skeleton) : nullptr;
-									if (skeleton3d) {
-										NodePath actual_path = skeleton_path;
-										if (!skeleton_path.is_absolute()) {
-											actual_path = node->get_path_to(skeleton3d);
-										}
-										mesh_instance->set_skeleton_path(actual_path);
-										set_skeleton = true;
-										skeleton_paths.insert(skeleton_path);
+		if (replace_shader_materials && mesh.is_valid()) {
+			for (int surface_i = 0; surface_i < mesh->get_surface_count(); surface_i++) {
+				Ref<ShaderMaterial> shader_material;
+				Ref<Material> active_surface_material = mesh_instance->get_active_material(surface_i);
+				Ref<Material> surface_material = mesh->surface_get_material(surface_i);
+				Ref<BaseMaterial3D> base_material;
+				shader_material = active_surface_material;
+				if (shader_material.is_valid()) {
+					if (shader_material_to_base_material_map.has(shader_material)) {
+						base_material = shader_material_to_base_material_map[shader_material];
+					} else {
+						Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> base_material_pair = convert_shader_material_to_base_material(shader_material, mesh_instance);
+						if (!base_material_pair.second.first) {
+							base_material = surface_material;
+							if (!base_material.is_valid()) {
+								Ref<ShaderMaterial> surface_shader_material = surface_material;
+								if (surface_shader_material.is_valid() && surface_shader_material != shader_material) {
+									auto new_material_pair = convert_shader_material_to_base_material(surface_shader_material);
+									if (new_material_pair.second.first) {
+										shader_material = surface_shader_material;
+										base_material_pair = new_material_pair;
 									}
 								}
 							}
 						}
-						if (set_skin && set_skeleton) {
-							break;
+						if (!base_material.is_valid()) {
+							base_material = base_material_pair.first;
 						}
+						// We don't want to cache it if it has instance uniforms that were actually used,
+						// since they will need to be created per-instance
+						if (base_material.is_valid() && !base_material_pair.second.second) {
+							shader_material_to_base_material_map[shader_material] = base_material;
+						}
+					}
+					if (base_material.is_valid()) {
+						mesh_instance->set_surface_override_material(surface_i, base_material);
 					}
 				}
 			}
 		}
+	};
+	other_error_messages.append_array(_get_logged_error_messages());
+	for (auto &E : mesh_instances) {
+		MeshInstance3D *mesh_instance = Object::cast_to<MeshInstance3D>(E);
+		ERR_CONTINUE(!mesh_instance);
+		process_mesh_instance(mesh_instance);
 	}
+	other_error_messages.append_array(_get_logged_error_messages());
+	// Needed for warning about scene with physics nodes being exported as multi-root
+	{
+		TypedArray<Node> physics_nodes = root->find_children("*", "CollisionObject3D");
+		TypedArray<Node> physics_shapes = root->find_children("*", "CollisionShape3D");
+		has_physics_nodes = physics_nodes.size() > 0 || physics_shapes.size() > 0;
+	}
+
+	TypedArray<Node> nodes = { root };
+	nodes.append_array(root->get_children());
+	int i = 0;
+	auto generate_mesh_instance = [&](Node *node, const Ref<Mesh> &mesh, Node *original_node = nullptr) {
+		auto mesh_instance = memnew(MeshInstance3D());
+		mesh_instance->set_mesh(mesh);
+		String name = mesh->get_name();
+		String path = mesh->get_path();
+
+		if (name.is_empty()) {
+			name = demangle_name(path.get_file().get_basename());
+			if (name.is_empty() || path.contains("::")) {
+				if (original_node) {
+					name = original_node->get_name();
+				} else {
+					name = ("Mesh_" + String::num_int64(++i));
+				}
+			}
+			mesh->set_name(name);
+		}
+		if (!path.is_empty()) {
+			mesh_path_to_instance_map[path] = mesh_instance;
+		}
+		mesh_instance->set_name(name);
+		generated_mesh_instance_parents.insert(node);
+		meshes_in_mesh_instances.insert(mesh);
+		return mesh_instance;
+	};
+	std::function<void(Node *)> process_node = [&](Node *node) {
+		ScriptInstance *si = node->get_script_instance();
+		List<PropertyInfo> properties;
+		HashSet<MeshInstance3D *> mis_generated_from_scripts;
+		// generate mesh instances from script properties
+		if (si) {
+			si->get_property_list(&properties);
+			HashSet<Variant> other_values;
+			HashSet<Ref<Skin>> skins;
+			HashSet<NodePath> skeleton_paths;
+			for (auto &prop : properties) {
+				Variant value;
+				if (si->get(prop.name, value)) {
+					// check if it's a mesh instance
+					Ref<Mesh> mesh = value;
+					if (mesh.is_valid() && !meshes_in_mesh_instances.has(mesh)) {
+						// create a new mesh instance
+						auto mesh_instance = generate_mesh_instance(node, mesh);
+						mis_generated_from_scripts.insert(mesh_instance);
+						node->add_child(mesh_instance);
+					}
+				}
+			}
+			for (auto &mesh_instance : mis_generated_from_scripts) {
+				bool set_skin = false;
+				bool set_skeleton = false;
+				for (auto &prop : properties) {
+					Variant value;
+					if (si->get(prop.name, value) && !skins.has(value) && !skeleton_paths.has(value)) {
+						Ref<Skin> skin = value;
+						if (skin.is_valid() && !set_skin) {
+							mesh_instance->set_skin(skin);
+							set_skin = true;
+							skins.insert(skin);
+						} else if (!set_skeleton) {
+							NodePath skeleton_path = value;
+							if (!skeleton_path.is_empty()) {
+								// we need to check to see if this is actually a skeleton
+								Node *skeleton = node->get_node(skeleton_path);
+								Skeleton3D *skeleton3d = skeleton ? Object::cast_to<Skeleton3D>(skeleton) : nullptr;
+								if (skeleton3d) {
+									NodePath actual_path = skeleton_path;
+									if (!skeleton_path.is_absolute()) {
+										actual_path = mesh_instance->get_path_to(skeleton3d);
+									}
+									mesh_instance->set_skeleton_path(actual_path);
+									set_skeleton = true;
+									skeleton_paths.insert(skeleton_path);
+								}
+							}
+						}
+					}
+					if (set_skin && set_skeleton) {
+						break;
+					}
+				}
+				process_mesh_instance(mesh_instance);
+				if (updating_import_info) {
+					node_options[get_node_path(mesh_instance).operator String()] = { { "import/skip_import", true } };
+				}
+			}
+		}
+		Node *original_node = nullptr;
+		auto replace_with_mi = [&](Ref<ArrayMesh> mesh) {
+			auto mesh_instance = generate_mesh_instance(node, mesh, node);
+			mesh_instance->set_name(node->get_name());
+			process_mesh_instance(mesh_instance);
+			replaced_node_names.push_back(get_node_path(node).operator String() + ":" + node->get_class());
+			auto node3d = Object::cast_to<Node3D>(node);
+			auto transform = node3d ? node3d->get_transform() : Transform3D();
+			auto script = node->get_script();
+			node->replace_by(mesh_instance);
+			mesh_instance->set_transform(transform);
+			mesh_instance->set_script(script);
+
+			original_node = node;
+			node = mesh_instance;
+			if (original_node == root) {
+				root = node;
+				root_type = node->get_class();
+				root_name = node->get_name();
+			}
+			auto parent = original_node->get_parent();
+			Vector<CollisionShape3D *> shapes;
+			if (!parent || !Object::cast_to<RigidBody3D>(parent)) {
+				for (auto &E : mesh_instance->get_children()) {
+					auto shape = Object::cast_to<CollisionShape3D>(E.operator Object *());
+					if (shape) {
+						shapes.push_back(shape);
+					}
+				}
+			}
+			if (!shapes.is_empty()) {
+				StaticBody3D *static_body = memnew(StaticBody3D());
+				static_body->set_name(mesh_instance->get_name().operator String() + "_StaticBody3D");
+				mesh_instance->add_child(static_body);
+				for (auto &shape : shapes) {
+					shape->set_owner(nullptr);
+					shape->reparent(static_body, false);
+				}
+			}
+		};
+		// replace NavMesh/Occluder/Area3D-only nodes with mesh instances
+		// e.g. the original mesh will have been replaced by a NavMesh/Occluder/Area3D node by the importer, so we have to put it back.
+		if (!is_auto_generated_node(node) && node != root) {
+			if (auto navigation_region = Object::cast_to<NavigationRegion3D>(node); navigation_region) {
+				if (Ref<NavigationMesh> navmesh = navigation_region->get_navigation_mesh(); navmesh.is_valid()) {
+					auto debug_mesh = get_nav_array_debug_mesh(navmesh);
+					replace_with_mi(debug_mesh);
+				}
+			} else if (auto occluder_instance = Object::cast_to<OccluderInstance3D>(node); occluder_instance) {
+				if (Ref<Occluder3D> occluder = occluder_instance->get_occluder(); occluder.is_valid()) {
+					replace_with_mi(occluder->get_debug_mesh());
+				}
+			} else if (auto area_3d = Object::cast_to<Area3D>(node); area_3d) {
+				Vector<Ref<ArrayMesh>> meshes;
+				Ref<ArrayMesh> mesh;
+				for (auto &E : area_3d->get_children()) {
+					if (auto collision_shape = Object::cast_to<CollisionShape3D>(E.operator Object *()); collision_shape && collision_shape->get_shape().is_valid()) {
+						meshes.push_back(collision_shape->get_shape()->get_debug_mesh());
+					}
+				}
+				if (meshes.size() > 1) {
+					SurfaceTool surface_tool;
+					for (size_t i = 0; i < meshes.size(); i++) {
+						for (size_t j = 0; j < meshes[i]->get_surface_count(); j++) {
+							if (i == 0 && j == 0) {
+								surface_tool.create_from(meshes[i], j);
+							} else {
+								surface_tool.append_from(meshes[i], j, Transform3D());
+							}
+						}
+					}
+					mesh = surface_tool.commit();
+				} else if (meshes.size() == 1) {
+					mesh = meshes[0];
+				}
+				if (mesh.is_valid()) {
+					replace_with_mi(mesh);
+				}
+			}
+		}
+		if (updating_import_info && node != root) {
+			node_options[get_node_path(node).operator String()] = get_node_options(node, original_node);
+		}
+
+		if (original_node) {
+			if (SceneTree::get_singleton()) {
+				original_node->queue_free();
+			} else {
+				memdelete(original_node);
+			}
+		}
+
+		for (auto &E : node->get_children()) {
+			auto child = Object::cast_to<Node>(E.operator Object *());
+			if (!mis_generated_from_scripts.has(Object::cast_to<MeshInstance3D>(child))) {
+				process_node(child);
+			}
+		}
+	};
+	process_node(root);
+	if (replaced_node_names.size() > 0) {
+		auto thingy = String(", ").join(replaced_node_names);
+		print_line(vformat("%s: replaced nodes with mesh instances: %s", scene_name, thingy));
+#ifdef DEBUG_ENABLED
+		if (true) {
+			auto new_dest = "res://.tscn_manip/" + report->get_import_info()->get_export_dest().trim_prefix("res://.assets/").trim_prefix("res://").get_basename() + ".tscn";
+			auto new_dest_path = output_dir.path_join(new_dest.replace_first("res://", ""));
+			Ref<PackedScene> scene = memnew(PackedScene);
+			scene->pack(root);
+			ResourceCompatLoader::save_custom(scene, new_dest_path, GODOT_VERSION_MAJOR, GODOT_VERSION_MINOR);
+		}
+#endif
+	}
+
 	Vector<int64_t> fps_values;
 	for (int32_t node_i = 0; node_i < animation_player_nodes.size(); node_i++) {
 		bool any_compressed = false;
@@ -1586,6 +1890,7 @@ void GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 			baked_fps = MIN(max_fps, 120);
 		}
 	}
+	return root;
 }
 
 bool GLBExporterInstance::_is_logger_silencing_errors() const {
@@ -1701,7 +2006,7 @@ struct UniformInfo {
 	String hint;
 };
 
-Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> convert_shader_material_to_base_material(Ref<ShaderMaterial> p_shader_material, Node *p_parent = nullptr) {
+Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> GLBExporterInstance::convert_shader_material_to_base_material(Ref<ShaderMaterial> p_shader_material, Node *p_parent) {
 	// we need to manually create a BaseMaterial3D from the shader material
 	// We do this by getting the shader uniforms and then mapping them to the BaseMaterial3D properties
 	// We also need to handle the texture parameters and features
@@ -2057,6 +2362,7 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> convert_shader_material_to_base_mate
 	base_material->set_name(p_shader_material->get_name());
 	// set the path to the shader material's path so that we can add it to the external deps found if necessary
 	base_material->set_path_cache(p_shader_material->get_path());
+	base_material->merge_meta_from(p_shader_material.ptr());
 
 	bool set_instance_uniforms = false;
 	for (auto &E : set_params) {
@@ -2135,7 +2441,7 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 		flags |= 16; // EditorSceneFormatImporter::IMPORT_USE_NAMED_SKIN_BINDS;
 		bool was_silenced = _is_logger_silencing_errors();
 		_silence_errors(true);
-		other_error_messages = _get_logged_error_messages();
+		other_error_messages.append_array(_get_logged_error_messages());
 		auto errors_before_append = _get_error_count();
 		err = doc->append_from_scene(root, state, flags);
 		_silence_errors(was_silenced);
@@ -2146,86 +2452,6 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 		}
 		GDRE_SCN_EXP_CHECK_CANCEL();
 
-		Vector<String> errors_before_replace_shader_materials = _get_logged_error_messages();
-
-		// remove shader materials from meshes in the state before serializing
-		if (replace_shader_materials) {
-			for (auto &E : state->get_meshes()) {
-				Ref<GLTFMesh> mesh = E;
-				if (mesh.is_valid()) {
-					Ref<ImporterMesh> im = mesh->get_mesh();
-					ERR_CONTINUE_MSG(im.is_null(), "ImporterMesh is null");
-					auto instance_materials = mesh->get_instance_materials();
-
-					String path = get_path_res(im);
-					MeshInstance3D *instance = nullptr;
-					if (!path.is_empty() && mesh_path_to_instance_map.has(path)) {
-						instance = mesh_path_to_instance_map[path];
-					}
-					for (int surface_i = 0; surface_i < im->get_surface_count(); surface_i++) {
-						Ref<ShaderMaterial> shader_material;
-						Ref<BaseMaterial3D> base_material;
-						;
-						if (surface_i < instance_materials.size()) {
-							shader_material = instance_materials[surface_i];
-						} else {
-							shader_material = im->get_surface_material(surface_i);
-						}
-						if (shader_material.is_valid()) {
-							if (shader_material_to_base_material_map.has(shader_material)) {
-								base_material = shader_material_to_base_material_map[shader_material];
-							} else {
-								Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> base_material_pair = convert_shader_material_to_base_material(shader_material, instance);
-								if (!base_material_pair.second.first) {
-									base_material = im->get_surface_material(surface_i);
-									if (!base_material.is_valid()) {
-										Ref<ShaderMaterial> surface_shader_material = im->get_surface_material(surface_i);
-										if (surface_shader_material.is_valid() && surface_shader_material != shader_material) {
-											auto new_material_pair = convert_shader_material_to_base_material(surface_shader_material);
-											if (new_material_pair.second.first) {
-												shader_material = surface_shader_material;
-												base_material_pair = new_material_pair;
-											}
-										}
-									}
-								}
-								if (!base_material.is_valid()) {
-									base_material = base_material_pair.first;
-								}
-								// We don't want to cache it if it has instance uniforms that were actually used,
-								// since they will need to be created per-instance
-								if (base_material.is_valid() && !base_material_pair.second.second) {
-									shader_material_to_base_material_map[shader_material] = base_material;
-								}
-							}
-							if (base_material.is_valid()) {
-								if (surface_i < instance_materials.size()) {
-									instance_materials[surface_i] = base_material;
-								}
-								im->set_surface_material(surface_i, base_material);
-							}
-						}
-					}
-					// This shouldn't happen??
-					if (instance_materials.size() > im->get_surface_count()) {
-						WARN_PRINT("Instance materials size is greater than the mesh's surface count????");
-						for (int i = im->get_surface_count(); i < instance_materials.size(); i++) {
-							Ref<ShaderMaterial> shader_material = instance_materials[i];
-							if (shader_material.is_valid()) {
-								auto new_material_pair = convert_shader_material_to_base_material(shader_material);
-								if (new_material_pair.second.first) {
-									instance_materials[i] = new_material_pair.first;
-								}
-							}
-						}
-					}
-					mesh->set_instance_materials(instance_materials);
-				}
-			}
-			// clear material conversion error messages
-			other_error_messages.append_array(_get_logged_error_messages());
-		}
-
 		_silence_errors(true);
 		auto errors_before_serialize = _get_error_count();
 		err = doc->_serialize(state);
@@ -2234,7 +2460,6 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 		GDRE_SCN_EXP_CHECK_CANCEL();
 
 		if (errors_after_serialize > errors_before_serialize || errors_after_append > errors_before_append) {
-			gltf_serialization_error_messages.append_array(errors_before_replace_shader_materials);
 			gltf_serialization_error_messages.append_array(_get_logged_error_messages());
 		}
 		if (err) {
@@ -2255,22 +2480,24 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 		}
 		GDRE_SCN_EXP_CHECK_CANCEL();
 #endif
+		auto check_unique = [&](String &name, HashSet<String> &image_map) {
+			if (name.is_empty()) {
+				return;
+			}
+			if (!image_map.has(name)) {
+				image_map.insert(name);
+			} else {
+				name = String(name) + vformat("_%03d", image_map.size() - 1);
+			}
+		};
+
 		// rename objects in the state so that they will be imported correctly, and gather import params info
 		{
 			auto json = state->get_json();
 			auto materials = state->get_materials();
 			auto images = state->get_images();
 			Array json_images = json.has("images") ? (Array)json["images"] : Array();
-			HashMap<String, Vector<int>> image_map;
-			auto insert_image_map = [&](String &name, int i) {
-				if (!image_map.has(name)) {
-					image_map[name] = Vector<int>();
-					image_map[name].push_back(i);
-				} else {
-					image_map[name].push_back(i);
-					name = String(name) + vformat("_%03d", image_map[name].size() - 1);
-				}
-			};
+			HashSet<String> image_map;
 			static const HashMap<String, Vector<BaseMaterial3D::TextureParam>> generated_tex_suffixes = {
 				{ "emission", { BaseMaterial3D::TEXTURE_EMISSION } },
 				{ "normal", { BaseMaterial3D::TEXTURE_NORMAL } },
@@ -2278,21 +2505,27 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 				{ "orm", { BaseMaterial3D::TEXTURE_AMBIENT_OCCLUSION, BaseMaterial3D::TEXTURE_ROUGHNESS, BaseMaterial3D::TEXTURE_METALLIC } },
 				{ "albedo", { BaseMaterial3D::TEXTURE_ALBEDO } }
 			};
+			HashMap<String, String> image_name_to_path;
+			for (auto E : image_deps_needed) {
+				image_name_to_path[E.get_file().get_basename()] = E;
+			}
+
 			for (int i = 0; i < json_images.size(); i++) {
 				Dictionary image_dict = json_images[i];
 				Ref<Texture2D> image = images[i];
 				auto path = get_path_res(image);
-				String name = image_dict.get("name", String());
+				String name = image->get_name();
 				if (path.is_empty() && !name.is_empty()) {
-					for (auto E : image_deps_needed) {
-						if (E.get_file().get_basename() == name) {
-							path = E;
-							break;
+					if (image_name_to_path.has(name)) {
+						path = image_name_to_path[name];
+					} else if (name[name.length() - 1] <= '9' && name[name.length() - 1] >= '0') {
+						name = name.substr(0, name.length() - 1);
+						if (image_name_to_path.has(name) && !image_map.has(name)) {
+							path = image_name_to_path[name];
 						}
 					}
 				}
-				if (path.is_empty() && !get_name_res(image_dict, image, i).is_empty()) {
-					name = get_name_res(image_dict, image, i);
+				if (path.is_empty() && !name.is_empty()) {
 					auto parts = name.rsplit("_", false, 1);
 					String material_name = parts.size() > 0 ? parts[0] : String();
 					String suffix;
@@ -2328,18 +2561,13 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 				bool is_internal = path.is_empty() || path.get_file().contains("::");
 				if (is_internal) {
 					name = get_name_res(image_dict, image, i);
-					insert_image_map(name, i);
 				} else {
 					name = path.get_file().get_basename();
 					external_deps_updated.insert(path);
-					insert_image_map(name, i);
-					unsigned char md5_hash[16];
-					Ref<Image> img = image->get_image();
-					auto img_data = img->get_data();
-					CryptoCore::md5(img_data.ptr(), img_data.size(), md5_hash);
-					String new_md5 = String::hex_encode_buffer(md5_hash, 16);
-					image_path_to_data_hash[path] = new_md5;
+					image_path_to_data_hash[path] = FileAccess::get_md5(path);
 				}
+				check_unique(name, image_map);
+
 				if (!name.is_empty()) {
 					image_dict["name"] = demangle_name(name);
 				}
@@ -2356,7 +2584,7 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 
 			if (json.has("meshes")) {
 				auto default_light_map_size = Vector2i(0, 0);
-				Vector<String> mesh_names;
+				HashSet<String> mesh_names;
 				Vector<Pair<Ref<ArrayMesh>, MeshInstance3D *>> mesh_to_instance;
 				Vector<bool> mesh_is_shadow;
 				auto gltf_meshes = state->get_meshes();
@@ -2382,21 +2610,21 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 						continue;
 					}
 					String path = get_path_res(imesh);
-					String name;
-					bool is_internal = path.is_empty() || path.get_file().contains("::");
-					if (is_internal) {
-						name = get_name_res(mesh_dict, imesh, i);
-					} else {
-						name = path.get_file().get_basename();
+					String name = original_name;
+					if (name.is_empty()) {
+						bool is_internal = path.is_empty() || path.get_file().contains("::");
+						if (is_internal) {
+							name = get_name_res(mesh_dict, imesh, i);
+						} else {
+							name = path.get_file().get_basename();
+						}
 					}
+					check_unique(name, mesh_names);
 					if (!name.is_empty()) {
 						mesh_dict["name"] = demangle_name(name);
 						if (original_name.is_empty()) {
 							gltf_mesh->set_original_name(name);
 						}
-					} else if (!original_name.is_empty()) {
-						mesh_dict["name"] = original_name;
-						name = original_name;
 					}
 					if (!updating_import_info || shadow_meshes.has(imesh) || (path.is_empty() && name.is_empty())) {
 						// mesh that won't be imported, skip
@@ -2442,18 +2670,22 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 			}
 
 			if (json.has("materials")) {
+				HashSet<String> material_names;
 				Array json_materials = json["materials"];
 				for (int i = 0; i < materials.size(); i++) {
 					Dictionary material_dict = json_materials[i];
 					Ref<Material> material = materials[i];
 					auto path = get_path_res(material);
-					String name;
+					String name = material->get_name();
 					bool is_internal = path.is_empty() || path.get_file().contains("::");
-					if (is_internal) {
-						name = get_name_res(material_dict, material, i);
-					} else {
-						name = path.get_file().get_basename();
+					if (name.is_empty()) {
+						if (is_internal) {
+							name = get_name_res(material_dict, material, i);
+						} else {
+							name = path.get_file().get_basename();
+						}
 					}
+					check_unique(name, material_names);
 					// the name in the options import is the name in the gltf file, unlike for meshes
 					if (!name.is_empty()) {
 						material_dict["name"] = name;
@@ -2511,6 +2743,76 @@ Error GLBExporterInstance::_check_model_can_load(const String &p_dest_path) {
 		return ERR_FILE_CORRUPT;
 	}
 	return OK;
+}
+
+Dictionary GLBExporterInstance::_get_default_subresource_options() {
+	Dictionary dict = {
+		{ "save_to_file/enabled", false },
+		{ "save_to_file/path", "" },
+		{ "save_to_file/fallback_path", "" },
+		{ "generate/shadow_meshes", 0 },
+		{ "generate/lightmap_uv", 0 },
+		{ "generate/lods", 0 },
+		{ "lods/normal_merge_angle", 20.0f },
+		{ "use_external/enabled", false },
+		{ "use_external/path", "" },
+		{ "use_external/fallback_path", "" },
+		{ "settings/loop_mode", 0 },
+		{ "save_to_file/keep_custom_tracks", false },
+		{ "slices/amount", 0 },
+	};
+	if (!after_4_3) {
+		dict["lods/normal_split_angle"] = 25.0f;
+	}
+	if (!after_4_4) {
+		dict["lods/normal_merge_angle"] = 60.0f;
+	}
+	for (int i = 0; i < 256; i++) {
+		dict["slice_" + itos(i + 1) + "/name"] = "";
+		dict["slice_" + itos(i + 1) + "/start_frame"] = 0;
+		dict["slice_" + itos(i + 1) + "/end_frame"] = 0;
+		dict["slice_" + itos(i + 1) + "/loop_mode"] = 0;
+		dict["slice_" + itos(i + 1) + "/save_to_file/enabled"] = false;
+		dict["slice_" + itos(i + 1) + "/save_to_file/path"] = "";
+		dict["slice_" + itos(i + 1) + "/save_to_file/fallback_path"] = "";
+		dict["slice_" + itos(i + 1) + "/save_to_file/keep_custom_tracks"] = false;
+	}
+	return dict;
+	// switch (p_category) {
+	// 	case SceneExporterEnums::INTERNAL_IMPORT_CATEGORY_MESH: {
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "save_to_file/enabled", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_UPDATE_ALL_IF_MODIFIED), false));
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::STRING, "save_to_file/path", PROPERTY_HINT_SAVE_FILE, "*.res,*.tres"), ""));
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::STRING, "save_to_file/fallback_path", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR), ""));
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "generate/shadow_meshes", PROPERTY_HINT_ENUM, "Default,Enable,Disable"), 0));
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "generate/lightmap_uv", PROPERTY_HINT_ENUM, "Default,Enable,Disable"), 0));
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "generate/lods", PROPERTY_HINT_ENUM, "Default,Enable,Disable"), 0));
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::FLOAT, "lods/normal_merge_angle", PROPERTY_HINT_RANGE, "0,180,1,degrees"), 20.0f));
+	// 	} break;
+	// 	case SceneExporterEnums::INTERNAL_IMPORT_CATEGORY_MATERIAL: {
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "use_external/enabled", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_UPDATE_ALL_IF_MODIFIED), false));
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::STRING, "use_external/path", PROPERTY_HINT_FILE, "*.material,*.res,*.tres"), ""));
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::STRING, "use_external/fallback_path", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR), ""));
+	// 	} break;
+	// 	case SceneExporterEnums::INTERNAL_IMPORT_CATEGORY_ANIMATION: {
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "settings/loop_mode", PROPERTY_HINT_ENUM, "None,Linear,Pingpong"), 0));
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "save_to_file/enabled", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_UPDATE_ALL_IF_MODIFIED), false));
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::STRING, "save_to_file/path", PROPERTY_HINT_SAVE_FILE, "*.res,*.anim,*.tres"), ""));
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::STRING, "save_to_file/fallback_path", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR), ""));
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "save_to_file/keep_custom_tracks"), ""));
+	// 		r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "slices/amount", PROPERTY_HINT_RANGE, "0,256,1", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_UPDATE_ALL_IF_MODIFIED), 0));
+
+	// 		for (int i = 0; i < 256; i++) {
+	// 			r_options->push_back(ImportOption(PropertyInfo(Variant::STRING, "slice_" + itos(i + 1) + "/name"), ""));
+	// 			r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "slice_" + itos(i + 1) + "/start_frame"), 0));
+	// 			r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "slice_" + itos(i + 1) + "/end_frame"), 0));
+	// 			r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "slice_" + itos(i + 1) + "/loop_mode", PROPERTY_HINT_ENUM, "None,Linear,Pingpong"), 0));
+	// 			r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "slice_" + itos(i + 1) + "/save_to_file/enabled", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_UPDATE_ALL_IF_MODIFIED), false));
+	// 			r_options->push_back(ImportOption(PropertyInfo(Variant::STRING, "slice_" + itos(i + 1) + "/save_to_file/path", PROPERTY_HINT_SAVE_FILE, "*.res,*.anim,*.tres"), ""));
+	// 			r_options->push_back(ImportOption(PropertyInfo(Variant::STRING, "slice_" + itos(i + 1) + "/save_to_file/fallback_path", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR), ""));
+	// 			r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "slice_" + itos(i + 1) + "/save_to_file/keep_custom_tracks"), false));
+	// 		}
+	// 	} break;
+	// }
 }
 
 void GLBExporterInstance::_update_import_params(const String &p_dest_path) {
@@ -2573,18 +2875,35 @@ void GLBExporterInstance::_update_import_params(const String &p_dest_path) {
 
 	iinfo->set_param("gltf/embedded_image_handling", image_handling_val);
 
-	if (animation_options.size() > 0) {
-		if (!_subresources_dict.has("animations")) {
-			_subresources_dict["animations"] = Dictionary();
+	Dictionary default_subresource_options = _get_default_subresource_options();
+	auto check_subresource_dict = [&](Dictionary &p_dict) {
+		bool differs = false;
+		for (auto &E : p_dict) {
+			if (!default_subresource_options.has(E.key)) {
+				ERR_CONTINUE(!default_subresource_options.has(E.key));
+			}
+			if (E.value != default_subresource_options.get(E.key, Variant())) {
+				differs = true;
+				break;
+			}
 		}
-		Dictionary animations_dict = _subresources_dict["animations"];
+		// the importer puts all the default options in if one of them differs; if none do, we don't have to include it
+		return differs;
+	};
+	if (animation_options.size() > 0) {
+		Dictionary animations_dict = _subresources_dict.get("animations", Dictionary());
 		for (auto &E : animation_options) {
-			animations_dict[E.key] = E.value;
+			if (check_subresource_dict(E.value)) {
+				animations_dict[E.key] = E.value;
+			}
 			String path = get_path_options(E.value);
 			if (!(path.is_empty() || path.get_file().contains("::"))) {
 				external_deps_updated.insert(path);
 				animation_deps_updated.insert(path);
 			}
+		}
+		if (!animations_dict.is_empty()) {
+			_subresources_dict["animations"] = animations_dict;
 		}
 	}
 	auto get_default_mesh_opt = [](bool global_opt, bool local_opt) {
@@ -2597,11 +2916,7 @@ void GLBExporterInstance::_update_import_params(const String &p_dest_path) {
 		return 2;
 	};
 	if (id_to_mesh_info.size() > 0) {
-		if (!_subresources_dict.has("meshes")) {
-			_subresources_dict["meshes"] = Dictionary();
-		}
-
-		Dictionary mesh_Dict = _subresources_dict["meshes"];
+		Dictionary mesh_Dict = _subresources_dict.get("meshes", Dictionary());
 		for (auto &E : id_to_mesh_info) {
 			auto name = E.name;
 			auto path = E.path;
@@ -2610,8 +2925,7 @@ void GLBExporterInstance::_update_import_params(const String &p_dest_path) {
 			}
 			// "save_to_file/enabled": true,
 			// "save_to_file/path": "res://models/Enemies/cultist-shoot-anim.res",
-			mesh_Dict[name] = Dictionary();
-			Dictionary subres = mesh_Dict[name];
+			Dictionary subres;
 			if (path.is_empty() || path.get_file().contains("::")) {
 				subres["save_to_file/enabled"] = false;
 				set_path_options(subres, "");
@@ -2625,29 +2939,30 @@ void GLBExporterInstance::_update_import_params(const String &p_dest_path) {
 			subres["generate/lods"] = get_default_mesh_opt(global_mesh_info.has_lods, E.has_lods);
 			// TODO: get these somehow??
 			if (!after_4_3) {
-				subres["lods/normal_split_angle"] = 25.0f;
+				subres["lods/normal_split_angle"] = default_subresource_options.get("lods/normal_split_angle", 25.0f);
 			}
-			subres["lods/normal_merge_angle"] = 60.0f;
+			subres["lods/normal_merge_angle"] = default_subresource_options.get("lods/normal_merge_angle", 60.0f);
 			// Doesn't look like this ever made it in?
 			// if (!after_4_3) {
 			// 	subres["lods/raycast_normals"] = false;
 			// }
+			if (check_subresource_dict(subres)) {
+				mesh_Dict[name] = subres;
+			}
+		}
+		if (!mesh_Dict.is_empty()) {
+			_subresources_dict["meshes"] = mesh_Dict;
 		}
 	}
 	if (id_to_material_path.size() > 0) {
-		if (!_subresources_dict.has("materials")) {
-			_subresources_dict["materials"] = Dictionary();
-		}
-
-		Dictionary mat_Dict = _subresources_dict["materials"];
+		Dictionary mat_Dict = _subresources_dict.get("materials", Dictionary());
 		for (auto &E : id_to_material_path) {
 			auto name = E.first;
 			auto path = E.second;
 			if (name.is_empty() || mat_Dict.has(name)) {
 				continue;
 			}
-			mat_Dict[name] = Dictionary();
-			Dictionary subres = mat_Dict[name];
+			Dictionary subres;
 			if (path.is_empty() || path.get_file().contains("::")) {
 				subres["use_external/enabled"] = false;
 				set_path_options(subres, "", "use_external");
@@ -2656,6 +2971,12 @@ void GLBExporterInstance::_update_import_params(const String &p_dest_path) {
 				set_path_options(subres, path, "use_external");
 				external_deps_updated.insert(path);
 			}
+			if (check_subresource_dict(subres)) {
+				mat_Dict[name] = subres;
+			}
+		}
+		if (!mat_Dict.is_empty()) {
+			_subresources_dict["materials"] = mat_Dict;
 		}
 	}
 	if (node_options.size() > 0) {
@@ -2713,20 +3034,21 @@ Error SceneExporter::export_file_to_non_glb(const String &p_src_path, const Stri
 }
 
 Node *GLBExporterInstance::_instantiate_scene(Ref<PackedScene> scene) {
-	auto errors_before = _get_error_count();
+	other_error_messages.append_array(_get_logged_error_messages());
 	// Instantiation of older scenes will spam warnings about deprecated features (this doesn't affect the error count or retrieving the logged error messages)
+#ifndef DEBUG_ENABLED
 	if (ver_major <= 3) {
 		_silence_errors(true);
 	}
+#endif
 	Node *root = scene->instantiate();
+#ifndef DEBUG_ENABLED
 	if (ver_major <= 3) {
 		_silence_errors(false);
 	}
-	auto errors_after = _get_error_count();
+#endif
 	// this isn't an explcit error by itself, but it's context in case we experience further errors during the export
-	if (errors_after > errors_before) {
-		scene_instantiation_error_messages.append_array(_get_logged_error_messages());
-	}
+	scene_instantiation_error_messages.append_array(_get_logged_error_messages());
 	if (root == nullptr) {
 		err = ERR_CANT_ACQUIRE_RESOURCE;
 		ERR_PRINT(add_errors_to_report(ERR_CANT_ACQUIRE_RESOURCE, "Failed to instantiate scene " + source_path));
@@ -2747,18 +3069,23 @@ Error GLBExporterInstance::_load_scene_and_deps(Ref<PackedScene> &r_scene) {
 Error GLBExporterInstance::_load_scene(Ref<PackedScene> &r_scene) {
 	auto mode_type = ResourceCompatLoader::get_default_load_type();
 	// loading older scenes will spam warnings about deprecated features
+#ifndef DEBUG_ENABLED
 	if (ver_major <= 3) {
 		_silence_errors(true);
 	}
+#endif
 	// For some reason, scenes with meshes fail to load without the load done by ResourceLoader::load, possibly due to notification shenanigans.
 	if (ResourceCompatLoader::is_globally_available() && using_threaded_load()) {
 		r_scene = ResourceLoader::load(source_path, "PackedScene", ResourceFormatLoader::CACHE_MODE_REUSE, &err);
 	} else {
 		r_scene = ResourceCompatLoader::custom_load(source_path, "PackedScene", mode_type, &err, using_threaded_load(), ResourceFormatLoader::CACHE_MODE_REUSE);
 	}
+#ifndef DEBUG_ENABLED
 	if (ver_major <= 3) {
 		_silence_errors(false);
 	}
+#endif
+	scene_loading_error_messages.append_array(_get_logged_error_messages());
 	if (err || !r_scene.is_valid()) {
 		r_scene = nullptr;
 		_unload_deps();
@@ -2850,8 +3177,10 @@ Error GLBExporterInstance::_get_return_error() {
 
 	if (had_gltf_serialization_errors) {
 		String _ = add_errors_to_report(ERR_BUG, "");
-	} else if (!set_all_externals && err == OK) {
+	} else if ((!set_all_externals || missing_dependencies.size() > 0) && err == OK) {
 		String _ = add_errors_to_report(ERR_PRINTER_ON_FIRE, "Failed to set all external dependencies in GLTF export and/or import info. This scene may not be imported correctly upon re-import.");
+	} else if (err == OK) {
+		String _ = add_errors_to_report(OK, "");
 	} else {
 		GDRE_SCN_EXP_FAIL_COND_V_MSG(err, err, "");
 	}
@@ -3114,6 +3443,7 @@ struct BatchExportToken : public TaskRunnerStruct {
 
 	// scene loading and scene instancing has to be done on the main thread to avoid deadlocks and crashes
 	bool batch_preload() {
+		GDRELogger::clear_error_queues();
 		if (check_unsupported()) {
 			err = ERR_UNAVAILABLE;
 			_set_unsupported(report, ver_major, is_obj_output());
@@ -3157,7 +3487,7 @@ struct BatchExportToken : public TaskRunnerStruct {
 					preload_done = true;
 					return false;
 				}
-				instance._set_stuff_from_instanced_scene(root);
+				root = instance._set_stuff_from_instanced_scene(root);
 			}
 		}
 
@@ -3219,6 +3549,13 @@ struct BatchExportToken : public TaskRunnerStruct {
 			if (err == OK) {
 				report->set_saved_path(p_dest_path);
 			}
+#ifdef DEBUG_ENABLED // export a text copy so we can see what went wrong
+			if (true) {
+				auto new_dest = "res://.tscn_copy/" + report->get_import_info()->get_export_dest().trim_prefix("res://.assets/").trim_prefix("res://").get_basename() + ".tscn";
+				auto new_dest_path = output_dir.path_join(new_dest.replace_first("res://", ""));
+				ResourceCompatLoader::to_text(p_src_path, new_dest_path);
+			}
+#endif
 		}
 		_scene = nullptr;
 		// print_line("Finished exporting scene " + p_src_path);
@@ -3250,13 +3587,6 @@ struct BatchExportToken : public TaskRunnerStruct {
 				report->set_saved_path(p_dest_path);
 			}
 		} else {
-#ifdef DEBUG_ENABLED // export a text copy so we can see what went wrong
-			if (err != OK) {
-				auto new_dest = "res://.tscn_copy/" + report->get_import_info()->get_export_dest().trim_prefix("res://").get_basename() + ".tscn";
-				auto new_dest_path = output_dir.path_join(new_dest.replace_first("res://", ""));
-				ResourceCompatLoader::to_text(p_src_path, new_dest_path);
-			}
-#endif
 			instance._unload_deps();
 			if (instance.had_script() && err == OK) {
 				report->set_message("Script has scripts, not saving to original path.");
@@ -3392,6 +3722,10 @@ String SceneExporter::get_default_export_extension(const String &res_path) const
 	return "glb";
 }
 
+Vector<String> SceneExporter::get_export_extensions(const String &res_path) const {
+	return { "glb", "gltf", "obj", "escn", "tscn" };
+}
+
 void SceneExporter::_bind_methods() {
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("export_file_with_options", "out_path", "res_path", "options"), &SceneExporter::export_file_with_options);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_minimum_godot_ver_supported"), &SceneExporter::get_minimum_godot_ver_supported);
@@ -3402,7 +3736,15 @@ uint64_t GLBExporterInstance::_get_error_count() {
 }
 
 Vector<String> GLBExporterInstance::_get_logged_error_messages() {
-	return supports_multithread() ? GDRELogger::get_thread_errors() : GDRELogger::get_errors();
+	auto errors = supports_multithread() ? GDRELogger::get_thread_errors() : GDRELogger::get_errors();
+	Vector<String> ret;
+	for (auto &err : errors) {
+		String lstripped = err.strip_edges(true, false);
+		if (!lstripped.begins_with("GDScript backtrace")) {
+			ret.push_back(err.strip_edges(false, true));
+		}
+	}
+	return ret;
 }
 
 SceneExporter *SceneExporter::singleton = nullptr;
@@ -3431,13 +3773,13 @@ Error GLBExporterInstance::_batch_export_instanced_scene(Node *root, const Strin
 		return err;
 	}
 
+	if (updating_import_info) {
+		_update_import_params(p_dest_path);
+	}
 	// Check if the model can be loaded; minimum validation to ensure the model is valid
 	err = _check_model_can_load(p_dest_path);
 	if (err) {
 		GDRE_SCN_EXP_FAIL_V_MSG(ERR_FILE_CORRUPT, "");
-	}
-	if (updating_import_info) {
-		_update_import_params(p_dest_path);
 	}
 	err = _get_return_error();
 
@@ -3581,6 +3923,7 @@ Vector<Ref<ExportReport>> SceneExporter::batch_export_files(const String &output
 	Vector<uint64_t> abnormal_deltas;
 	Vector<uint64_t> resync_deltas;
 	constexpr size_t MAX_DELTA_COUNT = 1000000;
+	constexpr uint64_t DRAW_DELTA_THRESHOLD = 50000;
 	resync_deltas.reserve(MAX_DELTA_COUNT);
 
 	auto average_out_delta = [&](Vector<uint64_t> &deltas) {
@@ -3630,15 +3973,14 @@ Vector<Ref<ExportReport>> SceneExporter::batch_export_files(const String &output
 
 	auto ensure_progress = [&]() {
 		auto current_time = OS::get_singleton()->get_ticks_usec();
-		if (current_time - last_update_time >= 10000) {
+		if (current_time - last_update_time >= DRAW_DELTA_THRESHOLD) {
 			last_update_time = current_time;
 			return TaskManager::get_singleton()->update_progress_bg(true);
 		}
 		resync_rendering_server();
 		return false;
 	};
-	// if (number_of_threads <= 1 || GDREConfig::get_singleton()->get_setting("force_single_threaded", false)) {
-	if (true) { // TODO: On current master, multi-threaded export is causing crashes, so disabling for now
+	if (number_of_threads <= 1 || GDREConfig::get_singleton()->get_setting("force_single_threaded", false)) {
 		print_line("Forcing single-threaded scene export...");
 		err = TaskManager::get_singleton()->run_group_task_on_current_thread(
 				this,

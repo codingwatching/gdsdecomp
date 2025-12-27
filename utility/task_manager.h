@@ -9,6 +9,7 @@
 #include <memory>
 
 struct TaskRunnerStruct {
+	virtual bool pre_run() { return true; }
 	virtual int get_current_task_step_value() = 0;
 	virtual String get_current_task_step_description() = 0;
 	virtual void cancel() = 0;
@@ -28,6 +29,36 @@ public:
 	static inline bool is_memory_usage_too_high() {
 		return (int64_t)OS::get_singleton()->get_static_memory_usage() > TaskManager::maximum_memory_usage;
 	}
+
+	class BaseMainThreadDispatchData {
+	public:
+		virtual ~BaseMainThreadDispatchData() = default;
+		virtual void callback() = 0;
+		virtual void wait_for_completion() = 0;
+	};
+
+	// This is a helper class to dispatch a callback to the main thread.
+	template <typename C, typename M, typename U>
+	class MainThreadDispatchData : public BaseMainThreadDispatchData {
+		C *instance;
+		M method;
+		U userdata;
+		Semaphore semaphore;
+		bool done = false;
+
+	public:
+		MainThreadDispatchData(C *p_instance, M p_method, U p_userdata) :
+				instance(p_instance), method(p_method), userdata(p_userdata) {}
+		void callback() override {
+			(instance->*method)(userdata);
+			semaphore.post();
+		}
+
+		void wait_for_completion() override {
+			semaphore.wait();
+		}
+	};
+
 	class BaseTemplateTaskData {
 	protected:
 		bool dont_update_progress_bg = false;
@@ -230,6 +261,7 @@ public:
 	protected:
 		virtual void wait_for_task_completion_internal() override {
 			if (!runs_current_thread) {
+				ERR_FAIL_COND_MSG(task_id == -1, "Task not started");
 				WorkerThreadPool::get_singleton()->wait_for_task_completion(task_id);
 			} else {
 				run_on_current_thread();
@@ -261,13 +293,13 @@ public:
 		}
 
 		void run_internal(void *p_data) {
+			if (canceled || done) {
+				return;
+			}
 			cb_struct->run(p_data);
 			done = true;
 		}
 		virtual void run_on_current_thread() override {
-			if (canceled) {
-				return;
-			}
 			run_internal(userdata);
 		}
 		virtual int get_current_task_step_value() override {
@@ -280,8 +312,12 @@ public:
 			return done;
 		}
 		void start_internal() override {
-			if (task_id != -1) {
+			if (task_id != -1 || done || canceled) {
 				return;
+			}
+			if (!cb_struct->pre_run()) {
+				done = true;
+				ERR_FAIL_MSG("Failed to pre-run task: " + description);
 			}
 			if (runs_current_thread) {
 				// random group id
@@ -358,6 +394,7 @@ public:
 protected:
 	static TaskManager *singleton;
 	ParallelFlatHashMap<TaskManagerID, std::shared_ptr<BaseTemplateTaskData>> group_id_to_description;
+	StaticParallelQueue<std::shared_ptr<BaseMainThreadDispatchData>, 256> main_thread_dispatch_queue;
 	DownloadQueueThread download_thread;
 	std::atomic<TaskManagerID> current_task_id = 0;
 	bool updating_bg = false;
@@ -477,6 +514,19 @@ public:
 			bool p_progress_enabled = true) {
 		auto task_id = add_task(p_task_runner, p_userdata, p_description, progress_steps, p_can_cancel, p_high_priority, p_progress_enabled);
 		return wait_for_task_completion(task_id);
+	}
+
+	template <typename C, typename M, typename U>
+	void dispatch_to_main_thread(C *p_instance, M p_method, U p_userdata) {
+		if (Thread::is_main_thread()) {
+			(p_instance->*p_method)(p_userdata);
+			return;
+		}
+		std::shared_ptr<BaseMainThreadDispatchData> data = std::make_shared<MainThreadDispatchData<C, M, U>>(p_instance, p_method, p_userdata);
+		while (!main_thread_dispatch_queue.try_push(data)) {
+			OS::get_singleton()->delay_usec(10000); // wait for a slot to become available
+		}
+		data->wait_for_completion();
 	}
 
 	DownloadTaskID add_download_task(const String &p_download_url, const String &p_save_path, bool silent = false);

@@ -821,7 +821,7 @@ struct ProcessRunnerStruct : public TaskRunnerStruct {
 	}
 
 	// We have to start the process on the main thread because of inscrutable WINPROC stuff.
-	bool pre_run() {
+	virtual bool pre_run() override {
 		List<String> args;
 		for (const String &arg : arguments) {
 			args.push_back(arg);
@@ -976,12 +976,7 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 					if (get_ver_major() >= 4 && OS::get_singleton()->execute("dotnet", { "--version" }, nullptr, &ret_code) == OK && ret_code == 0) {
 						String solution_path = csproj_path.get_basename() + ".sln";
 						process_runner = std::make_shared<ProcessRunnerStruct>("dotnet", Vector<String>({ "build", solution_path, "--property", "WarningLevel=0" }));
-						if (process_runner->pre_run()) {
-							process_runner_task_id = TaskManager::get_singleton()->add_task(process_runner, nullptr, "Compiling C# project...", -1, true, true);
-						} else {
-							// process failed to start
-							process_runner = nullptr;
-						}
+						process_runner_task_id = TaskManager::get_singleton()->add_task(process_runner, nullptr, "Compiling C# project...", -1, true, true);
 					} else {
 						print_line("Unable to compile C# project; ensure that the project is built in the editor before making any changes.");
 					}
@@ -1578,6 +1573,9 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 		ERR_FAIL_COND_V_MSG(err || f.is_null(), ERR_FILE_CANT_WRITE, "can't open report.json for writing");
 		f->store_string(JSON::stringify(report->to_json(), "\t", false, true));
 	}
+	if (GDREConfig::get_singleton()->get_setting("Recovery/git/create_git_repo", false)) {
+		make_git_repo();
+	}
 	return OK;
 }
 
@@ -1719,6 +1717,111 @@ Error ImportExporter::recreate_plugin_configs() {
 		}
 	}
 	return OK;
+}
+
+void ImportExporter::make_git_repo() {
+	if (DirAccess::dir_exists_absolute(output_dir.path_join(".git"))) {
+		print_line("Git repo already exists!");
+		return;
+	}
+	// check if git exists on the path
+	int exit_code = 0;
+	if (OS::get_singleton()->execute("git", { "--version" }, nullptr, &exit_code, true) != OK || exit_code != 0) {
+		ERR_FAIL_MSG("git not found!");
+	}
+	// create the git repo
+	String output;
+	OS::get_singleton()->execute("git", { "-C", output_dir, "init" }, &output, &exit_code, true);
+	if (exit_code != 0) {
+		ERR_FAIL_MSG("Failed to create git repo: " + output);
+	}
+
+	// set core.autocrlf to input
+	OS::get_singleton()->execute("git", { "-C", output_dir, "config", "set", "--local", "core.autocrlf", "input" }, &output, &exit_code, true);
+	if (exit_code != 0) {
+		ERR_FAIL_MSG("Failed to set core.autocrlf to input: " + output);
+	}
+	String gitignore_path = output_dir.path_join(".gitignore");
+	HashSet<String> gitignore_lines = {
+		"# System files",
+		"**/.DS_Store",
+		"Thumbs.db",
+		"**/Thumbs.db",
+		"# GDRE specific ignores",
+		".gltf_copy/",
+		".untouched_gltf_copy/",
+		".tscn_copy/",
+		".tscn_manip/",
+		".autoconverted/",
+		"gdre_export.json",
+		"gdre_export.log",
+		"# Mono build directory",
+		".mono/",
+		".godot/*",
+	};
+	auto da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+	ERR_FAIL_COND_MSG(da.is_null(), "Failed to create DirAccess for " + output_dir);
+	bool include_imports = GDREConfig::get_singleton()->get_setting("Recovery/git/add_imports_to_git_repo", true);
+	Vector<String> files_to_add = { ".gitignore" };
+	if (DirAccess::dir_exists_absolute(output_dir.path_join(".assets"))) {
+		files_to_add.push_back(".assets/");
+	}
+	int ver_major = get_ver_major();
+	if (!include_imports && ver_major == 3) {
+		gitignore_lines.insert(".import/");
+	} else if (include_imports) {
+		if (ver_major >= 4) {
+			gitignore_lines.insert("!.godot/imported/");
+			files_to_add.push_back(".godot/imported/");
+		} else if (ver_major == 3) {
+			files_to_add.push_back(".import/");
+		}
+	}
+	da->change_dir(output_dir);
+	da->set_include_hidden(false);
+	da->list_dir_begin();
+	String file = da->get_next();
+	while (file != "") {
+		if (file[0] != '.' && !gitignore_lines.has(file) && !gitignore_lines.has(file + "/")) {
+			files_to_add.push_back(file);
+		}
+		file = da->get_next();
+	}
+	da->list_dir_end();
+
+	if (!FileAccess::exists(gitignore_path)) {
+		Ref<FileAccess> gitignore = FileAccess::open(gitignore_path, FileAccess::WRITE);
+		if (gitignore.is_null()) {
+			ERR_FAIL_MSG("Failed to open .gitignore for writing");
+		}
+		for (auto &line : gitignore_lines) {
+			gitignore->store_line(line);
+		}
+		gitignore->flush();
+		gitignore->close();
+	}
+
+	Vector<String> add_args = { "-C", output_dir, "add" };
+	for (int i = 0; i < files_to_add.size(); i++) {
+		add_args.push_back(files_to_add[i]);
+	}
+	auto add_runner = std::make_shared<ProcessRunnerStruct>("git", add_args);
+	Error err = TaskManager::get_singleton()->run_task(add_runner, nullptr, "Adding files to git repo...", -1, true, true);
+	if (err == ERR_SKIP) {
+		return;
+	}
+	if (err != OK || add_runner->error_code != 0) {
+		ERR_FAIL_MSG("Failed to add files to git repo: " + add_runner->output);
+	}
+	// commit the files
+	auto commit_runner = std::make_shared<ProcessRunnerStruct>("git", Vector<String>{ "-C", output_dir, "commit", "-m", "Initial commit" });
+	err = TaskManager::get_singleton()->run_task(commit_runner, nullptr, "Committing files to git repo...", -1, true, true);
+	if (err == ERR_SKIP) {
+		return;
+	}
+	if (err != OK || commit_runner->error_code != 0) {
+		ERR_FAIL_MSG("Failed to commit files to git repo: " + commit_runner->output);
+	}
 }
 
 // Godot import data rewriting

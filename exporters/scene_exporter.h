@@ -42,6 +42,13 @@ public:
 #endif
 	static constexpr const char *const EXPORTER_NAME = "PackedScene";
 
+	enum class KeepRootMode {
+		KEEP_ROOT_MODE_AUTO,
+		KEEP_ROOT_MODE_SINGLE_ROOT,
+		KEEP_ROOT_MODE_KEEP_ROOT,
+		KEEP_ROOT_MODE_MULTI_ROOT,
+	};
+
 	static Error export_file_to_non_glb(const String &p_src_path, const String &p_dest_path, Ref<ImportInfo> iinfo);
 	static constexpr bool can_multithread = false;
 
@@ -57,6 +64,7 @@ public:
 	virtual String get_name() const override;
 	virtual bool supports_nonpack_export() const override { return false; }
 	virtual String get_default_export_extension(const String &res_path) const override;
+	virtual Vector<String> get_export_extensions(const String &res_path) const override;
 
 	static Ref<ExportReport> export_file_with_options(const String &out_path, const String &res_path, const Dictionary &options);
 	static size_t get_vram_usage();
@@ -114,6 +122,7 @@ class GLBExporterInstance {
 	Vector<String> image_extensions;
 	Vector<Ref<Resource>> loaded_deps;
 	Vector<uint64_t> loaded_dep_uids;
+	Vector<String> missing_dependencies;
 
 	// set during _export_instanced_scene
 	bool had_images = false;
@@ -121,7 +130,6 @@ class GLBExporterInstance {
 	Dictionary image_path_to_data_hash;
 	Vector<ObjExporter::MeshInfo> id_to_mesh_info;
 	Vector<Pair<String, String>> id_to_material_path;
-	HashMap<Ref<ShaderMaterial>, Ref<BaseMaterial3D>> shader_material_to_base_material_map;
 
 	// set during _set_stuff_from_instanced_scene
 	HashMap<String, Dictionary> node_options;
@@ -131,6 +139,7 @@ class GLBExporterInstance {
 	bool has_non_skeleton_transforms = false;
 	bool has_physics_nodes = false;
 	HashMap<String, MeshInstance3D *> mesh_path_to_instance_map;
+	Vector<String> replaced_node_names;
 	String root_type;
 	String root_name;
 	bool has_lossy_images = false;
@@ -143,6 +152,7 @@ class GLBExporterInstance {
 
 	// error tracking
 	String error_statement;
+	Vector<String> scene_loading_error_messages;
 	Vector<String> scene_instantiation_error_messages;
 	Vector<String> gltf_serialization_error_messages;
 	Vector<String> import_param_error_messages;
@@ -150,6 +160,8 @@ class GLBExporterInstance {
 	Vector<String> other_error_messages;
 
 	constexpr static const char *const COPYRIGHT_STRING_FORMAT = "The Creators of '%s'";
+
+	Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> convert_shader_material_to_base_material(Ref<ShaderMaterial> p_shader_material, Node *p_parent = nullptr);
 
 	ObjExporter::MeshInfo _get_mesh_options_for_import_params();
 
@@ -161,9 +173,10 @@ class GLBExporterInstance {
 	String add_errors_to_report(Error p_err, const String &err_msg = "");
 	void set_cache_res(const dep_info &info, const Ref<Resource> &texture, bool force_replace);
 
-	void _set_stuff_from_instanced_scene(Node *root);
+	[[nodiscard]] Node *_set_stuff_from_instanced_scene(Node *root);
 	Error _export_instanced_scene(Node *root, const String &p_dest_path);
 	void _update_import_params(const String &p_dest_path);
+	Dictionary _get_default_subresource_options();
 	Error _check_model_can_load(const String &p_dest_path);
 	Error _load_deps();
 	Error _load_scene_and_deps(Ref<PackedScene> &r_scene);
