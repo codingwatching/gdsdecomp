@@ -3447,18 +3447,17 @@ struct BatchExportToken : public TaskRunnerStruct {
 		if (check_unsupported()) {
 			err = ERR_UNAVAILABLE;
 			_set_unsupported(report, ver_major, is_obj_output());
-			preload_done = true;
+			after_preload();
 			return false;
 		}
 
 		if (is_text_output()) {
-			preload_done = true;
 			return false;
 		}
 		err = _check_cancelled();
 		if (err != OK) {
 			report->set_error(err);
-			preload_done = true;
+			after_preload();
 			return false;
 		}
 		instance._initial_set(p_src_path, report);
@@ -3474,7 +3473,7 @@ struct BatchExportToken : public TaskRunnerStruct {
 			}
 			if (err != OK) {
 				report->set_error(err);
-				preload_done = true;
+				after_preload();
 				return false;
 			}
 			_scene = scene;
@@ -3484,7 +3483,7 @@ struct BatchExportToken : public TaskRunnerStruct {
 					_scene = nullptr;
 					err = ERR_CANT_ACQUIRE_RESOURCE;
 					report->set_error(err);
-					preload_done = true;
+					after_preload();
 					return false;
 				}
 				root = instance._set_stuff_from_instanced_scene(root);
@@ -3501,8 +3500,17 @@ struct BatchExportToken : public TaskRunnerStruct {
 			surface_count = get_total_surface_count(meshes);
 		}
 		// print_line("Preloaded scene " + p_src_path);
-		preload_done = true;
+		after_preload();
 		return do_on_main_thread;
+	}
+
+	void after_preload() {
+		if (Thread::is_main_thread() && _scene.is_valid()) {
+			// We have to flush the message queue after the scene is loaded;
+			// Certain resources like NoiseTexture2D can queue up deferred calls that will cause crashes if not flushed before the scene is manipulated or freed
+			GDRESettings::main_iteration();
+		}
+		preload_done = true;
 	}
 
 	void batch_export_instanced_scene() {
