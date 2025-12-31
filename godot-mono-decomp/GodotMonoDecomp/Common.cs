@@ -246,7 +246,7 @@ public static class Common
 			.Select(field => field.Name).ToArray();
 	}
 
-	public static string GetEnumValueName(IType type, int value, string defaultValue = "")
+	public static string GetEnumValueName(IType type, long value, string defaultValue = "")
 	{
 		var names = GetEnumValueNames(type);
 		if (names.Length == 0 || value >= names.Length)

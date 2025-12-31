@@ -447,7 +447,18 @@ public class GodotModuleDecompiler
 			string propUsage = "";
 			if (exportAttr?.FixedArguments.Length >= 2)
 			{
-				int hintValue = exportAttr.FixedArguments[0].Value as int? ?? 0;
+				long hintValue = 0;
+				if (exportAttr.FixedArguments[0].Value != null)
+				{
+					if (exportAttr.FixedArguments[0].Value is int intVal)
+					{
+						hintValue = intVal;
+					}
+					else if (exportAttr.FixedArguments[0].Value is long longVal)
+					{
+						hintValue = longVal;
+					}
+				}
 				propHint = Common.GetEnumValueName(exportAttr.FixedArguments[0].Type, hintValue, "None");
 				propUsage = exportAttr.FixedArguments[1].Value?.ToString() ?? "";
 			}
