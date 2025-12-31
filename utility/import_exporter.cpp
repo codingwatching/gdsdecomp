@@ -1766,6 +1766,7 @@ void ImportExporter::make_git_repo() {
 	if (DirAccess::dir_exists_absolute(output_dir.path_join(".assets"))) {
 		files_to_add.push_back(".assets/");
 	}
+	String game_version = get_settings()->get_game_app_version();
 	int ver_major = get_ver_major();
 	if (!include_imports && ver_major == 3) {
 		gitignore_lines.insert(".import/");
@@ -1814,7 +1815,11 @@ void ImportExporter::make_git_repo() {
 		ERR_FAIL_MSG("Failed to add files to git repo: " + add_runner->output);
 	}
 	// commit the files
-	auto commit_runner = std::make_shared<ProcessRunnerStruct>("git", Vector<String>{ "-C", output_dir, "commit", "-m", "Initial commit" });
+	String commit_message = "Initial commit";
+	if (!game_version.is_empty()) {
+		commit_message += " @ version " + game_version;
+	}
+	auto commit_runner = std::make_shared<ProcessRunnerStruct>("git", Vector<String>{ "-C", output_dir, "commit", "-m", commit_message });
 	err = TaskManager::get_singleton()->run_task(commit_runner, nullptr, "Committing files to git repo...", -1, true, true);
 	if (err == ERR_SKIP) {
 		return;
