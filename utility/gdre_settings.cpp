@@ -685,6 +685,7 @@ Error GDRESettings::_add_pack(const String &path) {
 
 Error GDRESettings::load_project(const Vector<String> &p_paths, bool _cmd_line_extract, const String &csharp_assembly_override) {
 	GDRELogger::clear_error_queues();
+	error_encryption = false;
 	if (is_pack_loaded()) {
 		return ERR_ALREADY_IN_USE;
 	}
