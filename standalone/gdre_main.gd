@@ -126,6 +126,13 @@ func end_recovery():
 func extract_and_recover(files_to_extract: PackedStringArray, output_dir: String, extract_only: bool):
 	%GdreRecover.hide_win()
 	if not extract_only:
+		if GDREConfig.get_setting("Recovery/clear_output_dir_except_git_before_full_recovery"):
+			if files_to_extract.size() >= GDRESettings.get_file_info_array().size():
+				var err = GDRECommon.clear_dir_except_for(output_dir, [".git", ".gitignore"])
+				if err != OK:
+					print("Error: failed to clear output directory except for git")
+					return 1
+
 		GDRESettings.open_log_file(output_dir)
 	var log_path = GDRESettings.get_log_file_path()
 	GDRESettings.get_errors()
@@ -973,6 +980,15 @@ func recovery(  input_files:PackedStringArray,
 		if (da.file_exists(output_dir)):
 			print("Error: output dir appears to be a file, not extracting...")
 			return 1
+
+	var not_full_recovery = extract_only or translation_only or scripts_only or includes.size() > 0 or excludes.size() > 0
+	if !not_full_recovery and GDREConfig.get_setting("Recovery/clear_output_dir_except_git_before_full_recovery"):
+		var log_file = GDRESettings.get_log_file_path().get_file()
+		err = GDRECommon.clear_dir_except_for(output_dir, [".git", ".gitignore", log_file])
+		if (err != OK):
+			print("Error: failed to clear output directory except for git")
+			return 1
+
 	if is_dir:
 		if extract_only:
 			print("Why did you open a folder to extract it??? What's wrong with you?!!?")

@@ -375,6 +375,7 @@ String path_to_uri(const String &p_path);
 bool is_zip_file(const String &p_path);
 String get_safe_dir_name(const String &p_dir_name, bool p_allow_paths = false);
 Ref<Image> load_image_from_file(const String &p_path);
+Error clear_dir_except_for(const String &p_dir, const Vector<String> &p_files_or_dirs);
 } // namespace gdre
 
 class GDRECommon : public Object {

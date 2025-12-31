@@ -250,6 +250,12 @@ Vector<Ref<GDREConfigSetting>> GDREConfig::_init_default_settings() {
 				"Use scene view by default instead of the text preview.\nWARNING: Scene view is still experimental and certain scenes may cause the program to become unresponsive.",
 				false)),
 		memnew(GDREConfigSetting(
+				"Recovery/clear_output_dir_except_git_before_full_recovery",
+				"Clear output directory except git before full recovery",
+				"Clear the output directory except for the .git directory before running a full recovery (i.e. no includes/excludes)",
+				false,
+				true)),
+		memnew(GDREConfigSetting(
 				"Recovery/git/create_git_repo",
 				"Create git repo in recovered project",
 				"Create a git repo in the output directory after exporting.\nRequires git to be installed on the system.",
