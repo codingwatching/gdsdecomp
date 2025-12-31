@@ -23,6 +23,7 @@ public class GodotModule
 	public readonly PEFile Module;
 	public readonly DotNetCoreDepInfo? depInfo;
 	public readonly LanguageVersion languageVersion;
+	public readonly Guid moduleGuid;
 	public readonly IDebugInfoProvider? debugInfoProvider;
 	public readonly string? SubDirectory;
 	public Dictionary<string, TypeDefinitionHandle> fileMap;
@@ -54,7 +55,11 @@ public class GodotModule
 		var moduleSettings = p_settings!.Clone();
 		moduleSettings.SetLanguageVersion(languageVersion);
 
-		ProjectDecompiler = new GodotProjectDecompiler(moduleSettings, assemblyResolver, assemblyResolver, debugInfoProvider);
+
+		// generate a UUID for the module based on its name
+		moduleGuid = Common.GenerateDeterministicGuidFromString(Module.FileName);
+
+		ProjectDecompiler = new GodotProjectDecompiler(moduleSettings, moduleGuid, assemblyResolver, assemblyResolver, debugInfoProvider);
 		TypeSystem = ProjectDecompiler.CreateTypeSystem(Module);
 	}
 

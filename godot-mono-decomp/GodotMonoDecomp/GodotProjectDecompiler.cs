@@ -130,7 +130,7 @@ namespace GodotMonoDecomp
 		{
 		}
 
-		protected GodotProjectDecompiler(
+		public GodotProjectDecompiler(
 			GodotMonoDecompSettings settings,
 			Guid projectGuid,
 			IAssemblyResolver assemblyResolver,
