@@ -330,6 +330,20 @@ public class GodotModuleDecompiler
 			foreach (var module in AdditionalModules)
 			{
 				projectIDs.Add(decompileFile(module, moduleToCsProjPath[module.Name]));
+				var dir = Path.GetDirectoryName(moduleToCsProjPath[module.Name]);
+				if (dir != null)
+				{
+					Common.EnsureDir(dir);
+					// create a .gitignore file in the directory
+					var gitignorePath = Path.Combine(dir, ".gitignore");
+					if (!File.Exists(gitignorePath))
+					{
+						var gitignore = File.CreateText(gitignorePath);
+						gitignore.WriteLine("bin/*");
+						gitignore.WriteLine("obj/*");
+						gitignore.Close();
+					}
+				}
 			}
 			var solutionPath = Path.ChangeExtension(outputCSProjectPath, ".sln");
 			removeIfExists(solutionPath);
