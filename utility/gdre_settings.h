@@ -418,6 +418,9 @@ public:
 	// ResourceUID does not provide a way to get a UID for a given path, so we have to do it ourselves
 	ResourceUID::ID get_uid_for_path(const String &p_path) const;
 	String get_game_name() const;
+
+	// Get the game's declared version from the project config
+	String get_game_app_version() const;
 	// the reverse of `get_remap()`; gets the source path for the given destination path
 	String get_remapped_source_path(const String &p_dst) const;
 

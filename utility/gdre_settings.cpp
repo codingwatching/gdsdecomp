@@ -1990,6 +1990,14 @@ String GDRESettings::get_game_name() const {
 	return game_name;
 }
 
+String GDRESettings::get_game_app_version() const {
+	if (is_project_config_loaded()) {
+		const char *version_setting = get_ver_major() <= 3 ? "application/version" : "application/config/version";
+		return current_project->pcfg->get_setting(version_setting, "");
+	}
+	return "";
+}
+
 Error GDRESettings::load_pack_gdscript_cache(bool p_reset) {
 	if (!is_pack_loaded()) {
 		return ERR_UNAVAILABLE;
@@ -2910,6 +2918,7 @@ void GDRESettings::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_ver_rev"), &GDRESettings::get_ver_rev);
 	ClassDB::bind_method(D_METHOD("get_file_count"), &GDRESettings::get_file_count);
 	ClassDB::bind_method(D_METHOD("get_game_name"), &GDRESettings::get_game_name);
+	ClassDB::bind_method(D_METHOD("get_game_app_version"), &GDRESettings::get_game_app_version);
 	ClassDB::bind_method(D_METHOD("globalize_path", "p_path", "resource_path"), &GDRESettings::globalize_path);
 	ClassDB::bind_method(D_METHOD("localize_path", "p_path", "resource_path"), &GDRESettings::localize_path);
 	ClassDB::bind_method(D_METHOD("set_project_path", "p_path"), &GDRESettings::set_project_path);
