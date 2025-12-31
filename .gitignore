@@ -44,7 +44,6 @@ gmon.out
 *.swp
 
 # QT project files
-*.config
 *.creator
 *.creator.*
 *.files
@@ -76,7 +75,6 @@ logs/
 *.suo
 *.user
 *.sln.docstates
-*.sln
 *.vcxproj*
 
 # Build results

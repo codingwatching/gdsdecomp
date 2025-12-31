@@ -224,7 +224,7 @@ jobs:
       - name: setup-dotnet
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
 
       - name: Download pre-built Android Swappy Frame Pacing Library
         if: matrix.platform == 'android'
