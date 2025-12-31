@@ -91,7 +91,7 @@ public class GetFieldInitializerValueVisitor : DepthFirstAstVisitor
 			}
 			else if (init is InterpolatedStringExpression interpolatedStringExpression)
 			{
-				value = GodotExpressionOutputVisitor.GetString(interpolatedStringExpression);
+				value = GodotExpressionOutputVisitor.GetString(interpolatedStringExpression, godotDecompiler);
 			}
 			else if (init is IdentifierExpression identifierExpression)
 			{
@@ -134,45 +134,13 @@ public class GetFieldInitializerValueVisitor : DepthFirstAstVisitor
 				}
 				else
 				{
-					var sr = GodotExpressionOutputVisitor.GetString(oce);
+					var sr = GodotExpressionOutputVisitor.GetString(oce, godotDecompiler);
 					value = Common.TrimPrefix(sr, "new").Trim();
 				}
 			}
-			else if (init is MemberReferenceExpression memberReferenceExpression)
-			{
-				value = GodotStuff.ReplaceMemberReference(memberReferenceExpression);
-				if (value == null)
-				{
-					var s = memberReferenceExpression.GetSymbol();
-					if (s is IProperty || s is IField)
-					{
-						IMember prop = (IMember)s;
-						var declaringType = prop.DeclaringType.GetDefinition();
-						if (declaringType == null || declaringType.ParentModule == null || declaringType.ParentModule.MetadataFile == null)
-						{
-							return GodotExpressionOutputVisitor.GetString(memberReferenceExpression);
-						}
-						var decompiler = godotDecompiler.CreateDecompilerWithPartials(declaringType.ParentModule.MetadataFile, [(TypeDefinitionHandle)declaringType.MetadataToken]);
-						var tree = decompiler.DecompileTypes([(TypeDefinitionHandle)declaringType.MetadataToken]);
-						GetFieldInitializerValueVisitor vis;
-						if (memberReferenceExpression.GetSymbol() is IMember m)
-						{
-							vis =  new GetFieldInitializerValueVisitor(m, godotDecompiler);
-							tree.AcceptVisitor(vis);
-							value = vis.strVal;
-						}
-
-						if (value == null)
-						{
-							value = GodotExpressionOutputVisitor.GetString(memberReferenceExpression);
-						}
-					}
-				}
-			}
-
 			else
 			{
-				value = GodotExpressionOutputVisitor.GetString(init);
+				value = GodotExpressionOutputVisitor.GetString(init, godotDecompiler);
 			}
 		}
 		return value;
@@ -1222,7 +1190,7 @@ public static class GodotStuff
 		return newType;
 	}
 
-	public static string? ReplaceMemberReference(MemberReferenceExpression memberReferenceExpression)
+	public static string? ReplaceMemberReference(MemberReferenceExpression memberReferenceExpression, GodotProjectDecompiler? godotDecompiler = null)
 	{
 		string? text = null;
 		if (memberReferenceExpression.GetSymbol() is IMember ne)
@@ -1256,6 +1224,28 @@ public static class GodotStuff
 			else if (ne.FullName.EndsWith("tring.Empty"))
 			{
 				text = "\"\"";
+			}
+			else if (godotDecompiler != null)
+			{
+				var s = memberReferenceExpression.GetSymbol();
+				if (s is IProperty || s is IField)
+				{
+					IMember prop = (IMember)s;
+					var declaringType = prop.DeclaringType.GetDefinition();
+					if (declaringType == null || declaringType.ParentModule == null || declaringType.ParentModule.MetadataFile == null)
+					{
+						return null;
+					}
+					var decompiler = godotDecompiler.CreateDecompilerWithPartials(declaringType.ParentModule.MetadataFile, [(TypeDefinitionHandle)declaringType.MetadataToken]);
+					var tree = decompiler.DecompileTypes([(TypeDefinitionHandle)declaringType.MetadataToken]);
+					GetFieldInitializerValueVisitor vis;
+					if (memberReferenceExpression.GetSymbol() is IMember m)
+					{
+						vis = new GetFieldInitializerValueVisitor(m, godotDecompiler);
+						tree.AcceptVisitor(vis);
+						text = vis.strVal;
+					}
+				}
 			}
 		}
 
