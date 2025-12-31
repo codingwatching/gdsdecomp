@@ -29,6 +29,7 @@
 #include "utility/gdre_logger.h"
 #include "utility/gdre_settings.h"
 
+#include "core/crypto/crypto_core.h"
 #include "core/error/error_list.h"
 #include "core/error/error_macros.h"
 #include "main/main.h"
@@ -38,7 +39,11 @@
 #include "utility/task_manager.h"
 
 #ifndef MAKE_GLTF_COPY
+#ifdef DEBUG_ENABLED
+#define MAKE_GLTF_COPY 1
+#else
 #define MAKE_GLTF_COPY 0
+#endif
 #endif
 #ifndef PRINT_PERF_CSV
 #define PRINT_PERF_CSV 0
@@ -2408,6 +2413,85 @@ void GLTFDocumentExtensionPhysicsRemover::convert_scene_node(Ref<GLTFState> p_st
 	}
 }
 
+Ref<Image> GLBExporterInstance::_parse_image_bytes_into_image(const Ref<GLTFState> &p_state, const Vector<uint8_t> &p_bytes, const String &p_mime_type, int p_index, String &r_file_extension) {
+	Ref<Image> r_image;
+	r_image.instantiate();
+	// Check if any GLTFDocumentExtensions want to import this data as an image.
+	for (auto &ext : GLTFDocument::get_all_gltf_document_extensions()) {
+		ERR_CONTINUE(ext.is_null());
+		Error err = ext->parse_image_data(p_state, p_bytes, p_mime_type, r_image);
+		ERR_CONTINUE_MSG(err != OK, "glTF: Encountered error " + itos(err) + " when parsing image " + itos(p_index) + " in file " + p_state->get_filename() + ". Continuing.");
+		if (!r_image->is_empty()) {
+			r_file_extension = ext->get_image_file_extension();
+			return r_image;
+		}
+	}
+	// If no extension wanted to import this data as an image, try to load a PNG or JPEG.
+	// First we honor the mime types if they were defined.
+	if (p_mime_type == "image/png") { // Load buffer as PNG.
+		r_image->load_png_from_buffer(p_bytes);
+		r_file_extension = ".png";
+	} else if (p_mime_type == "image/jpeg") { // Loader buffer as JPEG.
+		r_image->load_jpg_from_buffer(p_bytes);
+		r_file_extension = ".jpg";
+	}
+	// If we didn't pass the above tests, we attempt loading as PNG and then JPEG directly.
+	// This covers URIs with base64-encoded data with application/* type but
+	// no optional mimeType property, or bufferViews with a bogus mimeType
+	// (e.g. `image/jpeg` but the data is actually PNG).
+	// That's not *exactly* what the spec mandates but this lets us be
+	// lenient with bogus glb files which do exist in production.
+	if (r_image->is_empty()) { // Try PNG first.
+		r_image->load_png_from_buffer(p_bytes);
+	}
+	if (r_image->is_empty()) { // And then JPEG.
+		r_image->load_jpg_from_buffer(p_bytes);
+	}
+	// If it still can't be loaded, give up and insert an empty image as placeholder.
+	if (r_image->is_empty()) {
+		ERR_PRINT(vformat("glTF: Couldn't load image index '%d' with its given mimetype: %s.", p_index, p_mime_type));
+	}
+	return r_image;
+}
+
+String GLBExporterInstance::get_gltf_image_hash(const Ref<GLTFState> &p_state, const Dictionary &dict, int p_index) {
+	String image_hash;
+	String mime_type;
+	if (dict.has("mimeType")) { // Should be "image/png", "image/jpeg", or something handled by an extension.
+		mime_type = dict["mimeType"];
+	}
+
+	String resource_uri;
+	// We only need the image hash if it's embedded in the glTF file, so if it's not a bufferView, we can return early.
+	Vector<uint8_t> data;
+	if (dict.has("bufferView")) {
+		// Handles the third bullet point from the spec (bufferView).
+		ERR_FAIL_COND_V_MSG(mime_type.is_empty(), "", vformat("glTF: Image index '%d' specifies 'bufferView' but no 'mimeType', which is invalid.", p_index));
+		const GLTFBufferViewIndex bvi = dict["bufferView"];
+		auto buffer_views = p_state->get_buffer_views();
+		ERR_FAIL_INDEX_V(bvi, buffer_views.size(), "");
+		Ref<GLTFBufferView> bv = buffer_views[bvi];
+		const GLTFBufferIndex bi = bv->get_buffer();
+		auto buffers = p_state->get_buffers();
+		ERR_FAIL_INDEX_V(bi, buffers.size(), "");
+		ERR_FAIL_COND_V(bv->get_byte_offset() + bv->get_byte_length() > buffers[bi].size(), "");
+		const PackedByteArray &buffer = buffers[bi];
+		data = buffer.slice(bv->get_byte_offset(), bv->get_byte_offset() + bv->get_byte_length());
+	}
+	if (data.is_empty()) {
+		return image_hash;
+	}
+	String ext;
+	Ref<Image> img = _parse_image_bytes_into_image(p_state, data, mime_type, p_index, ext);
+	if (img.is_valid()) {
+		auto img_data = img->get_data();
+		unsigned char md5_hash[16];
+		CryptoCore::md5(img_data.ptr(), img_data.size(), md5_hash);
+		image_hash = String::hex_encode_buffer(md5_hash, 16);
+	}
+	return image_hash;
+}
+
 Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_dest_path) {
 	{
 		GDRE_SCN_EXP_CHECK_CANCEL();
@@ -2564,7 +2648,9 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 				} else {
 					name = path.get_file().get_basename();
 					external_deps_updated.insert(path);
-					image_path_to_data_hash[path] = FileAccess::get_md5(path);
+					if (updating_import_info && is_batch_export) {
+						image_path_to_data_hash[path] = get_gltf_image_hash(state, image_dict, i);
+					}
 				}
 				check_unique(name, image_map);
 
@@ -3008,7 +3094,9 @@ void GLBExporterInstance::_update_import_params(const String &p_dest_path) {
 
 	iinfo->set_param("_subresources", _subresources_dict);
 	Dictionary extra_info = report->get_extra_info();
-	extra_info["image_path_to_data_hash"] = image_path_to_data_hash;
+	if (!image_path_to_data_hash.is_empty()) {
+		extra_info["image_path_to_data_hash"] = image_path_to_data_hash;
+	}
 	report->set_extra_info(extra_info);
 }
 
