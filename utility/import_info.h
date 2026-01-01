@@ -2,7 +2,6 @@
 
 #include "compat/resource_import_metadatav2.h"
 
-#include "core/io/config_file.h"
 #include "core/object/object.h"
 #include "core/object/ref_counted.h"
 #include "core/os/shared_object.h"

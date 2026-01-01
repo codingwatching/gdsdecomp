@@ -31,11 +31,9 @@
 #include "resource_format_xml.h"
 #include "compat/image_enum_compat.h"
 #include "compat/input_event_parser_v2.h"
-#include "core/config/project_settings.h"
-#include "core/io/dir_access.h"
 #include "core/io/image.h"
 #include "core/string/ustring.h"
-#include "core/version.h"
+
 #include "utility/gdre_settings.h"
 
 typedef uint8_t CharType;

@@ -1,5 +1,4 @@
 #include "oggstr_exporter.h"
-#include "compat/oggstr_loader_compat.h"
 #include "compat/resource_loader_compat.h"
 #include "core/error/error_list.h"
 #include "core/error/error_macros.h"

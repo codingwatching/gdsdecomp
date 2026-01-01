@@ -3,7 +3,7 @@
 #include "core/object/object.h"
 #include "core/object/ref_counted.h"
 #include "core/string/ustring.h"
-#include "core/variant/typed_dictionary.h"
+#include "core/variant/typed_array.h"
 #include "gd_parallel_hashmap.h"
 
 class GDREConfig;

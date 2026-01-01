@@ -2,6 +2,7 @@
 #include "bytecode/bytecode_base.h"
 #include "bytecode/bytecode_versions.h"
 #include "common.h"
+#include "core/io/config_file.h"
 #include "core/io/json.h"
 #include "gdre_logger.h"
 #include "gdre_settings.h"

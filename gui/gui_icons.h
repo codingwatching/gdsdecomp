@@ -1,5 +1,6 @@
 #include "core/object/object.h"
-class ImageTexture;
+#include "scene/resources/image_texture.h"
+
 class Control;
 class GDREGuiIcons {
 	static GDREGuiIcons *singleton;

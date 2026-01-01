@@ -104,7 +104,6 @@
 	}
 
 #include "core/string/ustring.h"
-#include "core/templates/vector.h"
 
 namespace gdre_test {
 template <typename T>

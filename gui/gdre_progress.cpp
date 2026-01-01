@@ -31,8 +31,6 @@
 #include "gui/gdre_progress.h"
 
 #include "core/os/os.h"
-#include "gdre_standalone.h"
-#include "main/main.h"
 #include "scene/gui/file_dialog.h"
 #include "servers/display/display_server.h"
 #include "utility/gdre_logger.h"

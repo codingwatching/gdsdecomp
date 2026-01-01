@@ -5,7 +5,6 @@
 #include "core/os/keyboard.h"
 #include "core/variant/array.h"
 #include "gui/gui_icons.h"
-#include "scene/resources/image_texture.h"
 #include "utility/gdre_settings.h"
 
 #include "gui/gdre_icons.gen.h"

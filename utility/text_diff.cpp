@@ -1,4 +1,5 @@
 #include "text_diff.h"
+#include "core/object/class_db.h"
 #include "core/string/print_string.h"
 #include "external/dtl/dtl.hpp"
 #include <sstream>

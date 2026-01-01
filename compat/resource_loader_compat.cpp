@@ -4,7 +4,6 @@
 #include "compat/resource_format_xml.h"
 #include "core/error/error_list.h"
 #include "core/error/error_macros.h"
-#include "core/io/file_access_memory.h"
 #include "core/io/resource_loader.h"
 #include "core/object/class_db.h"
 #include "utility/common.h"

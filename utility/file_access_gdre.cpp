@@ -933,10 +933,11 @@ DirAccessGDRE::~DirAccessGDRE() {
 #include "drivers/windows/dir_access_windows.h"
 #include "drivers/windows/file_access_windows.h"
 #else // UNIX_ENABLED -- covers OSX, Linux, FreeBSD, Web.
-#include "drivers/unix/dir_access_unix.h"
 #include "drivers/unix/file_access_unix.h"
 #ifdef MACOS_ENABLED
 #include "platform/macos/dir_access_macos.h"
+#else
+#include "drivers/unix/dir_access_unix.h"
 #endif
 #ifdef ANDROID_ENABLED
 #include "platform/android/dir_access_jandroid.h"

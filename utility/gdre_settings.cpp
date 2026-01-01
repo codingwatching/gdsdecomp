@@ -9,7 +9,6 @@
 #include "core/error/error_macros.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
-#include "core/io/file_access_encrypted.h"
 #include "core/object/class_db.h"
 #include "core/string/print_string.h"
 #include "exporters/translation_exporter.h"

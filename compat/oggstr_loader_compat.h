@@ -1,14 +1,9 @@
 #pragma once
 
 #include "compat/resource_loader_compat.h"
-#include "core/io/file_access.h"
-#include "core/io/image.h"
 #include "core/io/resource.h"
-#include "core/io/resource_loader.h"
 #include "core/object/ref_counted.h"
-#include "core/templates/vector.h"
 #include "modules/vorbis/audio_stream_ogg_vorbis.h"
-#include "scene/resources/texture.h"
 
 class OggStreamConverterCompat : public ResourceCompatConverter {
 	GDCLASS(OggStreamConverterCompat, ResourceCompatConverter);

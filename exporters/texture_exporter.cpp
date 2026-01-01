@@ -17,6 +17,7 @@
 #include "scene/resources/texture.h"
 #include "utility/image_saver.h"
 #include "utility/resource_info.h"
+
 #include <cstdint>
 namespace {
 bool get_bit(const Vector<uint8_t> &bitmask, int width, int p_x, int p_y) {

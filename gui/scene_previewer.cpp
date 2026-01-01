@@ -30,10 +30,7 @@
 
 #include "scene_previewer.h"
 
-#include "compat/input_event_parser_v2.h"
 #include "core/config/project_settings.h"
-#include "main/main.h"
-#include "scene/2d/camera_2d.h"
 #include "scene/3d/mesh_instance_3d.h"
 #include "scene/gui/box_container.h"
 #include "scene/gui/button.h"

@@ -35,7 +35,6 @@
 #include "main/main.h"
 #include "scene/resources/compressed_texture.h"
 #include "scene/resources/packed_scene.h"
-#include "servers/navigation_3d/navigation_server_3d.h"
 #include "utility/task_manager.h"
 
 #ifndef MAKE_GLTF_COPY
