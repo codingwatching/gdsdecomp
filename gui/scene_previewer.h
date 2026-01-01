@@ -47,8 +47,8 @@ class ScenePreviewer3D : public SubViewportContainer {
 
 	friend class ScenePreviewer;
 
-	float rot_x;
-	float rot_y;
+	float rot_x = 0.0f;
+	float rot_y = 0.0f;
 	Vector3 center;
 	Vector3 scale = Vector3(1.0, 1.0, 1.0);
 
