@@ -2,8 +2,7 @@
 /*  gdre_editor.h                                                        */
 /*************************************************************************/
 
-#ifndef GODOT_RE_EDITOR_H
-#define GODOT_RE_EDITOR_H
+#pragma once
 #include "utility/packed_file_info.h"
 
 #include "core/io/resource.h"
@@ -189,5 +188,3 @@ public:
 };
 #endif // TOOLS_ENABLED
 /*************************************************************************/
-
-#endif // GODOT_RE_EDITOR_H

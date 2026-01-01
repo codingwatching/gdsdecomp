@@ -1,5 +1,4 @@
-#ifndef DIFF_RESULT_H
-#define DIFF_RESULT_H
+#pragma once
 
 #include "core/object/ref_counted.h"
 #include "core/variant/array.h"
@@ -167,5 +166,3 @@ public:
 	Object *get_new_object() const;
 	PropertyDiffResult(const String &p_name, const String &p_change_type, const Variant &p_old_value, const Variant &p_new_value, Object *p_old_object, Object *p_new_object);
 };
-
-#endif // DIFF_RESULT_H

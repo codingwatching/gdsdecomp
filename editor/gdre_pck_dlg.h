@@ -2,8 +2,7 @@
 /*  gdre_pck_dlg.h                                                       */
 /*************************************************************************/
 
-#ifndef GODOT_RE_PCK_DLG_H
-#define GODOT_RE_PCK_DLG_H
+#pragma once
 #ifdef TOOLS_ENABLED
 
 #include "core/io/resource.h"
@@ -82,4 +81,3 @@ public:
 };
 
 #endif // TOOLS_ENABLED
-#endif // GODOT_RE_PCK_DLG_H

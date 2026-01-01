@@ -2,8 +2,7 @@
 /*  gdre_cmp_dlg.h                                                       */
 /*************************************************************************/
 
-#ifndef GODOT_RE_CMP_DLG_H
-#define GODOT_RE_CMP_DLG_H
+#pragma once
 
 #include "core/io/resource.h"
 #include "core/templates/rb_map.h"
@@ -61,5 +60,3 @@ public:
 	int get_bytecode_version() const;
 	~ScriptCompDialog();
 };
-
-#endif

@@ -1,6 +1,5 @@
 
-#ifndef TEST_VARIANT_COMPAT_H
-#define TEST_VARIANT_COMPAT_H
+#pragma once
 #include "compat/image_enum_compat.h"
 #include "compat/image_parser_v2.h"
 #include "compat/input_event_parser_v2.h"
@@ -1081,4 +1080,3 @@ TEST_CASE("[GDSDecomp][VariantCompat] Writer recursive dictionary") {
 }
 
 } //namespace TestVariantCompat
-#endif //TEST_VARIANT_COMPAT_H

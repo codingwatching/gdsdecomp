@@ -1,7 +1,6 @@
 //woop
 
-#ifndef PCFG_LOADER_H
-#define PCFG_LOADER_H
+#pragma once
 
 #include "core/io/file_access.h"
 #include "core/object/object.h"
@@ -126,4 +125,3 @@ public:
 	ProjectConfigLoader();
 	~ProjectConfigLoader();
 };
-#endif

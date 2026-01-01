@@ -1,5 +1,4 @@
-#ifndef PLUGIN_MANAGER_H
-#define PLUGIN_MANAGER_H
+#pragma once
 
 #include "core/object/object.h"
 #include "core/object/ref_counted.h"
@@ -55,5 +54,3 @@ public:
 	static void unregister_source(Ref<PluginSource> source);
 	static void print_plugin_cache();
 };
-
-#endif // PLUGIN_MANAGER_H

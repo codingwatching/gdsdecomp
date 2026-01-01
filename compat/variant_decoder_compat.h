@@ -1,5 +1,4 @@
-#ifndef VARIANT_DECODER_COMPAT_H
-#define VARIANT_DECODER_COMPAT_H
+#pragma once
 
 #include "core/string/ustring.h"
 #include <core/variant/variant.h>
@@ -115,4 +114,3 @@ public:
 	static Error encode_variant_2(const Variant &p_variant, uint8_t *r_buffer, int &r_len);
 	static Error encode_variant_compat(int ver_major, const Variant &p_variant, uint8_t *r_buffer, int &r_len, bool p_full_objects = false, int p_depth = 0);
 };
-#endif // VARIANT_DECODER_COMPAT_H

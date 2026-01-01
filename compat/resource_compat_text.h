@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef RESOURCE_COMPAT_TEXT_H
-#define RESOURCE_COMPAT_TEXT_H
+#pragma once
 
 #include "compat/resource_loader_compat.h"
 #include "utility/resource_info.h"
@@ -274,5 +273,3 @@ public:
 
 	ResourceFormatSaverCompatText();
 };
-
-#endif // RESOURCE_COMPAT_TEXT_H

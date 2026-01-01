@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef GDRE_PROGRESS_DIALOG_H
-#define GDRE_PROGRESS_DIALOG_H
+#pragma once
 
 #include "scene/gui/box_container.h"
 #include "scene/gui/button.h"
@@ -175,5 +174,3 @@ public:
 	EditorProgressGDDC(Node *p_parent, const String &p_task, const String &p_label, int p_amount, bool p_can_cancel = false);
 	~EditorProgressGDDC();
 };
-
-#endif // GDRE_PROGRESS_H

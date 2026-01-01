@@ -1,6 +1,5 @@
 
-#ifndef STD_ALLOCATOR_H
-#define STD_ALLOCATOR_H
+#pragma once
 
 #include <core/os/memory.h>
 #include <core/typedefs.h>
@@ -64,4 +63,3 @@ public:
 		return false;
 	}
 };
-#endif //STD_ALLOCATOR_H

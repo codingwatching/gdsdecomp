@@ -1,5 +1,4 @@
-#ifndef INPUT_EVENT_PARSER_V2_H
-#define INPUT_EVENT_PARSER_V2_H
+#pragma once
 
 #include "compat/resource_loader_compat.h"
 #include "core/input/input_event.h"
@@ -420,5 +419,3 @@ public:
 	virtual Ref<MissingResource> convert_back(const Ref<Resource> &res, int ver_major, Error *r_error = nullptr) override;
 	static bool handles_type_static(const String &p_type, int ver_major);
 };
-
-#endif // INPUT_EVENT_PARSER_V2_H

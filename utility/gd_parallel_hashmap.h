@@ -1,7 +1,4 @@
-
-#ifndef GD_PARALLEL_HASHMAP_H
-#define GD_PARALLEL_HASHMAP_H
-
+#pragma once
 #include "core/os/mutex.h"
 #include "external/parallel_hashmap/phmap.h"
 #include "std_allocator.h"
@@ -73,5 +70,3 @@ template <class Key, class Value,
 		size_t N = 4, // 2**N submaps
 		class Mutex = BinaryMutex> // use std::mutex to enable internal locks
 using ParallelNodeHashMap = phmap::parallel_node_hash_map<Key, Value, Hash, Eq, Alloc, N, Mutex>;
-
-#endif //GD_PARALLEL_HASHMAP_H

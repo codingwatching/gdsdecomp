@@ -1,5 +1,4 @@
-#ifndef PLUGIN_SOURCE_H
-#define PLUGIN_SOURCE_H
+#pragma once
 
 #include "core/object/object.h"
 #include "core/object/ref_counted.h"
@@ -35,5 +34,3 @@ public:
 		return retrieved_time + EXPIRY_TIME <= OS::get_singleton()->get_unix_time();
 	}
 };
-
-#endif // PLUGIN_SOURCE_H

@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef RESOURCE_COMPAT_BINARY_H
-#define RESOURCE_COMPAT_BINARY_H
+#pragma once
 
 #include "compat/resource_import_metadatav2.h"
 #include "compat/resource_loader_compat.h"
@@ -274,5 +273,3 @@ public:
 
 	ResourceFormatSaverCompatBinary();
 };
-
-#endif // RESOURCE_COMPAT_BINARY_H

@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-#ifndef RESOURCE_FORMAT_XML_H
-#define RESOURCE_FORMAT_XML_H
+#pragma once
 
 #include "compat/resource_loader_compat.h"
 #include "core/io/file_access.h"
@@ -251,5 +250,3 @@ public:
 
 	ResourceFormatSaverXML();
 };
-
-#endif // RESOURCE_FORMAT_XML_H

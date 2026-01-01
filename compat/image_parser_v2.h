@@ -1,5 +1,4 @@
-#ifndef IMAGE_PARSER_V2_H
-#define IMAGE_PARSER_V2_H
+#pragma once
 
 #include "core/io/file_access.h"
 #include "core/io/image.h"
@@ -17,5 +16,3 @@ public:
 	static Error decode_image_v2(Ref<FileAccess> f, Variant &r_v, bool convert_indexed = true);
 	static Error write_image_v2_to_bin(Ref<FileAccess> f, const Variant &r_v, bool compress_lossless = true);
 };
-
-#endif // IMAGE_PARSER_V2_H

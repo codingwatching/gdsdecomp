@@ -1,5 +1,4 @@
-#ifndef GDRE_IMPORT_INFO_H
-#define GDRE_IMPORT_INFO_H
+#pragma once
 
 #include "compat/resource_import_metadatav2.h"
 
@@ -414,4 +413,3 @@ public:
 
 VARIANT_ENUM_CAST(ImportInfo::LossType);
 VARIANT_ENUM_CAST(ImportInfo::IInfoType);
-#endif

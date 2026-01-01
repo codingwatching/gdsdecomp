@@ -1,5 +1,4 @@
-#ifndef PCK_CREATOR_H
-#define PCK_CREATOR_H
+#pragma once
 
 #include "core/object/object.h"
 #include "core/object/ref_counted.h"
@@ -88,5 +87,3 @@ public:
 	String get_watermark() const { return watermark; }
 	String get_error_message() const { return error_string; }
 };
-
-#endif // PCK_CREATOR_H

@@ -1,5 +1,4 @@
-#ifndef PCK_DUMPER_H
-#define PCK_DUMPER_H
+#pragma once
 
 #include "core/object/object.h"
 #include "core/object/ref_counted.h"
@@ -41,5 +40,3 @@ public:
 
 	//Error pck_dump_to_dir(const String &dir, const Vector<String> &files_to_extract);
 };
-
-#endif // PCK_DUMPER_H

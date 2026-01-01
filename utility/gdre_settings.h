@@ -1,5 +1,4 @@
-#ifndef GDRE_SETTINGS_H
-#define GDRE_SETTINGS_H
+#pragma once
 #include "core/object/class_db.h"
 #include "gd_parallel_hashmap.h"
 #include "import_info.h"
@@ -465,4 +464,3 @@ public:
 };
 
 VARIANT_ENUM_CAST(GDRESettings::PackInfo::PackType);
-#endif

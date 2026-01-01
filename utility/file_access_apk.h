@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-#ifndef FILE_ACCESS_APK_H
-#define FILE_ACCESS_APK_H
+#pragma once
 
 #ifdef MINIZIP_ENABLED
 
@@ -128,5 +127,3 @@ public:
 };
 
 #endif // MINIZIP_ENABLED
-
-#endif // FILE_ACCESS_ZIP_H
