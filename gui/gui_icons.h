@@ -5,7 +5,7 @@ class GDREGuiIcons {
 	static GDREGuiIcons *singleton;
 
 	HashMap<float, HashMap<StringName, Ref<ImageTexture>>> icons;
-	bool initialized;
+	bool initialized = false;
 	Mutex init_lock;
 
 	void init_for_scale(float scale);
