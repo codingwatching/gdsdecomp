@@ -39,7 +39,6 @@
 class FileAccessEncryptedCustom : public FileAccess {
 	GDSOFTCLASS(FileAccessEncryptedCustom, FileAccess);
 
-
 public:
 	enum Mode : int32_t {
 		MODE_READ,
@@ -100,10 +99,8 @@ public:
 
 	virtual void close() override;
 
-
 	Error open_and_parse(Ref<FileAccess> p_base, const Vector<uint8_t> &p_key, Mode p_mode, bool p_with_magic = true, const Vector<uint8_t> &p_iv = Vector<uint8_t>());
 	Error open_and_parse_password(Ref<FileAccess> p_base, const String &p_key, Mode p_mode);
-
 
 	Vector<uint8_t> get_iv() const { return iv; }
 	void set_iv(const Vector<uint8_t> &p_iv) { iv = p_iv; }
@@ -121,7 +118,6 @@ public:
 	static void deinitialize();
 
 	void set_decryptor(Ref<CustomDecryptor> p_decryptor);
-
 
 	static Ref<FileAccessEncryptedCustom> create(Ref<CustomDecryptor> p_decryptor);
 

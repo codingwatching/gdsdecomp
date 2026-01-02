@@ -1,8 +1,8 @@
 #pragma once
-#include "core/object/ref_counted.h"
-#include "core/variant/variant.h"
 #include "core/io/file_access.h"
 #include "core/object/gdvirtual.gen.inc"
+#include "core/object/ref_counted.h"
+#include "core/variant/variant.h"
 
 class CustomDecryptor : public RefCounted {
 	GDCLASS(CustomDecryptor, RefCounted);
