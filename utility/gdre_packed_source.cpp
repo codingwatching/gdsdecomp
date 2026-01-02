@@ -443,6 +443,9 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 			pck_path, godot_ver, version, pack_flags, file_base, file_count, is_exe ? GDRESettings::PackInfo::EXE : GDRESettings::PackInfo::PCK, enc_directory, suspect_version, suspect_magic);
 	GDRESettings::get_singleton()->add_pack_info(pckinfo);
 
+	bool opened_encrypted_file = false;
+	bool open_encrypted_success = false;
+	int64_t encrypted_file_count = 0;
 	// Read the file list.
 	for (uint32_t i = 0; i < file_count; i++) {
 		uint32_t sl = f->get_32();
@@ -468,8 +471,36 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 		if (flags & PACK_FILE_REMOVAL) { // The file was removed.
 			GDREPackedData::get_singleton()->remove_path(path);
 		} else {
-			GDREPackedData::get_singleton()->add_path(pck_path, path, ofs, size, md5, this, p_replace_files, (flags & PACK_FILE_ENCRYPTED), sparse_bundle, (flags & PACK_FILE_DELTA));
+			bool encrypted = (flags & PACK_FILE_ENCRYPTED);
+			bool delta = (flags & PACK_FILE_DELTA);
+			GDREPackedData::get_singleton()->add_path(pck_path, path, ofs, size, md5, this, p_replace_files, encrypted, sparse_bundle, delta);
+			if (encrypted) {
+				encrypted_file_count++;
+				if (!opened_encrypted_file && size > 0 && !delta) {
+					opened_encrypted_file = true;
+					// try opening the file
+					PackedData::PackedFile pf;
+					pf.pack = pck_path;
+					pf.offset = ofs;
+					pf.size = size;
+					memcpy(pf.md5, md5, 16);
+					pf.src = this;
+					pf.encrypted = encrypted;
+					pf.bundle = sparse_bundle;
+					pf.delta = delta;
+					Ref<FileAccess> fa = get_file(path, &pf);
+					if (fa.is_null() || fa->get_error() != OK) {
+						WARN_PRINT("Can't open encrypted files in PCK!");
+						GDRESettings::get_singleton()->_set_error_encryption(true);
+					} else {
+						open_encrypted_success = true;
+					}
+				}
+			}
 		}
+	}
+	if (opened_encrypted_file && !open_encrypted_success) {
+		WARN_PRINT("Can't decrypt " + itos(encrypted_file_count) + " encrypted files in PCK!");
 	}
 
 	return true;
