@@ -237,6 +237,8 @@ func open_about_window():
 	$LegalNoticeWindow.popup_centered()
 
 func open_setenc_window():
+	%KeyText.text = GDRESettings.get_encryption_key_string()
+	%EncryptionScriptPathText.text = GDRESettings.get_custom_decryption_script_path()
 	$SetEncryptionKeyWindow.popup_centered()
 
 
@@ -454,6 +456,15 @@ func _on_setenc_key_ok_pressed():
 			# pop up an accept dialog
 			$SetEncryptionKeyWindow.popup_error_box("Invalid key!\nKey must be a hex string with 64 characters", "Error")
 			return
+
+	if %EncryptionScriptPathText.text.length() > 0:
+		GDRESettings.get_recent_error_string()
+		var err:int = GDRESettings.set_custom_decryption_script(%EncryptionScriptPathText.text)
+		if (err != OK):
+			$SetEncryptionKeyWindow.popup_error_box("Invalid encryption script!\n" + GDRESettings.get_recent_error_string(), "Error")
+			return
+	else:
+		GDRESettings.reset_custom_decryptor()
 	# close the window
 	$SetEncryptionKeyWindow.hide()
 
@@ -1850,3 +1861,16 @@ func _on_gdre_patch_pck_do_patch_pck(dest_pck: String, file_map: Dictionary[Stri
 		return
 	popup_error_box("PCK patching complete", "Success")
 	pass # Replace with function body.
+
+
+func _on_encryption_script_chooser_pressed() -> void:
+	%EncryptionScriptFileDialog.popup_centered()
+	pass # Replace with function body.
+
+
+func _on_encryption_script_clear_pressed() -> void:
+	%EncryptionScriptPathText.text = ""
+
+
+func _on_encryption_script_file_dialog_file_selected(path: String) -> void:
+	%EncryptionScriptPathText.text = path
