@@ -1,4 +1,5 @@
 #include "gdre_packed_source.h"
+#include "core/version_generated.gen.h"
 #include "file_access_apk.h"
 #include "file_access_gdre.h"
 #include "gdre_settings.h"
@@ -229,7 +230,7 @@ bool GDREPackedSource::_get_exe_embedded_pck_info(Ref<FileAccess> f, const Strin
 	return false;
 }
 
-bool GDREPackedSource::seek_offset_from_exe(Ref<FileAccess> f, const String &p_path) {
+bool GDREPackedSource::seek_offset_from_exe(Ref<FileAccess> f, const String &p_path, uint64_t &r_pck_size) {
 	EXEPCKInfo info;
 	auto ret = _get_exe_embedded_pck_info(f, p_path, info);
 #ifdef DEBUG_ENABLED
@@ -247,6 +248,7 @@ bool GDREPackedSource::seek_offset_from_exe(Ref<FileAccess> f, const String &p_p
 		print_verbose("Embedded PCK not found in executable.");
 	}
 #endif
+	r_pck_size = info.pck_embed_size;
 	return ret;
 }
 
@@ -278,11 +280,30 @@ bool GDREPackedSource::has_embedded_pck(const String &p_path) {
 	if (f.is_null()) {
 		return false;
 	}
-	return seek_offset_from_exe(f, p_path);
+	uint64_t file_length;
+	return seek_offset_from_exe(f, p_path, file_length);
+}
+
+bool GDREPackedSource::is_magic_ascii(uint32_t magic) {
+	for (int i = 0; i < 4; i++) {
+		// printable ASCII characters
+		uint32_t c = magic & 0xFF;
+		if (c < 32 || c > 127) {
+			return false;
+		}
+		magic >>= 8;
+	}
+	return true;
+}
+
+String GDREPackedSource::get_magic_ascii(uint32_t magic) {
+	// little-endian to ASCII
+	return String::chr(magic & 0xFF) + String::chr((magic >> 8) & 0xFF) + String::chr((magic >> 16) & 0xFF) + String::chr((magic >> 24) & 0xFF);
 }
 
 bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset) {
-	if (p_path.get_extension().to_lower() == "apk" || p_path.get_extension().to_lower() == "zip") {
+	String ext = p_path.get_extension().to_lower();
+	if (ext == "apk" || ext == "zip") {
 		return false;
 	}
 	String pck_path = p_path.replace("_GDRE_a_really_dumb_hack", "");
@@ -293,20 +314,30 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 
 	bool is_exe = false;
 	uint32_t magic = f->get_32();
+	bool suspect_magic = false;
+	// constexpr uint32_t ALTERNATIVE_MAGIC = 0x4F545650; // 'PVTO' in ASCII
+	uint64_t pck_size = f->get_length();
 
 	if (magic != PACK_HEADER_MAGIC) {
-		// Loading with offset feature not supported for self contained exe files.
-		if (p_offset != 0) {
-			ERR_FAIL_V_MSG(false, "Loading self-contained executable with offset not supported.");
-		}
+		if (ext == "pck" && is_magic_ascii(magic)) {
+			suspect_magic = true;
+			WARN_PRINT("PCK has suspect magic: " + get_magic_ascii(magic));
+		} else {
+			// Loading with offset feature not supported for self contained exe files.
+			if (p_offset != 0) {
+				ERR_FAIL_V_MSG(false, "Loading self-contained executable with offset not supported.");
+			}
 
-		if (!seek_offset_from_exe(f, pck_path)) {
-			return false;
+			if (!seek_offset_from_exe(f, pck_path, pck_size)) {
+				ERR_FAIL_COND_V_MSG(ext == "pck", false, "PCK header not found in pck file: " + pck_path);
+				return false;
+			}
+			is_exe = true;
 		}
-		is_exe = true;
 	}
 
 	int64_t pck_start_pos = f->get_position() - 4;
+	uint64_t pck_end_pos = pck_start_pos + pck_size;
 
 	uint32_t version = f->get_32();
 	uint32_t ver_major = f->get_32();
@@ -315,6 +346,12 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 
 	if (version > CURRENT_PACK_FORMAT_VERSION) {
 		ERR_FAIL_V_MSG(false, "Pack version unsupported: " + itos(version) + ". (engine version: " + itos(ver_major) + "." + itos(ver_minor) + "." + itos(ver_patch) + ")");
+	}
+
+	if (suspect_magic) {
+		if (ver_major > GODOT_VERSION_MAJOR || (ver_major == 0)) {
+			ERR_FAIL_V_MSG(false, "PCK ver_major is suspicious, not continuing: " + itos(version) + ". (engine version: " + itos(ver_major) + "." + itos(ver_minor) + "." + itos(ver_patch) + ")");
+		}
 	}
 
 	uint32_t pack_flags = 0;
@@ -346,6 +383,7 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 		uint64_t dir_offset = f->get_64() + pck_start_pos;
 		ERR_FAIL_COND_V_MSG(dir_offset == 0, false,
 				"Directory offset is 0, this is not a valid PCK file\n" + DEBUG_PCK_INFO());
+		ERR_FAIL_COND_V_MSG(dir_offset >= pck_end_pos, false, "Directory offset is out of bounds: " + String::num_int64(dir_offset) + " (file length: " + String::num_int64(pck_end_pos) + ")");
 		f->seek(dir_offset);
 	} else if (version <= PACK_FORMAT_VERSION_V2) {
 		// V2: Directory directly after the header.
@@ -356,6 +394,7 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 #undef DEBUG_PCK_INFO
 
 	uint32_t file_count = f->get_32();
+	ERR_FAIL_COND_V_MSG(file_count > 0 && file_base >= pck_end_pos, false, "file_base is out of bounds: " + String::num_int64(file_base) + " (file length: " + String::num_int64(pck_size) + ")");
 	if (enc_directory) {
 		Ref<FileAccessEncrypted> fae = memnew(FileAccessEncrypted);
 		if (fae.is_null()) {
@@ -401,7 +440,7 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 	Ref<GDRESettings::PackInfo> pckinfo;
 	pckinfo.instantiate();
 	pckinfo->init(
-			pck_path, godot_ver, version, pack_flags, file_base, file_count, is_exe ? GDRESettings::PackInfo::EXE : GDRESettings::PackInfo::PCK, enc_directory, suspect_version);
+			pck_path, godot_ver, version, pack_flags, file_base, file_count, is_exe ? GDRESettings::PackInfo::EXE : GDRESettings::PackInfo::PCK, enc_directory, suspect_version, suspect_magic);
 	GDRESettings::get_singleton()->add_pack_info(pckinfo);
 
 	// Read the file list.

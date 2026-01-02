@@ -43,10 +43,11 @@ public:
 		Ref<ProjectConfigLoader> pcfg;
 		bool encrypted = false;
 		bool suspect_version = false;
+		bool used_nonstandard_headers = false;
 
 	public:
 		void init(
-				String f, Ref<GodotVer> godot_ver, uint32_t fver, uint32_t flags, uint64_t base, uint32_t count, PackType tp, bool p_encrypted = false, bool p_suspect_version = false) {
+				String f, Ref<GodotVer> godot_ver, uint32_t fver, uint32_t flags, uint64_t base, uint32_t count, PackType tp, bool p_encrypted = false, bool p_suspect_version = false, bool p_uses_nonstandard_headers = false) {
 			pack_file = f;
 			// copy the version, or set it to null if it's invalid
 			if (godot_ver.is_valid() && godot_ver->is_valid_semver()) {
@@ -60,6 +61,7 @@ public:
 			pcfg.instantiate();
 			encrypted = p_encrypted;
 			suspect_version = p_suspect_version;
+			used_nonstandard_headers = p_uses_nonstandard_headers;
 		}
 		bool has_unknown_version() {
 			return !version.is_valid() || !version->is_valid_semver();
@@ -80,6 +82,7 @@ public:
 		PackType get_type() const { return type; }
 		bool is_encrypted() const { return encrypted; }
 		bool has_suspect_version() const { return suspect_version; }
+		bool uses_nonstandard_headers() const { return used_nonstandard_headers; }
 
 	protected:
 		static void _bind_methods() {
@@ -114,6 +117,7 @@ public:
 		int bytecode_revision = 0;
 		bool suspect_version = false;
 		bool detected_csharp = false;
+		bool uses_nonstandard_headers = false;
 		String assembly_path;
 		Ref<GodotMonoDecompWrapper> decompiler;
 		String assembly_temp_dir;
@@ -334,6 +338,8 @@ public:
 	uint32_t get_ver_rev() const;
 	// Get the total number of files in all loaded packs
 	uint32_t get_file_count() const;
+	// Returns whether the project's PCKs use non-standard headers
+	bool uses_nonstandard_headers() const;
 	// Converts a local path to a global filesystem path (e.g. "res://icon.png" -> "/path/to/game/icon.png")
 	String globalize_path(const String &p_path, const String &resource_path = "") const;
 	// Converts a global filesystem path to a local path (e.g. "/path/to/game/icon.png" -> "res://icon.png")
