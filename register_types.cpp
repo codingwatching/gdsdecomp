@@ -35,6 +35,9 @@
 #include "compat/script_loader.h"
 #include "compat/texture_loader_compat.h"
 #include "compat/video_stream_compat.h"
+#include "crypto/crypto_core_gdre_contexts.h"
+#include "crypto/custom_decryptor.h"
+#include "crypto/file_access_encrypted_custom.h"
 #include "exporters/autoconverted_exporter.h"
 #include "exporters/csharp_exporter.h"
 #include "exporters/dialogue_exporter.h"
@@ -483,6 +486,13 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<GDREAudioStreamPreviewGeneratorNode>();
 	ClassDB::register_class<GDREAudioStreamPreviewGenerator>();
 	ClassDB::register_class<GDREAudioStreamPreview>();
+
+	// crypto classes
+	ClassDB::register_class<CustomDecryptor>(true);
+	ClassDB::register_class<FileAccessEncryptedCustom>();
+	ClassDB::register_class<AESContextGDRE>();
+	ClassDB::register_class<CamelliaContext>();
+	ClassDB::register_class<AriaContext>();
 
 	ClassDB::register_class<GDRECommon>();
 	ClassDB::register_class<TextDiff>();

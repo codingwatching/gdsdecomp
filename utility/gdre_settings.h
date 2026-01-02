@@ -13,6 +13,8 @@
 class GDRELogger;
 class GDREPackedData;
 class GodotMonoDecompWrapper;
+class CustomDecryptor;
+
 class GDRESettings : public Object {
 	GDCLASS(GDRESettings, Object);
 	_THREAD_SAFE_CLASS_
@@ -166,6 +168,8 @@ private:
 	Vector<Ref<Script>> cached_scripts;
 
 	Vector<uint8_t> enc_key;
+	String custom_decryption_script_path;
+	Ref<CustomDecryptor> custom_decryptor;
 
 	bool in_editor = false;
 	bool first_load = true;
@@ -300,6 +304,15 @@ public:
 	Error set_encryption_key(Vector<uint8_t> key);
 	// Sets the encryption key from a string
 	Error set_encryption_key_string(const String &key);
+
+	Error set_custom_decryption_script(const String &p_decryptor_script_path);
+
+	void set_custom_decryptor(const Ref<CustomDecryptor> &p_decryptor);
+	void reset_custom_decryptor();
+
+	Ref<CustomDecryptor> get_custom_decryptor() const;
+	String get_custom_decryption_script_path() const;
+
 	// Resets the encryption key
 	void reset_encryption_key();
 	// Adds a pack info to the list of packs (used by the pack sources in GDREPackedData)

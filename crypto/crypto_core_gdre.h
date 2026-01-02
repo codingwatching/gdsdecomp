@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/object/object.h"
+#include "core/typedefs.h"
 
 class CryptoCoreGdre {
 public:

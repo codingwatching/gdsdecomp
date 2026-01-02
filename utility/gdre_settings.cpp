@@ -11,8 +11,10 @@
 #include "core/io/file_access.h"
 #include "core/object/class_db.h"
 #include "core/string/print_string.h"
+#include "crypto/custom_decryptor.h"
 #include "exporters/translation_exporter.h"
 #include "main/main.h"
+#include "modules/gdscript/gdscript.h"
 #include "modules/zip/zip_reader.h"
 #include "plugin_manager/plugin_manager.h"
 #include "utility/common.h"
@@ -1160,6 +1162,11 @@ Error GDRESettings::save_project_config_binary(const String &p_out_dir = "") {
 
 Error GDRESettings::unload_project(bool p_no_reset_ephemeral) {
 	logger->stop_prebuffering();
+	GDREPackedData::get_singleton()->clear();
+	// If this wasn't a custom decryptor set by the user, unload it.
+	if (custom_decryptor.is_valid() && custom_decryption_script_path.is_empty()) {
+		custom_decryptor = nullptr;
+	}
 	if (!is_pack_loaded()) {
 		return ERR_DOES_NOT_EXIST;
 	}
@@ -1167,7 +1174,6 @@ Error GDRESettings::unload_project(bool p_no_reset_ephemeral) {
 	error_encryption = false;
 
 	remove_current_pack();
-	GDREPackedData::get_singleton()->clear();
 	reset_uid_cache();
 	reset_gdscript_cache();
 	if (!p_no_reset_ephemeral && GDREConfig::get_singleton()) {
@@ -1324,6 +1330,42 @@ Error GDRESettings::set_encryption_key_string(const String &key_str) {
 	}
 	set_encryption_key(key);
 	return OK;
+}
+
+Error GDRESettings::set_custom_decryption_script(const String &p_decryptor_script_path) {
+	ERR_FAIL_COND_V_MSG(!FileAccess::exists(p_decryptor_script_path), ERR_FILE_NOT_FOUND, "Custom encryption script file '" + p_decryptor_script_path + "' does not exist");
+	ERR_FAIL_COND_V_MSG(p_decryptor_script_path.get_extension().to_lower() != "gd", ERR_INVALID_PARAMETER, "Custom encryption script file must be a GDScript!");
+	Error err = OK;
+	ResourceFormatLoaderGDScript loader;
+	Ref<Script> script = loader.load(p_decryptor_script_path, p_decryptor_script_path, &err, false, nullptr, ResourceFormatLoader::CACHE_MODE_IGNORE);
+	ERR_FAIL_COND_V_MSG(script.is_null() || err != OK, err, "Failed to load custom encryption script!");
+	auto base_type = script->get_instance_base_type();
+	ERR_FAIL_COND_V_MSG(base_type != "CustomDecryptor", ERR_INVALID_PARAMETER, "Custom encryption script does not inherit from CustomDecryptor!");
+	Ref<CustomDecryptor> decryptor;
+	decryptor.instantiate();
+	decryptor->set_script(script);
+	ERR_FAIL_COND_V_MSG(Ref<Script>(decryptor->get_script()).is_null(), ERR_INVALID_PARAMETER, "Failed to instantiate custom encryption script!");
+	ERR_FAIL_NULL_V_MSG(decryptor->get_script_instance(), ERR_INVALID_PARAMETER, "Failed to get script instance from custom encryption script!");
+	custom_decryption_script_path = p_decryptor_script_path;
+	set_custom_decryptor(decryptor);
+	return OK;
+}
+
+void GDRESettings::set_custom_decryptor(const Ref<CustomDecryptor> &p_decryptor) {
+	custom_decryptor = p_decryptor;
+}
+
+Ref<CustomDecryptor> GDRESettings::get_custom_decryptor() const {
+	return custom_decryptor;
+}
+
+String GDRESettings::get_custom_decryption_script_path() const {
+	return custom_decryption_script_path;
+}
+
+void GDRESettings::reset_custom_decryptor() {
+	custom_decryptor = nullptr;
+	custom_decryption_script_path = "";
 }
 
 void GDRESettings::reset_encryption_key() {
@@ -2924,6 +2966,11 @@ void GDRESettings::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_encryption_key_string", "key"), &GDRESettings::set_encryption_key_string);
 	ClassDB::bind_method(D_METHOD("set_encryption_key", "key"), &GDRESettings::set_encryption_key);
 	ClassDB::bind_method(D_METHOD("reset_encryption_key"), &GDRESettings::reset_encryption_key);
+	ClassDB::bind_method(D_METHOD("set_custom_decryption_script", "p_decryptor_script_path"), &GDRESettings::set_custom_decryption_script);
+	ClassDB::bind_method(D_METHOD("get_custom_decryption_script_path"), &GDRESettings::get_custom_decryption_script_path);
+	ClassDB::bind_method(D_METHOD("set_custom_decryptor", "p_decryptor"), &GDRESettings::set_custom_decryptor);
+	ClassDB::bind_method(D_METHOD("get_custom_decryptor"), &GDRESettings::get_custom_decryptor);
+	ClassDB::bind_method(D_METHOD("reset_custom_decryptor"), &GDRESettings::reset_custom_decryptor);
 	ClassDB::bind_method(D_METHOD("had_encryption_error"), &GDRESettings::had_encryption_error);
 	ClassDB::bind_method(D_METHOD("get_file_list", "filters"), &GDRESettings::get_file_list, DEFVAL(Vector<String>()));
 	ClassDB::bind_method(D_METHOD("get_file_info_array", "filters"), &GDRESettings::get_file_info_array, DEFVAL(Vector<String>()));

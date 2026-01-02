@@ -1,5 +1,6 @@
 #include "gdre_packed_source.h"
 #include "core/version_generated.gen.h"
+#include "crypto/file_access_encrypted_custom.h"
 #include "file_access_apk.h"
 #include "file_access_gdre.h"
 #include "gdre_settings.h"
@@ -398,24 +399,25 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 	uint32_t file_count = f->get_32();
 	ERR_FAIL_COND_V_MSG(file_count > 0 && file_base >= pck_end_pos, false, "file_base is out of bounds: " + String::num_int64(file_base) + " (file length: " + String::num_int64(pck_size) + ")");
 	if (enc_directory) {
-		Ref<FileAccessEncrypted> fae = memnew(FileAccessEncrypted);
-		if (fae.is_null()) {
-			GDRESettings::get_singleton()->_set_error_encryption(true);
-			ERR_FAIL_V_MSG(false, "Failed to instance FileAccessEncrypted??????.");
-		}
-
 		Vector<uint8_t> key;
 		key.resize(32);
 		for (int i = 0; i < key.size(); i++) {
 			key.write[i] = script_encryption_key[i];
 		}
-
-		Error err = fae->open_and_parse(f, key, FileAccessEncrypted::MODE_READ, false);
+		Error err = OK;
+		if (GDRESettings::get_singleton()->get_custom_decryptor().is_valid()) {
+			Ref<FileAccessEncryptedCustom> fae = FileAccessEncryptedCustom::create(GDRESettings::get_singleton()->get_custom_decryptor());
+			err = fae->open_and_parse(f, key, FileAccessEncryptedCustom::MODE_READ, false);
+			f = fae;
+		} else {
+			Ref<FileAccessEncrypted> fae = memnew(FileAccessEncrypted);
+			err = fae->open_and_parse(f, key, FileAccessEncrypted::MODE_READ, false);
+			f = fae;
+		}
 		if (err) {
 			GDRESettings::get_singleton()->_set_error_encryption(true);
 			ERR_FAIL_V_MSG(false, "Can't open encrypted pack directory (PCK format version " + itos(version) + ", engine version " + itos(ver_major) + "." + itos(ver_minor) + "." + itos(ver_patch) + ").");
 		}
-		f = fae;
 	}
 
 	// Set Pack info before reading the file list.
@@ -545,8 +547,25 @@ Ref<FileAccess> GDREPackedSource::get_file(const String &p_path, PackedData::Pac
 			file = fae;
 		}
 	} else {
-		// otherwise...
-		file = Ref<FileAccess>(memnew(FileAccessPack(p_path, *p_file)));
+		if (p_file->encrypted && GDRESettings::get_singleton()->get_custom_decryptor().is_valid()) {
+			Ref<FileAccess> base = FileAccess::open(p_file->pack, FileAccess::READ);
+			ERR_FAIL_COND_V_MSG(base.is_null(), nullptr, vformat("Can't open pack-referenced file '%s'.", String(p_path)));
+			base->seek(p_file->offset);
+
+			Ref<FileAccessEncryptedCustom> fae = FileAccessEncryptedCustom::create(GDRESettings::get_singleton()->get_custom_decryptor());
+			ERR_FAIL_COND_V_MSG(fae.is_null(), nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
+			Vector<uint8_t> key;
+			key.resize(32);
+			for (int i = 0; i < key.size(); i++) {
+				key.write[i] = script_encryption_key[i];
+			}
+			Error err = fae->open_and_parse(base, key, FileAccessEncryptedCustom::MODE_READ, false);
+			ERR_FAIL_COND_V_MSG(err, nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
+			file = fae;
+		} else {
+			// otherwise...
+			file = Ref<FileAccess>(memnew(FileAccessPack(p_path, *p_file)));
+		}
 	}
 
 	if (GDREPackedData::get_singleton()->has_delta_patches(p_path)) {

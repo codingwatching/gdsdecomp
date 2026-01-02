@@ -757,6 +757,7 @@ var RECOVER_OPTS_NOTES = """Recover/Extract Options:
 --load-custom-bytecode=<JSON_FILE>   Load a custom bytecode definition file from the specified JSON file and use it for the recovery session
 --translation-hint=<FILE>   		 Load a translation key hint file (.csv, .txt, .po, .mo) and use it during translation recovery
 --skip-loading-resource-strings   	 Skip loading resource strings from all resources during translation recovery
+--custom-decryption-script=<PATH>     Load a custom decryption script from the specified path and use it for the recovery session
 """
 # todo: handle --key option
 var COMPILE_OPTS_NOTES = """Decompile/Compile Options:
@@ -1511,6 +1512,24 @@ func handle_cli(args: PackedStringArray) -> bool:
 			scripts_only = true
 		elif arg.begins_with("--key"):
 			enc_key = get_arg_value(arg)
+		elif arg.begins_with("--custom-decryption-script"):
+			var decryptor_script_path = get_cli_abs_path(get_arg_value(arg))
+			if decryptor_script_path.is_empty():
+				print_usage()
+				print("Error: path is required for --custom-decryption-script")
+				ret_code = 1
+				return true
+			decryptor_script_path = get_cli_abs_path(decryptor_script_path)
+			if not FileAccess.file_exists(decryptor_script_path):
+				print_usage()
+				print("Error: custom encryption script file '" + decryptor_script_path + "' does not exist")
+				ret_code = 1
+				return true
+			if GDRESettings.set_custom_decryption_script(decryptor_script_path) != OK:
+				print_usage()
+				print("Error: failed to set custom encryption script: " + decryptor_script_path)
+				ret_code = 1
+				return true
 		elif arg.begins_with("--ignore-checksum-errors"):
 			ignore_md5 = true
 		elif arg.begins_with("--skip-checksum-check"):

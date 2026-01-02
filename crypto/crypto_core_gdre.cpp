@@ -1,5 +1,7 @@
 #include "crypto_core_gdre.h"
 
+#include "core/os/memory.h"
+
 #include <mbedtls/aria.h>
 #include <mbedtls/camellia.h>
 
@@ -108,4 +110,3 @@ Error CryptoCoreGdre::AriaContext::decrypt_cfb(size_t p_length, uint8_t p_iv[16]
 	int ret = mbedtls_aria_crypt_cfb128((mbedtls_aria_context *)ctx, MBEDTLS_ARIA_DECRYPT, p_length, &iv_off, p_iv, p_src, r_dst);
 	return ret ? FAILED : OK;
 }
-
