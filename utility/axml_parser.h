@@ -36,6 +36,6 @@ class AXMLParser {
 	Vector<String> perms;
 
 public:
-	String get_godot_library_version_string() { return godot_library_version; };
+	String get_godot_library_version_string() { return godot_library_version; }
 	Error parse_manifest(Vector<uint8_t> &p_manifest);
 };
