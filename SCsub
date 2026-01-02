@@ -852,6 +852,7 @@ module_obj = []
 env_gdsdecomp.add_source_files(module_obj, "*.cpp")
 env_gdsdecomp.add_source_files(module_obj, "bytecode/*.cpp")
 env_gdsdecomp.add_source_files(module_obj, "compat/*.cpp")
+env_gdsdecomp.add_source_files(module_obj, "crypto/*.cpp")
 if env["target"] == "editor":
     env_gdsdecomp.add_source_files(module_obj, "editor/*.cpp")
 env_gdsdecomp.add_source_files(module_obj, "exporters/*.cpp")
