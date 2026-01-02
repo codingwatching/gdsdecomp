@@ -26,7 +26,9 @@ private:
 	static bool get_pck_section_info_unix(Ref<FileAccess> f, GDREPackedSource::EXEPCKInfo &info);
 	static bool seek_after_magic_windows(Ref<FileAccess> f);
 	static bool get_pck_section_info_windows(Ref<FileAccess> f, GDREPackedSource::EXEPCKInfo &r_info);
-	static bool seek_offset_from_exe(Ref<FileAccess> f, const String &p_path);
+	static bool seek_offset_from_exe(Ref<FileAccess> f, const String &p_path, uint64_t &r_pck_size);
+	static bool is_magic_ascii(uint32_t magic);
+	static String get_magic_ascii(uint32_t magic);
 
 public:
 	static constexpr int CURRENT_PACK_FORMAT_VERSION = 3;
