@@ -315,12 +315,14 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 	bool is_exe = false;
 	uint32_t magic = f->get_32();
 	bool suspect_magic = false;
-	// constexpr uint32_t ALTERNATIVE_MAGIC = 0x4F545650; // 'PVTO' in ASCII
+	String non_standard_header;
+
 	uint64_t pck_size = f->get_length();
 
 	if (magic != PACK_HEADER_MAGIC) {
 		if (ext == "pck" && is_magic_ascii(magic)) {
 			suspect_magic = true;
+			non_standard_header = get_magic_ascii(magic);
 			WARN_PRINT("PCK has suspect magic: " + get_magic_ascii(magic));
 		} else {
 			// Loading with offset feature not supported for self contained exe files.
@@ -440,7 +442,7 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 	Ref<GDRESettings::PackInfo> pckinfo;
 	pckinfo.instantiate();
 	pckinfo->init(
-			pck_path, godot_ver, version, pack_flags, file_base, file_count, is_exe ? GDRESettings::PackInfo::EXE : GDRESettings::PackInfo::PCK, enc_directory, suspect_version, suspect_magic);
+			pck_path, godot_ver, version, pack_flags, file_base, file_count, is_exe ? GDRESettings::PackInfo::EXE : GDRESettings::PackInfo::PCK, enc_directory, suspect_version, non_standard_header);
 	GDRESettings::get_singleton()->add_pack_info(pckinfo);
 
 	bool opened_encrypted_file = false;
@@ -464,6 +466,8 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 		uint64_t size = f->get_64();
 		uint8_t md5[16];
 		uint32_t flags = 0;
+		// check if the file offset is out of bounds for pcks with suspect magic
+		ERR_FAIL_COND_V_MSG(suspect_magic && (ofs + size > pck_end_pos), false, "File offset is out of bounds: " + String::num_int64(ofs) + " (file length: " + String::num_int64(pck_end_pos) + ")");
 		f->get_buffer(md5, 16);
 		if (version >= PACK_FORMAT_VERSION_V2) {
 			flags = f->get_32();

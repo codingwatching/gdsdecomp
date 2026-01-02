@@ -318,7 +318,14 @@ bool GDRESettings::uses_nonstandard_headers() const {
 	if (!is_pack_loaded()) {
 		return false;
 	}
-	return current_project->uses_nonstandard_headers;
+	return !current_project->non_standard_header.is_empty();
+}
+
+String GDRESettings::get_non_standard_header() const {
+	if (!is_pack_loaded()) {
+		return "";
+	}
+	return current_project->non_standard_header;
 }
 
 void GDRESettings::set_project_path(const String &p_path) {
@@ -1178,7 +1185,7 @@ void GDRESettings::add_pack_info(Ref<PackInfo> packinfo) {
 		current_project->pack_file = packinfo->pack_file;
 		current_project->type = packinfo->type;
 		current_project->suspect_version = packinfo->suspect_version;
-		current_project->uses_nonstandard_headers = packinfo->used_nonstandard_headers;
+		current_project->non_standard_header = packinfo->non_standard_header;
 	} else {
 		if (!current_project->version->eq(packinfo->version)) {
 			if ((!current_project->version->is_valid_semver() || current_project->version->get_major() == 0) &&
