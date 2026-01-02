@@ -47,7 +47,7 @@ public:
 	};
 
 private:
-	Mode mode;
+	Mode mode = MODE_READ;
 	Vector<uint8_t> key;
 	bool writing = false;
 	Ref<FileAccess> file;
