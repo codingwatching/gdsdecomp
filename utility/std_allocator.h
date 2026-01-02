@@ -4,6 +4,9 @@
 #include <core/os/memory.h>
 #include <core/typedefs.h>
 
+#include <limits>
+#include <memory>
+
 template <typename T>
 class GodotStdAllocator {
 public:

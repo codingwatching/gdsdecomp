@@ -119,10 +119,12 @@ int GDRESettings::get_ver_major_from_dir() {
 	if (check_if_dir_is_v2() && (FileAccess::exists("res://engine.cfb") || FileAccess::exists("res://engine.cfg"))) {
 		return 2;
 	}
-	if (check_if_dir_is_v4())
+	if (check_if_dir_is_v4()) {
 		return 4;
-	if (check_if_dir_is_v3())
+	}
+	if (check_if_dir_is_v3()) {
 		return 3;
+	}
 	bool not_v2 = !check_if_dir_is_v2() || FileAccess::exists("res://project.binary") || FileAccess::exists("res://project.godot");
 
 	// deeper checking; we know it's not v2, so we don't need to check that.
@@ -1286,19 +1288,21 @@ Error GDRESettings::set_encryption_key_string(const String &key_str) {
 		int v = 0;
 		if (i * 2 < skey.length()) {
 			char32_t ct = skey.to_lower()[i * 2];
-			if (ct >= '0' && ct <= '9')
+			if (ct >= '0' && ct <= '9') {
 				ct = ct - '0';
-			else if (ct >= 'a' && ct <= 'f')
+			} else if (ct >= 'a' && ct <= 'f') {
 				ct = 10 + ct - 'a';
+			}
 			v |= ct << 4;
 		}
 
 		if (i * 2 + 1 < skey.length()) {
 			char32_t ct = skey.to_lower()[i * 2 + 1];
-			if (ct >= '0' && ct <= '9')
+			if (ct >= '0' && ct <= '9') {
 				ct = ct - '0';
-			else if (ct >= 'a' && ct <= 'f')
+			} else if (ct >= 'a' && ct <= 'f') {
 				ct = 10 + ct - 'a';
+			}
 			v |= ct;
 		}
 		key.write[i] = v;

@@ -99,8 +99,9 @@ String ImageParserV2::image_v2_to_string(const Variant &r_v, bool is_pcfg) {
 	if (!is_pcfg) {
 		int len = data.size();
 		for (int i = 0; i < len; i++) {
-			if (i > 0)
+			if (i > 0) {
 				s += ", ";
+			}
 			s += itos(data[i]);
 		}
 	} else {

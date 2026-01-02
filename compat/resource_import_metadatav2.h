@@ -1,7 +1,6 @@
 
 #pragma once
 
-#include "core/io/resource.h"
 #include "core/object/ref_counted.h"
 #include "core/templates/rb_map.h"
 

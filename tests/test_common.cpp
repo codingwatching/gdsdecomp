@@ -1,9 +1,5 @@
 #include "test_common.h"
-#include "bytecode/bytecode_base.h"
-#include "bytecode/bytecode_versions.h"
-#include "compat/fake_gdscript.h"
 #include "core/os/main_loop.h"
-#include "modules/gdscript/gdscript_tokenizer_buffer.h"
 #include "servers/audio/audio_server.h"
 
 #ifdef WINDOWS_ENABLED

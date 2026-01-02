@@ -406,8 +406,9 @@ String get_user_home_dir() {
 }
 
 String expand_tilde(String path) {
-	if (path.is_empty() || path[0] != '~')
+	if (path.is_empty() || path[0] != '~') {
 		return path;
+	}
 
 	String home = get_user_home_dir();
 

@@ -2052,8 +2052,9 @@ void ResourceFormatSaverXMLInstance::write_tabs(int p_diff) {
 
 void ResourceFormatSaverXMLInstance::write_string(String p_str, bool p_escape) {
 	/* write an UTF8 string */
-	if (p_escape)
+	if (p_escape) {
 		escape(p_str);
+	}
 
 	f->store_string(p_str);
 	;
@@ -2147,8 +2148,9 @@ static bool _check_type(const Variant& p_property) {
 }*/
 
 void ResourceFormatSaverXMLInstance::write_property(const String &p_name, const Variant &p_property, bool *r_ok) {
-	if (r_ok)
+	if (r_ok) {
 		*r_ok = false;
+	}
 
 	const char *type;
 	String params;
@@ -2210,8 +2212,9 @@ void ResourceFormatSaverXMLInstance::write_property(const String &p_name, const 
 				write_tabs();
 				enter_tag(type, "name=\"" + p_name + "\"");
 				exit_tag(type);
-				if (r_ok)
+				if (r_ok) {
 					*r_ok = true;
+				}
 
 				return; // don't save it
 			}
@@ -2222,8 +2225,9 @@ void ResourceFormatSaverXMLInstance::write_property(const String &p_name, const 
 					write_tabs();
 					enter_tag(type, "name=\"" + p_name + "\"");
 					exit_tag(type);
-					if (r_ok)
+					if (r_ok) {
 						*r_ok = true;
+					}
 					return;
 				}
 				params += "encoding=\"raw\"";
@@ -2375,21 +2379,24 @@ void ResourceFormatSaverXMLInstance::write_property(const String &p_name, const 
 	write_tabs();
 
 	if (p_name != "") {
-		if (params.length())
+		if (params.length()) {
 			enter_tag(type, "name=\"" + p_name + "\" " + params);
-		else
+		} else {
 			enter_tag(type, "name=\"" + p_name + "\"");
+		}
 	} else {
-		if (params.length())
+		if (params.length()) {
 			enter_tag(type, " " + params);
-		else
+		} else {
 			enter_tag(type, String());
+		}
 	}
 
-	if (!oneliner)
+	if (!oneliner) {
 		f->store_8('\n');
-	else
+	} else {
 		f->store_8(' ');
+	}
 
 	switch (p_property.get_type()) {
 		case Variant::NIL: {
@@ -2442,8 +2449,9 @@ void ResourceFormatSaverXMLInstance::write_property(const String &p_name, const 
 			Transform2D m3 = p_property;
 			for (int i = 0; i < 3; i++) {
 				for (int j = 0; j < 2; j++) {
-					if (i != 0 || j != 0)
+					if (i != 0 || j != 0) {
 						s += ", ";
+					}
 					s += rtoss(m3.columns[i][j]);
 				}
 			}
@@ -2456,8 +2464,9 @@ void ResourceFormatSaverXMLInstance::write_property(const String &p_name, const 
 			Basis m3 = p_property;
 			for (int i = 0; i < 3; i++) {
 				for (int j = 0; j < 3; j++) {
-					if (i != 0 || j != 0)
+					if (i != 0 || j != 0) {
 						s += ", ";
+					}
 					s += rtoss(m3.rows[i][j]);
 				}
 			}
@@ -2471,8 +2480,9 @@ void ResourceFormatSaverXMLInstance::write_property(const String &p_name, const 
 			Basis &m3 = t.basis;
 			for (int i = 0; i < 3; i++) {
 				for (int j = 0; j < 3; j++) {
-					if (i != 0 || j != 0)
+					if (i != 0 || j != 0) {
 						s += ", ";
+					}
 					s += rtoss(m3.rows[i][j]);
 				}
 			}
@@ -2571,8 +2581,9 @@ void ResourceFormatSaverXMLInstance::write_property(const String &p_name, const 
 				ERR_CONTINUE(!ok);
 
 				write_property("", dict[key], &ok);
-				if (!ok)
+				if (!ok) {
 					write_property("", Variant()); //at least make the file consistent..
+				}
 			}
 
 		} break;
@@ -2611,8 +2622,9 @@ void ResourceFormatSaverXMLInstance::write_property(const String &p_name, const 
 			write_tabs();
 
 			for (int i = 0; i < len; i++) {
-				if (i > 0)
+				if (i > 0) {
 					write_string(", ", false);
+				}
 
 				write_string(itos(ptr[i]), false);
 			}
@@ -2628,8 +2640,9 @@ void ResourceFormatSaverXMLInstance::write_property(const String &p_name, const 
 			String cm = ", ";
 
 			for (int i = 0; i < len; i++) {
-				if (i > 0)
+				if (i > 0) {
 					write_string(cm, false);
+				}
 				write_string(rtoss(ptr[i]), false);
 			}
 
@@ -2659,8 +2672,9 @@ void ResourceFormatSaverXMLInstance::write_property(const String &p_name, const 
 			write_tabs();
 
 			for (int i = 0; i < len; i++) {
-				if (i > 0)
+				if (i > 0) {
 					write_string(", ", false);
+				}
 				write_string(rtoss(ptr[i].x), false);
 				write_string(", " + rtoss(ptr[i].y), false);
 			}
@@ -2675,8 +2689,9 @@ void ResourceFormatSaverXMLInstance::write_property(const String &p_name, const 
 			write_tabs();
 
 			for (int i = 0; i < len; i++) {
-				if (i > 0)
+				if (i > 0) {
 					write_string(", ", false);
+				}
 				write_string(rtoss(ptr[i].x), false);
 				write_string(", " + rtoss(ptr[i].y), false);
 				write_string(", " + rtoss(ptr[i].z), false);
@@ -2692,8 +2707,9 @@ void ResourceFormatSaverXMLInstance::write_property(const String &p_name, const 
 			write_tabs();
 
 			for (int i = 0; i < len; i++) {
-				if (i > 0)
+				if (i > 0) {
 					write_string(", ", false);
+				}
 
 				write_string(rtoss(ptr[i].r), false);
 				write_string(", " + rtoss(ptr[i].g), false);
@@ -2705,16 +2721,18 @@ void ResourceFormatSaverXMLInstance::write_property(const String &p_name, const 
 		default: {
 		}
 	}
-	if (oneliner)
+	if (oneliner) {
 		f->store_8(' ');
-	else
+	} else {
 		write_tabs(-1);
+	}
 	exit_tag(type);
 
 	f->store_8('\n');
 
-	if (r_ok)
+	if (r_ok) {
 		*r_ok = true;
+	}
 }
 
 void ResourceFormatSaverXMLInstance::_find_resources(const Variant &p_variant, bool p_main) {
@@ -2722,8 +2740,9 @@ void ResourceFormatSaverXMLInstance::_find_resources(const Variant &p_variant, b
 		case Variant::OBJECT: {
 			Ref<Resource> res = p_variant;
 
-			if (res.is_null() || external_resources.has(res))
+			if (res.is_null() || external_resources.has(res)) {
 				return;
+			}
 			if (!CompatFormatLoader::resource_is_resource(res, ver_major)) {
 				return;
 			}
@@ -2734,8 +2753,9 @@ void ResourceFormatSaverXMLInstance::_find_resources(const Variant &p_variant, b
 				return;
 			}
 
-			if (resource_set.has(res))
+			if (resource_set.has(res)) {
 				return;
+			}
 
 			List<PropertyInfo> property_list;
 
@@ -2853,11 +2873,11 @@ Error ResourceFormatSaverXMLInstance::save_to_file(const Ref<FileAccess> &p_f, c
 
 		write_tabs();
 
-		if (main)
+		if (main) {
 			enter_tag("main_resource", ""); //bundled
-		else if (res->get_path().length() && res->get_path().find("::") == -1)
+		} else if (res->get_path().length() && res->get_path().find("::") == -1) {
 			enter_tag("resource", "type=\"" + res->get_save_class() + "\" path=\"" + res->get_path() + "\""); //bundled
-		else {
+		} else {
 			if (res->get_scene_unique_id() == "0") {
 				int new_subindex = 1;
 				if (used_indices.size()) {
@@ -2880,8 +2900,9 @@ Error ResourceFormatSaverXMLInstance::save_to_file(const Ref<FileAccess> &p_f, c
 		res->get_property_list(&property_list);
 		//		property_list.sort();
 		for (List<PropertyInfo>::Element *PE = property_list.front(); PE; PE = PE->next()) {
-			if (skip_editor && PE->get().name.begins_with("__editor"))
+			if (skip_editor && PE->get().name.begins_with("__editor")) {
 				continue;
+			}
 
 			if (PE->get().usage & PROPERTY_USAGE_STORAGE) {
 				// 2.x didn't have these
@@ -2912,10 +2933,11 @@ Error ResourceFormatSaverXMLInstance::save_to_file(const Ref<FileAccess> &p_f, c
 
 		write_string("\n", false);
 		write_tabs(-1);
-		if (main)
+		if (main) {
 			exit_tag("main_resource");
-		else
+		} else {
 			exit_tag("resource");
+		}
 
 		write_string("\n", false);
 	}

@@ -1415,8 +1415,9 @@ Error VariantDecoderCompat::decode_variant_2(Variant &r_variant, const uint8_t *
 			}
 			r_variant = img;
 			if (r_len) {
-				if (datalen % 4)
+				if (datalen % 4) {
 					(*r_len) += 4 - datalen % 4;
+				}
 
 				(*r_len) += 4 * 5 + datalen;
 			}
@@ -1479,8 +1480,9 @@ Error VariantDecoderCompat::decode_variant_2(Variant &r_variant, const uint8_t *
 
 				r_variant = NodePath(str);
 
-				if (r_len)
+				if (r_len) {
 					(*r_len) += 4 + strlen;
+				}
 
 				ERR_FAIL_V(ERR_INVALID_DATA);
 			}
@@ -2347,8 +2349,9 @@ Error VariantDecoderCompat::encode_variant_3(const Variant &p_variant, uint8_t *
 			if (buf) {
 				encode_uint32(datalen, buf);
 				buf += 4;
-				for (int i = 0; i < datalen; i++)
+				for (int i = 0; i < datalen; i++) {
 					encode_uint32(data[i], &buf[i * datasize]);
+				}
 			}
 
 			r_len += 4 + datalen * datasize;
@@ -2363,8 +2366,9 @@ Error VariantDecoderCompat::encode_variant_3(const Variant &p_variant, uint8_t *
 			if (buf) {
 				encode_uint32(datalen, buf);
 				buf += 4;
-				for (int i = 0; i < datalen; i++)
+				for (int i = 0; i < datalen; i++) {
 					encode_float(data[i], &buf[i * datasize]);
+				}
 			}
 
 			r_len += 4 + datalen * datasize;
@@ -2559,8 +2563,9 @@ Error VariantDecoderCompat::encode_variant_2(const Variant &p_variant, uint8_t *
 			}
 
 			int pad = 0;
-			if (data.size() % 4)
+			if (data.size() % 4) {
 				pad = 4 - data.size() % 4;
+			}
 
 			r_len += data.size() + 5 * 4 + pad;
 			return OK;
@@ -2616,10 +2621,12 @@ Error VariantDecoderCompat::encode_variant_2(const Variant &p_variant, uint8_t *
 				encode_uint32(uint32_t(np.get_name_count()) | 0x80000000, buf); //for compatibility with the old format
 				encode_uint32(snc, buf + 4);
 				uint32_t flags = 0;
-				if (np.is_absolute())
+				if (np.is_absolute()) {
 					flags |= 1;
-				if (property_idx != -1)
+				}
+				if (property_idx != -1) {
 					flags |= 2;
+				}
 
 				encode_uint32(flags, buf + 8);
 
@@ -2629,18 +2636,20 @@ Error VariantDecoderCompat::encode_variant_2(const Variant &p_variant, uint8_t *
 			r_len += 12;
 
 			int total = np.get_name_count() + snc;
-			if (property_idx != -1)
+			if (property_idx != -1) {
 				total++;
+			}
 
 			for (int i = 0; i < total; i++) {
 				String str;
 
-				if (i < np.get_name_count())
+				if (i < np.get_name_count()) {
 					str = np.get_name(i);
-				else if (i < np.get_name_count() + snc)
+				} else if (i < np.get_name_count() + snc) {
 					str = np.get_subname(i - np.get_name_count());
-				else // property
+				} else { // property
 					str = np.get_subname(property_idx);
+				}
 
 				_encode_string(str, buf, r_len);
 			}
@@ -2818,13 +2827,15 @@ Error VariantDecoderCompat::encode_variant_2(const Variant &p_variant, uint8_t *
 				encode_variant_2(E, buf, len);
 				ERR_FAIL_COND_V(len % 4, ERR_BUG);
 				r_len += len;
-				if (buf)
+				if (buf) {
 					buf += len;
+				}
 				encode_variant_2(d[E], buf, len);
 				ERR_FAIL_COND_V(len % 4, ERR_BUG);
 				r_len += len;
-				if (buf)
+				if (buf) {
 					buf += len;
+				}
 			}
 
 		} break;
@@ -2845,8 +2856,9 @@ Error VariantDecoderCompat::encode_variant_2(const Variant &p_variant, uint8_t *
 				encode_variant_2(v.get(i), buf, len);
 				ERR_FAIL_COND_V(len % 4, ERR_BUG);
 				r_len += len;
-				if (buf)
+				if (buf) {
 					buf += len;
+				}
 			}
 
 		} break;
@@ -2863,8 +2875,9 @@ Error VariantDecoderCompat::encode_variant_2(const Variant &p_variant, uint8_t *
 			}
 
 			r_len += 4 + datalen * datasize;
-			while (r_len % 4)
+			while (r_len % 4) {
 				r_len++;
+			}
 
 		} break;
 		// compat
@@ -2876,8 +2889,9 @@ Error VariantDecoderCompat::encode_variant_2(const Variant &p_variant, uint8_t *
 			if (buf) {
 				encode_uint32(datalen, buf);
 				buf += 4;
-				for (int i = 0; i < datalen; i++)
+				for (int i = 0; i < datalen; i++) {
 					encode_uint32(data[i], &buf[i * datasize]);
+				}
 			}
 
 			r_len += 4 + datalen * datasize;
@@ -2891,8 +2905,9 @@ Error VariantDecoderCompat::encode_variant_2(const Variant &p_variant, uint8_t *
 			if (buf) {
 				encode_uint32(datalen, buf);
 				buf += 4;
-				for (int i = 0; i < datalen; i++)
+				for (int i = 0; i < datalen; i++) {
 					encode_uint32(data[i], &buf[i * datasize]);
+				}
 			}
 
 			r_len += 4 + datalen * datasize;
@@ -2910,8 +2925,9 @@ Error VariantDecoderCompat::encode_variant_2(const Variant &p_variant, uint8_t *
 			if (buf) {
 				encode_uint32(datalen, buf);
 				buf += 4;
-				for (int i = 0; i < datalen; i++)
+				for (int i = 0; i < datalen; i++) {
 					encode_float(data[i], &buf[i * datasize]);
+				}
 			}
 
 			r_len += 4 + datalen * datasize;
@@ -2925,8 +2941,9 @@ Error VariantDecoderCompat::encode_variant_2(const Variant &p_variant, uint8_t *
 			if (buf) {
 				encode_uint32(datalen, buf);
 				buf += 4;
-				for (int i = 0; i < datalen; i++)
+				for (int i = 0; i < datalen; i++) {
 					encode_float(data[i], &buf[i * datasize]);
+				}
 			}
 
 			r_len += 4 + datalen * datasize;
@@ -2956,8 +2973,9 @@ Error VariantDecoderCompat::encode_variant_2(const Variant &p_variant, uint8_t *
 				r_len += 4 + utf8.length() + 1;
 				while (r_len % 4) {
 					r_len++; //pad
-					if (buf)
+					if (buf) {
 						*(buf++) = 0;
+					}
 				}
 			}
 

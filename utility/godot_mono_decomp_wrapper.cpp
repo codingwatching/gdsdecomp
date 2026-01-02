@@ -79,8 +79,8 @@ struct DecompileModuleTaskData : public TaskRunnerStruct {
 
 	String get_current_task_step_description() override {
 		// pop them all off until we get the current one
-		while (queue.try_pop(current_step_description))
-			;
+		while (queue.try_pop(current_step_description)) {
+		}
 		return current_step_description;
 	}
 

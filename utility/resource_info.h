@@ -1,5 +1,6 @@
 #pragma once
 #include "compat/resource_import_metadatav2.h"
+#include "core/io/resource.h"
 
 #include "core/variant/dictionary.h"
 #define META_PROPERTY_COMPAT_DATA "metadata/compat"
