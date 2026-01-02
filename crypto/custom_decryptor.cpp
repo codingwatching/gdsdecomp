@@ -2,7 +2,7 @@
 #include "core/variant/variant.h"
 
 void CustomDecryptor::_bind_methods() {
-	ClassDB::bind_method("parse_and_decrypt", &CustomDecryptor::parse_and_decrypt);
+	ClassDB::bind_method(D_METHOD("parse_and_decrypt", "file", "key", "non_pack_file"), &CustomDecryptor::parse_and_decrypt);
 	GDVIRTUAL_BIND(_parse_and_decrypt, "file", "key", "non_pack_file");
 }
 
