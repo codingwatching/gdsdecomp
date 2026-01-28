@@ -12,7 +12,8 @@ int64_t TaskManager::maximum_memory_usage = TWELVE_GB;
 
 TaskManager *TaskManager::singleton = nullptr;
 
-TaskManager::TaskManager() {
+TaskManager::TaskManager() :
+		main_thread_dispatch_queue(WorkerThreadPool::get_singleton()->get_thread_count() * 2) {
 	singleton = this;
 	Dictionary mem_info = OS::get_singleton()->get_memory_info();
 	// 3/4ths of the physical memory, but no more than 12GB
@@ -20,7 +21,24 @@ TaskManager::TaskManager() {
 	if (max_usage <= 0) {
 		max_usage = FOUR_GB;
 	}
+	named_pool = WorkerThreadPool::get_named_pool("TaskManager");
 	maximum_memory_usage = MIN(max_usage, TWELVE_GB);
+	auto thread_count = named_pool->get_thread_count();
+	thread_index_to_thread_id.resize(thread_count);
+	thread_index_to_task_ids.resize(thread_count);
+	for (int i = 0; i < thread_count; i++) {
+		thread_index_to_thread_id[i] = -1;
+		thread_index_to_task_ids[i] = -1;
+	}
+	auto task_id = named_pool->add_template_group_task(
+			this,
+			&TaskManager::_set_thread_name_task,
+			nullptr,
+			thread_count,
+			thread_count,
+			true,
+			"TaskManagerThreadSetup");
+	named_pool->wait_for_group_task_completion(task_id);
 }
 
 TaskManager::~TaskManager() {
@@ -28,12 +46,27 @@ TaskManager::~TaskManager() {
 	singleton = nullptr;
 }
 
+void TaskManager::_set_thread_name_task(uint32_t i, void *p_userdata) {
+	// delaying here to ensure all the threads are started
+	OS::get_singleton()->delay_usec(10000);
+	int thread_index = named_pool->get_thread_index();
+	thread_index_to_thread_id[thread_index] = Thread::get_caller_id();
+	Thread::set_name(vformat("GDRETask %d (%d)", thread_index, Thread::get_caller_id()));
+}
+
 TaskManager *TaskManager::get_singleton() {
 	return singleton;
 }
 
 int TaskManager::get_max_thread_count() {
+	if (get_singleton() && get_singleton()->named_pool) {
+		return get_singleton()->named_pool->get_thread_count();
+	}
 	return WorkerThreadPool::get_singleton()->get_thread_count();
+}
+
+WorkerThreadPool *TaskManager::get_thread_pool() {
+	return get_singleton() ? get_singleton()->named_pool : WorkerThreadPool::get_singleton();
 }
 
 void TaskManager::BaseTemplateTaskData::start() {
@@ -303,6 +336,69 @@ bool TaskManager::update_progress_bg(bool p_force_refresh, bool called_from_proc
 	return canceled;
 }
 
+void TaskManager::set_thread_task_id(TaskManagerID p_task_manager_id) {
+	if (Thread::is_main_thread()) {
+		main_thread_task_id = p_task_manager_id;
+	} else {
+		int thread_index = named_pool->get_thread_index();
+		ERR_FAIL_COND_MSG(thread_index == -1, "This can only be called from a task thread");
+		thread_index_to_task_ids[thread_index] = p_task_manager_id;
+	}
+}
+
+TaskManager::TaskManagerID TaskManager::get_thread_task_id() const {
+	if (Thread::is_main_thread()) {
+		return main_thread_task_id;
+	} else {
+		int thread_index = named_pool->get_thread_index();
+		ERR_FAIL_COND_V_MSG(thread_index == -1, -1, "This can only be called from a task thread");
+		return thread_index_to_task_ids[thread_index];
+	}
+}
+bool TaskManager::_dispatch_to_main_thread(std::shared_ptr<BaseMainThreadDispatchData> p_data) {
+	if (Thread::is_main_thread()) {
+		p_data->callback();
+		return p_data->is_canceled();
+	}
+	while (!main_thread_dispatch_queue.try_push(p_data)) {
+		OS::get_singleton()->delay_usec(10000); // wait for a slot to become available
+	}
+	p_data->wait_for_completion();
+	return p_data->is_canceled();
+}
+
+void TaskManager::process_main_thread_dispatch_queue_for(int64_t time_usec) {
+	if (!Thread::is_main_thread()) {
+		return;
+	}
+	int64_t start_time_usec = OS::get_singleton()->get_ticks_usec();
+	int64_t elapsed_time_usec = 0;
+	while (elapsed_time_usec < time_usec) {
+		std::shared_ptr<BaseMainThreadDispatchData> data;
+		if (!main_thread_dispatch_queue.try_pop(data)) {
+			break;
+		}
+		TaskManagerID previous_main_thread_task_id = main_thread_task_id;
+		if (previous_main_thread_task_id == data->get_calling_task_id()) {
+			WARN_PRINT("Trying to dispatch to the same task id, this is not supported!");
+		}
+		set_thread_task_id(data->get_calling_task_id());
+		data->callback();
+		set_thread_task_id(previous_main_thread_task_id);
+		elapsed_time_usec = OS::get_singleton()->get_ticks_usec() - start_time_usec;
+	}
+}
+
+void TaskManager::cancel_main_thread_dispatch_queue() {
+	if (!Thread::is_main_thread()) {
+		return;
+	}
+	std::shared_ptr<BaseMainThreadDispatchData> data;
+	while (main_thread_dispatch_queue.try_pop(data)) {
+		data->cancel();
+	}
+}
+
 TaskManager::DownloadTaskID TaskManager::add_download_task(const String &p_download_url, const String &p_save_path, bool silent) {
 	return download_thread.add_download_task(p_download_url, p_save_path, silent);
 }
@@ -520,9 +616,11 @@ void TaskManager::DownloadQueueThread::worker_main_loop() {
 }
 
 void TaskManager::DownloadQueueThread::thread_func(void *p_userdata) {
+	Thread::set_name("DownloadQueueThread");
 	((DownloadQueueThread *)p_userdata)->main_loop();
 }
 void TaskManager::DownloadQueueThread::worker_thread_func(void *p_userdata) {
+	Thread::set_name("DownloadWorkerThread");
 	((DownloadQueueThread *)p_userdata)->worker_main_loop();
 }
 TaskManager::DownloadQueueThread::DownloadQueueThread() {
