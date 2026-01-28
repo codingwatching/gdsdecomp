@@ -290,16 +290,12 @@ Error TaskManager::wait_for_task_completion(TaskManagerID p_group_id, uint64_t t
 	return err;
 }
 
-bool TaskManager::update_progress_bg(bool p_force_refresh, bool called_from_process) {
+bool TaskManager::update_progress_bg(bool p_force_refresh, bool called_from_process, bool *r_did_redraw) {
 	if (updating_bg || (group_id_to_description.empty() && !Thread::is_main_thread())) {
-		return false;
-	}
-	if (Thread::is_main_thread()) {
-		std::shared_ptr<BaseMainThreadDispatchData> data;
-		// only once per loop
-		if (main_thread_dispatch_queue.try_pop(data)) {
-			data->callback();
+		if (r_did_redraw) {
+			*r_did_redraw = false;
 		}
+		return false;
 	}
 	updating_bg = true;
 	bool main_loop_iterating = false;
@@ -307,13 +303,12 @@ bool TaskManager::update_progress_bg(bool p_force_refresh, bool called_from_proc
 	bool canceled = false;
 	Vector<TaskManagerID> task_ids_to_erase;
 	bool is_headless = GDRESettings::get_singleton() && GDRESettings::get_singleton()->is_headless();
-	bool force_headless_progress = p_force_refresh && is_headless;
 	group_id_to_description.for_each_m([&](auto &v) {
 		if (v.second->is_progress_enabled() && v.second->is_started()) {
 			main_loop_iterating = true;
 			if (!v.second->is_waiting) {
 				has_non_waiting_tasks = true;
-				v.second->update_progress(force_headless_progress);
+				v.second->update_progress(false);
 			} else if (v.second->_is_aborted() && v.second->is_done()) {
 				task_ids_to_erase.push_back(v.first);
 			}

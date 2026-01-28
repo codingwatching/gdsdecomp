@@ -21,6 +21,7 @@ class GDRELogger : public Logger {
 	static void set_stdout_logger(Logger *p_logger) { stdout_logger = p_logger; }
 
 public:
+	static constexpr const char *STATUS_BAR_CLEAR = "\r                                                                      \r";
 	// print only to stdout, not to the file
 	static void stdout_print(const char *p_format, ...);
 	static void print_status_bar(const String &p_status, float p_progress, float p_indeterminate_progress = -1);

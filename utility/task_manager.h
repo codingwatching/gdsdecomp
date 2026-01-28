@@ -596,7 +596,13 @@ public:
 
 	template <typename C, typename M, typename U>
 	bool dispatch_to_main_thread(C *p_instance, M p_method, U p_userdata) {
-		std::shared_ptr<BaseMainThreadDispatchData> data = std::make_shared<TemplateMainThreadDispatchData<C, M, U>>(p_instance, p_method, p_userdata);
+		std::shared_ptr<BaseMainThreadDispatchData> data = std::make_shared<TemplateMainThreadDispatchData<C, M, U>>(get_thread_task_id(), p_instance, p_method, p_userdata);
+		return _dispatch_to_main_thread(data);
+	}
+
+	template <typename U>
+	bool dispatch_to_main_thread(std::function<void(U)> func, U userdata) {
+		std::shared_ptr<BaseMainThreadDispatchData> data = std::make_shared<FunctionMainThreadDispatchData<U>>(get_thread_task_id(), func, userdata);
 		return _dispatch_to_main_thread(data);
 	}
 
@@ -606,7 +612,7 @@ public:
 	bool is_current_task_completed(TaskManagerID p_task_id) const;
 	bool is_current_task_canceled();
 	bool is_current_task_timed_out();
-	bool update_progress_bg(bool p_force_refresh = false, bool called_from_process = false);
+	bool update_progress_bg(bool p_force_refresh = false, bool called_from_process = false, bool *r_did_redraw = nullptr);
 	void set_thread_task_id(TaskManagerID p_task_manager_id);
 	TaskManagerID get_thread_task_id() const;
 	void cancel_all();

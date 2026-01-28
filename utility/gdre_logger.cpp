@@ -24,7 +24,6 @@ std::atomic<bool> GDRELogger::silent_errors = false;
 StaticParallelQueue<String, 1024> GDRELogger::error_queue;
 Logger *GDRELogger::stdout_logger = nullptr;
 std::atomic<bool> GDRELogger::just_printed_status_bar = false;
-static constexpr const char *STATUS_BAR_CLEAR = "\r                                                                      \r";
 
 void GDRELogger::logv(const char *p_format, va_list p_list, bool p_err) {
 	if (disabled || !should_log(p_err)) {
@@ -33,9 +32,6 @@ void GDRELogger::logv(const char *p_format, va_list p_list, bool p_err) {
 			thread_error_count++;
 		}
 		return;
-	}
-	if (just_printed_status_bar.exchange(false) && (!(thread_local_silent_errors || silent_errors) || !p_err)) {
-		stdout_print(STATUS_BAR_CLEAR);
 	}
 	const int static_buf_size = 512;
 	char static_buf[static_buf_size];
@@ -102,6 +98,9 @@ void GDRELogger::logv(const char *p_format, va_list p_list, bool p_err) {
 	}
 	if (len >= static_buf_size) {
 		Memory::free_static(buf);
+	}
+	if (just_printed_status_bar.exchange(false) && (!(thread_local_silent_errors || silent_errors) || !p_err)) {
+		stdout_print(STATUS_BAR_CLEAR);
 	}
 	stdout_logger->logv(p_format, p_list, p_err);
 }
@@ -223,7 +222,9 @@ void GDRELogger::print_status_bar(const String &p_status, float p_progress, floa
 		progress_bar[i] = ' ';
 	}
 	progress_bar[width] = '\0';
-	stdout_print("\r%s [%s] %d%%", p_status.utf8().get_data(), progress_bar, (int)(p_progress * 100));
+	// ensure the string is long enough to overwrite the previous status bar
+	String str = vformat("%s [%s] %d%%", p_status, progress_bar, (int)(p_progress * 100));
+	stdout_print("\r%-80s", str.utf8().get_data());
 	just_printed_status_bar = true;
 }
 

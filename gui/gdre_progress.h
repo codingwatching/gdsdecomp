@@ -80,8 +80,11 @@ class GDREProgressDialog : public PopupPanel {
 		int steps = -1;
 		bool can_cancel = false;
 		bool indeterminate = false;
+		bool is_headless = false;
 
+		bool should_print = false;
 		bool initialized = false;
+		uint16_t indeterminate_width = 0;
 		Step current_step;
 		bool force_next_redraw = false;
 		VBoxContainer *vb = nullptr;
@@ -90,6 +93,7 @@ class GDREProgressDialog : public PopupPanel {
 		uint64_t last_progress_tick = 0;
 		void init(VBoxContainer *main);
 		void set_step(const String &p_state, int p_step = -1, bool p_force_redraw = true);
+		void print_status_bar() const;
 		void set_indeterminate(bool p_indeterminate);
 		void set_length(int p_new_amount);
 		bool should_redraw(uint64_t curr_time_us) const;
@@ -141,21 +145,6 @@ public:
 	~GDREProgressDialog();
 };
 
-struct StdOutProgress {
-	String label;
-	int amount = 0;
-	int current_step = 0;
-	bool is_indeterminate = false;
-	uint16_t indeterminate_width = 0;
-	int width = 30;
-	uint64_t last_iteration_tick = 0;
-	uint64_t last_progress_tick = 0;
-
-	bool step(int p_step = -1, bool p_force_refresh = true);
-	void end();
-	void print_status_bar(const String &p_status, float p_progress);
-};
-
 struct EditorProgressGDDC : public RefCounted {
 	GDCLASS(EditorProgressGDDC, RefCounted);
 
@@ -165,7 +154,6 @@ protected:
 public:
 	static Ref<EditorProgressGDDC> create(Node *p_parent, const String &p_task, const String &p_label, int p_amount, bool p_can_cancel = false);
 	String task;
-	StdOutProgress stdout_progress;
 	String get_task();
 	bool step(const String &p_state, int p_step = -1, bool p_force_refresh = true);
 	void set_progress_length(bool p_indeterminate, int p_new_amount = -1);
