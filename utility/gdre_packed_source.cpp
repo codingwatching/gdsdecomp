@@ -369,7 +369,8 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 	bool rel_filebase = (pack_flags & PACK_REL_FILEBASE);
 	bool sparse_bundle = (pack_flags & PACK_SPARSE_BUNDLE);
 
-	if ((version == PACK_FORMAT_VERSION_V3) || (version == PACK_FORMAT_VERSION_V2 && rel_filebase)) {
+	// TODO: support PACK_FORMAT_VERSION_V4
+	if ((version >= PACK_FORMAT_VERSION_V3) || (version == PACK_FORMAT_VERSION_V2 && rel_filebase)) {
 		file_base += pck_start_pos;
 	}
 

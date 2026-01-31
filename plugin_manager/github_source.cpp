@@ -227,7 +227,9 @@ Error GitHubSource::recache_release_list(const String &plugin_name) {
 			int64_t asset_id = int64_t(asset.get("id", 0));
 			asset_map[asset_id] = asset;
 		}
-		cache.releases[release_id] = { release, asset_map };
+		cache.releases[release_id] = {};
+		cache.releases[release_id].release = release;
+		cache.releases[release_id].assets = asset_map;
 	}
 
 	{

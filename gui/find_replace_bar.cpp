@@ -1,5 +1,6 @@
 #include "find_replace_bar.h"
 
+#include "core/input/input.h"
 #include "core/input/input_map.h"
 #include "core/input/shortcut.h"
 #include "core/os/keyboard.h"

@@ -31,7 +31,7 @@ private:
 	static String get_magic_ascii(uint32_t magic);
 
 public:
-	static constexpr int CURRENT_PACK_FORMAT_VERSION = 3;
+	static constexpr int CURRENT_PACK_FORMAT_VERSION = 4;
 	static bool is_executable(const String &p_path);
 	static bool is_embeddable_executable(const String &p_path);
 	static bool has_embedded_pck(const String &p_path);

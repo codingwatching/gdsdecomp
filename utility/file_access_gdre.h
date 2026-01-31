@@ -80,7 +80,7 @@ public:
 	void set_default_file_access();
 	void reset_default_file_access();
 	void add_pack_source(PackSource *p_source);
-	void add_path(const String &p_pkg_path, const String &p_path, uint64_t p_ofs, uint64_t p_size, const uint8_t *p_md5, PackSource *p_src, bool p_replace_files, bool p_encrypted = false, bool p_bundle = false, bool p_delta = false); // for PackSource
+	void add_path(const String &p_pkg_path, const String &p_path, uint64_t p_ofs, uint64_t p_size, const uint8_t *p_md5, PackSource *p_src, bool p_replace_files, bool p_encrypted = false, bool p_bundle = false, bool p_delta = false, const String &p_salt = String()); // for PackSource
 	void remove_path(const String &p_path);
 	uint8_t *get_file_hash(const String &p_path);
 	Vector<PackedData::PackedFile> get_delta_patches(const String &p_path) const;

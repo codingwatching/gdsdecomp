@@ -129,13 +129,14 @@ struct __ExpectedPackedFile {
 	bool encrypted;
 	bool bundle;
 	bool delta;
+	String salt;
 };
 CHECK_SIZE_MATCH_NO_PADDING(__ExpectedPackedFile, PackedData::PackedFile);
 } //namespace
 
 static_assert(has_same_signature<decltype(&GDREPackedData::add_path), decltype(&PackedData::add_path)>::value, "GDREPackedData::add_path does not have the same signature as PackedData::add_path");
 
-void GDREPackedData::add_path(const String &p_pkg_path, const String &p_path, uint64_t p_ofs, uint64_t p_size, const uint8_t *p_md5, PackSource *p_src, bool p_replace_files, bool p_encrypted, bool p_bundle, bool p_delta) {
+void GDREPackedData::add_path(const String &p_pkg_path, const String &p_path, uint64_t p_ofs, uint64_t p_size, const uint8_t *p_md5, PackSource *p_src, bool p_replace_files, bool p_encrypted, bool p_bundle, bool p_delta, const String &p_salt) {
 	// TODO: This might be a performance hit? If so, use the commented out one.
 	bool p_pck_src = dynamic_cast<GDREPackedSource *>(p_src) != nullptr;
 	// bool p_pck_src = p_src == sources[0];
@@ -146,6 +147,7 @@ void GDREPackedData::add_path(const String &p_pkg_path, const String &p_path, ui
 	pf.pack = p_pkg_path;
 	pf.offset = p_ofs;
 	pf.size = p_size;
+	pf.salt = p_salt;
 	for (int i = 0; i < 16; i++) {
 		pf.md5[i] = p_md5[i];
 	}

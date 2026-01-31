@@ -28,14 +28,13 @@ git checkout $NEW_BRANCH_NAME
 git reset --hard $HEAD
 
 BRANCHES_TO_MERGE=(
-	gltf-dupe-images
 	material-fix-deprecated-param
-	fix-dummy-mesh-blend-shape
 	fix-pack-error
 	convert-3.x-escn
 	fix-svg
 	fix-compat-array-shapes
-	gltf-buffer-view-encode-fix
+	fix-diraccess-windows
+	gltf-fix-value-track-interpolation
 )
 
 # set fail on error
