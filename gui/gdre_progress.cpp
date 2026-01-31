@@ -442,11 +442,11 @@ void GDREProgressDialog::end_task(const String &p_task) {
 	main_thread_update();
 }
 
-void GDREProgressDialog::main_thread_update() {
-	ERR_FAIL_COND_MSG(!is_safe_to_redraw(), "Cannot update progress dialog from non-main thread or while flushing messages.");
+bool GDREProgressDialog::main_thread_update() {
+	ERR_FAIL_COND_V_MSG(!is_safe_to_redraw(), false, "Cannot update progress dialog from non-main thread or while flushing messages.");
 	// This prevents recursive calls to main_thread_update caused by main iteration calling `process()`
 	if (is_updating) {
-		return;
+		return false;
 	}
 	is_updating = true;
 	bool removed = _process_removals();
@@ -465,6 +465,7 @@ void GDREProgressDialog::main_thread_update() {
 		Task &t = E.second;
 		if (!t.initialized) {
 			task_initialized = true;
+			should_update = true;
 			t.init(main);
 		}
 		t.force_next_redraw = t.force_next_redraw || should_force_redraw;
@@ -484,7 +485,7 @@ void GDREProgressDialog::main_thread_update() {
 			E.second.print_status_bar();
 		});
 	}
-	if (should_update || task_initialized) {
+	if (should_update) {
 		last_tick_updated = last_tick;
 		if (task_count == 0) {
 			_hide();
@@ -495,6 +496,7 @@ void GDREProgressDialog::main_thread_update() {
 		}
 	}
 	is_updating = false;
+	return should_update;
 }
 
 void GDREProgressDialog::add_host_window(Window *p_window) {

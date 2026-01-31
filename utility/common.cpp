@@ -295,7 +295,7 @@ bool gdre::dir_has_any_matching_wildcards(const String &p_dir, const Vector<Stri
 
 Error gdre::ensure_dir(const String &dst_dir) {
 	Error err = OK;
-	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+	Ref<DirAccess> da = DirAccess::create_for_path(dst_dir);
 	ERR_FAIL_COND_V(da.is_null(), ERR_FILE_CANT_OPEN);
 	// make_dir_recursive requires a mutex lock for every directory in the path, so it behooves us to check if the directory exists first
 	if (!da->dir_exists(dst_dir)) {
