@@ -97,8 +97,10 @@ popup/item_1/text = "1 (Godot 3.x)"
 popup/item_1/id = 1
 popup/item_2/text = "2 (Godot 4.0-4.4)"
 popup/item_2/id = 2
-popup/item_3/text = "3 (Godot 4.5+)"
+popup/item_3/text = "3 (Godot 4.5-4.6)"
 popup/item_3/id = 3
+popup/item_4/text = "4 (Godot 4.7+)"
+popup/item_4/id = 4
 
 [node name="EncryptionLabel" type="Label" parent="Control"]
 layout_mode = 0

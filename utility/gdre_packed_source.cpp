@@ -368,9 +368,9 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 	bool enc_directory = (pack_flags & PACK_DIR_ENCRYPTED);
 	bool rel_filebase = (pack_flags & PACK_REL_FILEBASE);
 	bool sparse_bundle = (pack_flags & PACK_SPARSE_BUNDLE);
+	String salt;
 
-	// TODO: support PACK_FORMAT_VERSION_V4
-	if ((version >= PACK_FORMAT_VERSION_V3) || (version == PACK_FORMAT_VERSION_V2 && rel_filebase)) {
+	if ((version == PACK_FORMAT_VERSION_V4) || (version == PACK_FORMAT_VERSION_V3) || (version == PACK_FORMAT_VERSION_V2 && rel_filebase)) {
 		file_base += pck_start_pos;
 	}
 
@@ -382,9 +382,14 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 			", filebase: " + String::num_int64(file_base) +                                          \
 			", pck_start_pos: " + String::num_int64(pck_start_pos) + ")."
 
-	if (version == PACK_FORMAT_VERSION_V3) {
-		// V3: Read directory offset and skip reserved part of the header.
+	if (version == PACK_FORMAT_VERSION_V3 || version == PACK_FORMAT_VERSION_V4) {
+		// V3/v4: Read directory offset and skip reserved part of the header.
 		uint64_t dir_offset = f->get_64() + pck_start_pos;
+		if (sparse_bundle && enc_directory && version == PACK_FORMAT_VERSION_V4) {
+			// V4: Read encrypted directory salt.
+			Vector<uint8_t> salt_data = f->get_buffer(32);
+			salt.append_latin1(Span((const char *)salt_data.ptr(), salt_data.size()));
+		}
 		ERR_FAIL_COND_V_MSG(dir_offset == 0, false,
 				"Directory offset is 0, this is not a valid PCK file\n" + DEBUG_PCK_INFO());
 		ERR_FAIL_COND_V_MSG(dir_offset >= pck_end_pos, false, "Directory offset is out of bounds: " + String::num_int64(dir_offset) + " (file length: " + String::num_int64(pck_end_pos) + ")");
@@ -480,7 +485,7 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 		} else {
 			bool encrypted = (flags & PACK_FILE_ENCRYPTED);
 			bool delta = (flags & PACK_FILE_DELTA);
-			GDREPackedData::get_singleton()->add_path(pck_path, path, ofs, size, md5, this, p_replace_files, encrypted, sparse_bundle, delta);
+			GDREPackedData::get_singleton()->add_path(pck_path, path, ofs, size, md5, this, p_replace_files, encrypted, sparse_bundle, delta, salt);
 			if (encrypted) {
 				encrypted_file_count++;
 				if (!opened_encrypted_file && size > 0 && !delta) {
@@ -519,15 +524,20 @@ Ref<FileAccess> GDREPackedSource::get_file(const String &p_path, PackedData::Pac
 	Ref<FileAccess> file;
 	if (p_file->bundle) {
 		String simplified_path = p_path.simplify_path();
+		String search_path = simplified_path;
 		auto pf = PackedData::PackedFile(*p_file);
 		pf.offset = 0;
 
-		if (APKArchive::get_singleton() && APKArchive::get_singleton()->file_exists(simplified_path)) {
+		if (!pf.salt.is_empty()) {
+			search_path = "res://" + (simplified_path + pf.salt).sha256_text();
+		}
+
+		if (APKArchive::get_singleton() && APKArchive::get_singleton()->file_exists(search_path)) {
 			// APKArchive ignores the pf file, so no need to modify it
-			file = APKArchive::get_singleton()->get_file(simplified_path, &pf);
-		} else if (DirSource::get_singleton() && DirSource::get_singleton()->file_exists(simplified_path)) {
-			pf.pack = DirSource::get_singleton()->get_pack_path(simplified_path);
-			file = DirSource::get_singleton()->get_file(simplified_path, &pf);
+			file = APKArchive::get_singleton()->get_file(search_path, &pf);
+		} else if (DirSource::get_singleton() && DirSource::get_singleton()->file_exists(search_path)) {
+			pf.pack = DirSource::get_singleton()->get_pack_path(search_path);
+			file = DirSource::get_singleton()->get_file(search_path, &pf);
 		}
 
 		ERR_FAIL_COND_V_MSG(file.is_null(), nullptr, vformat("APKArchive or DirSource doesn't contain sparse pack-referenced file '%s'.", p_path));
