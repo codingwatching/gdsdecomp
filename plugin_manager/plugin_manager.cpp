@@ -362,7 +362,15 @@ Error PluginManager::populate_plugin_version_hashes(PluginVersion &plugin_versio
 	auto temp_folder = GDRESettings::get_singleton()->get_gdre_tmp_path();
 	String url = plugin_version.release_info.download_url;
 	String new_temp_foldr = temp_folder.path_join(plugin_version.release_info.plugin_source + "_" + itos(plugin_version.release_info.primary_id) + "_" + itos(plugin_version.release_info.secondary_id));
-	String zip_path = new_temp_foldr.path_join("plugin.zip");
+	String zip_name = gdre::remove_url_query_params(url).get_file();
+	if (zip_name.is_empty()) {
+		String ext = "zip";
+		if (auto pos = url.find(".tar"); pos != -1) {
+			ext = url.substr(pos);
+		}
+		zip_name = vformat("plugin.%s", ext);
+	}
+	String zip_path = new_temp_foldr.path_join(zip_name);
 	print_line("Downloading plugin to populate cache: " + url);
 
 	Error err = OK;
@@ -383,24 +391,23 @@ Error PluginManager::populate_plugin_version_hashes(PluginVersion &plugin_versio
 	}
 
 	plugin_version.size = FileAccess::get_size(zip_path);
+	ERR_FAIL_COND_V_MSG(!gdre::is_path_archive(zip_path), ERR_FILE_CORRUPT, "File is not an archive: " + zip_path);
 
-	// check the magic number of the zip file before opening it
-	ERR_FAIL_COND_V_MSG(!gdre::is_zip_file(zip_path), ERR_FILE_CORRUPT, "File is not a zip file: " + zip_path);
-	Ref<ZIPReader> zip;
-	zip.instantiate();
-	err = zip->open(zip_path);
+	auto close_and_remove_zip = [&]() {
+		gdre::rimraf(zip_path);
+	};
+
+	// just unzup the files to the
+	String unzupped_path = new_temp_foldr.path_join("unzipped");
+	err = gdre::unzip_file_to_dir(zip_path, unzupped_path);
 	if (err) {
+		close_and_remove_zip();
 		return err;
 	}
 
-	auto files = zip->get_files();
+	auto files = gdre::get_recursive_dir_list(unzupped_path, {}, false, true);
 	String gd_ext_file = "";
 	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
-
-	auto close_and_remove_zip = [&]() {
-		zip->close();
-		da->remove(zip_path);
-	};
 
 	// get all the gdexts
 	HashMap<String, GDExtInfo> gdexts;
@@ -455,21 +462,14 @@ Error PluginManager::populate_plugin_version_hashes(PluginVersion &plugin_versio
 	}
 
 	print_line("Populating plugin version hashes for " + plugin_version.plugin_name + " version: " + plugin_version.release_info.version);
-	String unzupped_path = new_temp_foldr.path_join("unzipped");
-	err = gdre::unzip_file_to_dir(zip_path, unzupped_path);
-	if (err) {
-		close_and_remove_zip();
-		return err;
-	}
 
 	bool first_min = true;
 	bool first_max = true;
 	for (auto &E : gdexts) {
 		GDExtInfo &gdext_info = E.value;
 		auto &gdext_path = E.key;
-		auto data = zip->read_file(gdext_path, true);
-		String gdext_str;
-		gdext_str.append_utf8((const char *)data.ptr(), data.size());
+		String gdext_str = FileAccess::get_file_as_string(unzupped_path.path_join(gdext_path));
+		ERR_FAIL_COND_V_MSG(gdext_str.is_empty(), ERR_FILE_CORRUPT, "Failed to get gdext string for " + gdext_path);
 		Ref<ImportInfoGDExt> cf = memnew(ImportInfoGDExt);
 		cf->load_from_string("res://" + gdext_info.relative_path, gdext_str);
 

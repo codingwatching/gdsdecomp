@@ -1697,7 +1697,7 @@ func handle_cli(args: PackedStringArray) -> bool:
 			var start_time = Time.get_ticks_msec()
 			var err = PluginManager.prepop_cache(prepop)
 			if err != OK:
-				print("Error: failed to prepop plugin cache: " + err)
+				print("Error: failed to prepop plugin cache: " + str(err))
 				ret_code = 1
 			var end_time = Time.get_ticks_msec()
 			var secs_taken = (end_time - start_time) / 1000

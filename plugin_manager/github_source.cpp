@@ -266,11 +266,11 @@ ReleaseInfo GitHubSource::get_release_info(const String &plugin_name, int64_t pr
 				continue;
 			}
 			String download_url = asset.get("browser_download_url", "");
-			String ext = download_url.get_file().get_extension().to_lower();
-			if (ext.is_empty()) {
-				ext = name.get_extension().to_lower();
+			String download_file = gdre::remove_url_query_params(download_url).get_file();
+			if (download_file.is_empty()) {
+				download_file = name.get_file();
 			}
-			if (ext == "zip") {
+			if (gdre::is_path_archive(download_file)) {
 				if (is_empty_or_null(download_url)) {
 					continue;
 				}

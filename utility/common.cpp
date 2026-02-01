@@ -374,7 +374,27 @@ void gdre::get_strings_from_variant(const Variant &p_var, Vector<String> &r_stri
 	}
 }
 
+String gdre::remove_url_query_params(const String &p_url) {
+	String base = p_url.get_base_dir();
+	// get the substring of the url after the base
+	String file = p_url.substr(base.length());
+	auto pos = file.rfind("?");
+	if (pos == -1) {
+		return p_url;
+	}
+	return p_url.substr(0, pos + base.length());
+}
+
 Error gdre::unzip_file_to_dir(const String &zip_path, const String &output_dir) {
+	// check if the zip file is a tar archive
+	if (is_path_tar(zip_path)) {
+		ERR_FAIL_COND_V_MSG(ensure_dir(output_dir) != OK, ERR_FILE_CANT_OPEN, "Failed to create output directory: " + output_dir);
+		int exit_code = 0;
+		String pipe;
+		Error err = OS::get_singleton()->execute("tar", { "-xf", zip_path, "-C", output_dir }, &pipe, &exit_code, true);
+		ERR_FAIL_COND_V_MSG(err != OK || exit_code != 0, ERR_FILE_CANT_OPEN, vformat("Failed to extract tar archive: %s\n%s", zip_path, pipe));
+		return OK;
+	}
 	Ref<ZIPReader> zip;
 	zip.instantiate();
 
@@ -1510,6 +1530,18 @@ bool gdre::is_fs_path(const String &p_path) {
 String gdre::path_to_uri(const String &p_path) {
 	String s = p_path.simplify_path();
 	return (!s.begins_with("/") ? "file:///" : "file://") + s;
+}
+
+bool gdre::is_path_tar(const String &p_path) {
+	static HashSet<String> tar_extensions = { "tar", "tgz", "tbz2", "txz", "tzst" };
+	if (tar_extensions.has(p_path.get_extension().to_lower()) || p_path.get_basename().has_extension("tar")) {
+		return true;
+	}
+	return false;
+}
+
+bool gdre::is_path_archive(const String &p_path) {
+	return is_path_tar(p_path) || p_path.has_extension("zip");
 }
 
 bool gdre::is_zip_file(const String &p_path) {
