@@ -24,7 +24,7 @@ private:
 
 	// Source management
 	static Ref<PluginSource> get_source(const String &plugin_name);
-	static void load_plugin_version_cache_file(const String &cache_file);
+	static void load_plugin_version_cache_file(const String &cache_file, bool prepop = false);
 	static void load_plugin_version_cache();
 	static void save_plugin_version_cache();
 	static Error populate_plugin_version_hashes(PluginVersion &plugin_version);

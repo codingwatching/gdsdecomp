@@ -214,7 +214,7 @@ void PluginManager::load_cache() {
 	auto start_time = OS::get_singleton()->get_ticks_msec();
 	Dictionary d;
 	if (FileAccess::exists(STATIC_PLUGIN_CACHE_PATH)) {
-		load_plugin_version_cache_file(STATIC_PLUGIN_CACHE_PATH);
+		load_plugin_version_cache_file(STATIC_PLUGIN_CACHE_PATH, true);
 	}
 	for (int i = 0; i < source_count; ++i) {
 		sources[i]->load_cache();
@@ -242,6 +242,10 @@ struct PrePopToken {
 };
 
 struct PrePopTask {
+	String describe_task(uint32_t index, PrePopToken *tokens) {
+		return vformat("%s version: %d %d", tokens[index].plugin_name, tokens[index].version.first, tokens[index].version.second);
+	}
+
 	void do_task(uint32_t index, PrePopToken *tokens) {
 		Error &err = tokens[index].error;
 		auto &token = tokens[index];
@@ -292,30 +296,40 @@ Error PluginManager::prepop_cache(const Vector<String> &plugin_names) {
 		}
 	}
 	PrePopTask task;
+	Error err = OK;
 	if (multithread) {
 		gdre::shuffle_vector(tokens);
-		auto group_id = WorkerThreadPool::get_singleton()->add_template_group_task(
+		err = TaskManager::get_singleton()->run_multithreaded_group_task(
 				&task,
 				&PrePopTask::do_task,
 				tokens.ptrw(),
-				tokens.size(), -1, true, SNAME("GDRESettings::prepop_plugin_cache_gh"));
-		WorkerThreadPool::get_singleton()->wait_for_group_task_completion(group_id);
-		for (int i = 0; i < tokens.size(); i++) {
-			if (tokens[i].error != OK) {
-				return tokens[i].error;
-			}
-		}
+				tokens.size(),
+				&PrePopTask::describe_task,
+				"GDRESettings::prepop_plugin_cache_gh",
+				"Prepopulating plugin cache",
+				true,
+				-1,
+				true);
 	} else {
 		for (int i = 0; i < tokens.size(); i++) {
 			task.do_task(i, tokens.ptrw());
 			if (tokens[i].error != OK) {
-				return tokens[i].error;
+				break;
 			}
 		}
 	}
+	save_cache();
+	if (err != OK) {
+		return err;
+	}
+	for (int i = 0; i < tokens.size(); i++) {
+		if (tokens[i].error != OK) {
+			return tokens[i].error;
+		}
+	}
+
 	print_plugin_cache();
 
-	prepopping = false;
 	return OK;
 }
 
@@ -406,6 +420,11 @@ Error PluginManager::populate_plugin_version_hashes(PluginVersion &plugin_versio
 	}
 
 	auto files = gdre::get_recursive_dir_list(unzupped_path, {}, false, true);
+	for (int64_t i = files.size() - 1; i >= 0; i--) {
+		if (files[i].simplify_path().begins_with("__MACOSX")) {
+			files.remove_at(i);
+		}
+	}
 	String gd_ext_file = "";
 	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
 
@@ -493,9 +512,21 @@ Error PluginManager::populate_plugin_version_hashes(PluginVersion &plugin_versio
 
 		auto parse_bins = [unzupped_path](Vector<SharedObject> bins) {
 			Vector<PluginBin> plugin_bins;
+			HashSet<String> seen_paths;
 			for (auto &elem : bins) {
 				auto &lib = elem.path;
-				auto paths = Glob::rglob(unzupped_path.path_join("**").path_join(lib.replace_first("res://", "")), true);
+				String lib_search_path = lib.trim_prefix("res://").simplify_path();
+				Vector<String> paths;
+
+				while (paths.is_empty() && !lib_search_path.is_empty()) {
+					paths = Glob::rglob(unzupped_path.path_join("**").path_join(lib_search_path), true);
+					// pop off the LEFT part of the path, e.g. "addons/godotsteam/x11/libgodotsteam.so" -> "godotsteam/x11/libgodotsteam.so
+					auto parts = lib_search_path.split("/", false, 1);
+					if (parts.size() <= 1) {
+						break;
+					}
+					lib_search_path = parts[1];
+				}
 				String real_path;
 				for (auto &p : paths) {
 					if (p.ends_with(lib.replace_first("res://", ""))) {
@@ -503,6 +534,23 @@ Error PluginManager::populate_plugin_version_hashes(PluginVersion &plugin_versio
 						break;
 					}
 				}
+
+				if (real_path.is_empty()) {
+					// just use the first path
+					if (paths.size() > 0) {
+						for (auto &p : paths) {
+							if (!seen_paths.has(p)) {
+								real_path = p;
+								break;
+							}
+						}
+						// just use the first path
+						if (real_path.is_empty()) {
+							real_path = paths[0];
+						}
+					}
+				}
+				seen_paths.insert(real_path);
 				auto plugin_bin = PluginSource::get_plugin_bin(real_path, elem);
 				plugin_bins.push_back(plugin_bin);
 			}
@@ -526,11 +574,11 @@ void PluginManager::load_plugin_version_cache() {
 	}
 	auto files = Glob::rglob(cache_dir.path_join("**/*.json"), true);
 	for (auto &file : files) {
-		load_plugin_version_cache_file(file);
+		load_plugin_version_cache_file(file, false);
 	}
 }
 
-void PluginManager::load_plugin_version_cache_file(const String &cache_file) {
+void PluginManager::load_plugin_version_cache_file(const String &cache_file, bool p_static_cached) {
 	// this works with both the static and dynamic cache files
 	auto file = FileAccess::open(cache_file, FileAccess::READ);
 	if (file.is_null()) {
@@ -546,6 +594,7 @@ void PluginManager::load_plugin_version_cache_file(const String &cache_file) {
 		Dictionary version_data = data[E];
 		PluginVersion version = PluginVersion::from_json(version_data);
 		if (version.is_valid()) {
+			version.is_static_cached = p_static_cached;
 			String cache_key = version.release_info.get_cache_key();
 			plugin_version_cache[cache_key] = version;
 		}
@@ -561,7 +610,7 @@ void PluginManager::save_plugin_version_cache() {
 		for (auto &E : plugin_version_cache) {
 			String cache_key = E.key;
 			PluginVersion version = E.value;
-			if (version.is_valid()) {
+			if (version.is_valid() && (is_prepopping() || !version.is_static_cached)) {
 				Dictionary version_json = version.to_json();
 				String source = version.release_info.plugin_source;
 				String primary_id = itos(version.release_info.primary_id);
