@@ -22,6 +22,7 @@ class PckDumper : public RefCounted {
 	struct ExtractToken {
 		Ref<PackedFileInfo> file;
 		Error err = OK;
+		String path_to_extract;
 	};
 	void _do_extract(uint32_t i, ExtractToken *tokens);
 	String get_extract_token_description(int64_t i, ExtractToken *userdata);

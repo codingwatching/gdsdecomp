@@ -379,6 +379,21 @@ String remove_url_query_params(const String &p_url);
 String get_safe_dir_name(const String &p_dir_name, bool p_allow_paths = false);
 Ref<Image> load_image_from_file(const String &p_path);
 Error clear_dir_except_for(const String &p_dir, const Vector<String> &p_files_or_dirs);
+
+struct CaselessHashMapComparator {
+	static _FORCE_INLINE_ bool compare(const String &p_lhs, const String &p_rhs) {
+		return p_lhs.nocasecmp_to(p_rhs) == 0;
+	}
+};
+struct CaselessHashMapHasher {
+	static _FORCE_INLINE_ uint32_t hash(const String &p_string) {
+		return p_string.to_lower().hash();
+	}
+};
+
+template <typename T>
+using CaselessHashMap = HashMap<String, T, CaselessHashMapHasher, CaselessHashMapComparator>;
+using CaselessHashSet = HashSet<String, CaselessHashMapHasher, CaselessHashMapComparator>;
 } // namespace gdre
 
 class GDRECommon : public Object {

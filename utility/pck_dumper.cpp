@@ -136,7 +136,7 @@ void PckDumper::_do_extract(uint32_t i, ExtractToken *tokens) {
 		}
 		return;
 	}
-	String path = file->get_path();
+	String path = tokens[i].path_to_extract;
 	if (path.begins_with("user://")) {
 		path = path.replace_first("user://", ".user/");
 	}
@@ -188,6 +188,7 @@ Error PckDumper::_pck_dump_to_dir(
 	Error err = OK;
 	Vector<ExtractToken> tokens;
 	Vector<String> paths_to_extract;
+	gdre::CaselessHashSet seen_paths;
 	HashSet<String> files_to_extract_set = gdre::vector_to_hashset(files_to_extract);
 	for (int i = 0; i < files.size(); i++) {
 		const auto &file = files.get(i);
@@ -199,7 +200,21 @@ Error PckDumper::_pck_dump_to_dir(
 			print_line("File " + file->get_raw_path() + " has a malformed path and is empty, skipping extraction...");
 			continue;
 		}
-		tokens.push_back({ file, OK });
+#if defined(WINDOWS_ENABLED) || defined(MACOS_ENABLED)
+		if (seen_paths.has(path)) {
+			String new_path = path;
+			int j = 1;
+			while (seen_paths.has(new_path)) {
+				new_path = path.get_basename() + "_CONFLICT_" + itos(j) + "." + path.get_extension();
+				j++;
+			}
+
+			print_line("File " + path + " conflicts, renaming to " + new_path);
+			path = new_path;
+		}
+		seen_paths.insert(path);
+#endif
+		tokens.push_back({ file, OK, path });
 	}
 
 	if (tokens.is_empty()) {
