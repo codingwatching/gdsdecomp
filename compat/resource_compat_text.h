@@ -251,6 +251,8 @@ class ResourceFormatSaverCompatTextInstance {
 
 	static String get_local_path(const String &p_path, const Ref<Resource> &p_resource);
 
+	Ref<PackedScene> ensure_packed_scenes(const Ref<Resource> &p_resource);
+
 public:
 	Error save_to_file(const Ref<FileAccess> &f, const String &p_path, const Ref<Resource> &p_resource, uint32_t p_flags = 0);
 	Error save(const String &p_path, const Ref<Resource> &p_resource, uint32_t p_flags = 0);

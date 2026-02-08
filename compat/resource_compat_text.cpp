@@ -2160,13 +2160,7 @@ Error ResourceFormatSaverCompatTextInstance::save_to_file(const Ref<FileAccess> 
 
 	if (p_path.ends_with(".tscn") || p_path.ends_with(".escn")) {
 		// If this is a MissingResource holder for a PackedScene, we need to instance it for reals
-		if (p_resource->get_class() == "MissingResource" && _resource_get_class(p_resource) == "PackedScene") {
-			Dictionary bundle = p_resource->get("_bundled");
-			packed_scene = Ref<PackedScene>(memnew(PackedScene));
-			packed_scene->set("_bundled", bundle);
-		} else {
-			packed_scene = p_resource;
-		}
+		packed_scene = ensure_packed_scenes(p_resource);
 	}
 
 	Ref<FileAccess> _fref(f);
@@ -2217,7 +2211,7 @@ Error ResourceFormatSaverCompatTextInstance::save_to_file(const Ref<FileAccess> 
 			}
 
 			Ref<SceneState> state = packed_scene->get_state();
-			Ref<Resource> instance = SceneStateInstanceGetter::get_fake_instance(state.ptr(), i);
+			Ref<PackedScene> instance = state->get_node_instance(i);
 			if (instance.is_valid() && !external_resources.has(instance)) {
 #if 0
 				int index = external_resources.size() + 1;
@@ -2523,7 +2517,7 @@ Error ResourceFormatSaverCompatTextInstance::save_to_file(const Ref<FileAccess> 
 			PackedInt32Array parent_id_path = state->get_node_parent_id_path(i);
 			PackedInt32Array owner_id_path = state->get_node_owner_id_path(i);
 			NodePath owner = state->get_node_owner_path(i);
-			Ref<Resource> instance = SceneStateInstanceGetter::get_fake_instance(state.ptr(), i);
+			Ref<PackedScene> instance = state->get_node_instance(i);
 			String instance_placeholder = state->get_node_instance_placeholder(i);
 			Vector<StringName> groups = state->get_node_groups(i);
 			Vector<String> deferred_node_paths = state->get_node_deferred_nodepath_properties(i);
@@ -3119,4 +3113,101 @@ String ResourceFormatSaverCompatTextInstance::get_local_path(const String &p_pat
 		return GDRESettings::get_singleton()->localize_path(p_path);
 	}
 	return p_resource.is_valid() ? p_resource->get_path() : "";
+}
+
+bool is_packed_scene(const Ref<Resource> &p_resource) {
+	return p_resource.is_valid() && _resource_get_class(p_resource) == "PackedScene";
+}
+
+Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resource, HashMap<String, Ref<Resource>> &p_seen_resources, HashSet<Object *> &seen_objects, int recursion_depth);
+
+Variant scan_variant(const Variant &v, HashMap<String, Ref<Resource>> &p_seen_resources, HashSet<Object *> &seen_objects, int recursion_depth) {
+	ERR_FAIL_COND_V_MSG(recursion_depth > 1024, Variant(), "Recursion depth exceeded");
+	recursion_depth++;
+	Variant result = v;
+	switch (v.get_type()) {
+		case Variant::OBJECT: {
+			Ref<Resource> res = v;
+			if (is_packed_scene(res)) {
+				Ref<PackedScene> sub_scene;
+				if (!p_seen_resources.has(res->get_path())) {
+					if (_resource_get_class(res) == "PackedScene") {
+						sub_scene = _ensure_resource_is_packed_scene(res, p_seen_resources, seen_objects, recursion_depth);
+					}
+				} else {
+					sub_scene = p_seen_resources.get(res->get_path());
+				}
+				if (sub_scene.is_valid()) {
+					p_seen_resources[res->get_path()] = sub_scene;
+					result = sub_scene;
+				} else {
+					p_seen_resources[res->get_path()] = res;
+					result = res;
+				}
+			} else if (res.is_valid()) {
+				if (!p_seen_resources.has(res->get_path())) {
+					List<PropertyInfo> property_list;
+					res->get_property_list(&property_list);
+					for (const PropertyInfo &pi : property_list) {
+						Variant v = scan_variant(res->get(pi.name), p_seen_resources, seen_objects, recursion_depth);
+						res->set(pi.name, v);
+					}
+					p_seen_resources[res->get_path()] = res;
+				}
+			} else if (Object *obj = v.operator Object *(); obj != nullptr && !seen_objects.has(obj)) {
+				seen_objects.insert(obj);
+				List<PropertyInfo> property_list;
+				obj->get_property_list(&property_list);
+				for (const PropertyInfo &pi : property_list) {
+					if (pi.usage & PROPERTY_USAGE_STORAGE) {
+						Variant v = scan_variant(obj->get(pi.name), p_seen_resources, seen_objects, recursion_depth);
+						obj->set(pi.name, v);
+					}
+				}
+			}
+		} break;
+		case Variant::ARRAY: {
+			Array a = v;
+			for (int j = 0; j < a.size(); j++) {
+				a[j] = scan_variant(a[j], p_seen_resources, seen_objects, recursion_depth);
+			}
+			result = a;
+		} break;
+		case Variant::DICTIONARY: {
+			Dictionary d;
+			for (const KeyValue<Variant, Variant> &kv : v.operator Dictionary()) {
+				Variant key = scan_variant(kv.key, p_seen_resources, seen_objects, recursion_depth);
+				Variant value = scan_variant(kv.value, p_seen_resources, seen_objects, recursion_depth);
+				d[key] = value;
+			}
+			result = d;
+		} break;
+		default: {
+		}
+	}
+	return result;
+}
+
+Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resource, HashMap<String, Ref<Resource>> &p_seen_resources, HashSet<Object *> &seen_objects, int recursion_depth) {
+	Ref<PackedScene> r_packed_scene = p_resource;
+	if (_resource_get_class(p_resource) == "PackedScene") {
+		Dictionary bundle = scan_variant(p_resource->get("_bundled"), p_seen_resources, seen_objects, recursion_depth);
+		// we need to go through the variants in the bundle and ensure that any MissingResources that are PackedScenes are also replaced with instantiated packed scenes
+		// this is because of PackedScene::SceneState::get_node_instance, which returns a Ref<PackedScene>, which will be null if it's not an instance of a PackedScene
+		if (r_packed_scene.is_null()) { // MissingResource
+			r_packed_scene = Ref<PackedScene>(memnew(PackedScene));
+			if (!bundle.is_empty()) {
+				r_packed_scene->set("_bundled", bundle);
+			}
+			r_packed_scene->set_path_cache(p_resource->get_path());
+			r_packed_scene->merge_meta_from(p_resource.ptr());
+		}
+	}
+	return r_packed_scene;
+}
+
+Ref<PackedScene> ResourceFormatSaverCompatTextInstance::ensure_packed_scenes(const Ref<Resource> &p_resource) {
+	HashMap<String, Ref<Resource>> seen_resources;
+	HashSet<Object *> seen_objects;
+	return _ensure_resource_is_packed_scene(p_resource, seen_resources, seen_objects, 0);
 }
