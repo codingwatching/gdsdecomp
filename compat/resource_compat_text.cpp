@@ -42,8 +42,6 @@
 
 #include "core/io/dir_access.h"
 
-#include "fake_scene_state.h"
-
 void ResourceLoaderCompatText::_printerr() {
 	ERR_PRINT(vformat("%s:%d - Parse Error: %s.", res_path, lines, error_text));
 }

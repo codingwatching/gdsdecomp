@@ -1,5 +1,4 @@
 #pragma once
-#include "../compat/fake_scene_state.h"
 #include "../compat/resource_compat_binary.h"
 #include "../compat/resource_compat_text.h"
 

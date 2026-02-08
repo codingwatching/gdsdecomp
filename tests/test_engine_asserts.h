@@ -2,7 +2,6 @@
 #include "test_common.h"
 #include "tests/test_macros.h"
 
-#include "../compat/fake_scene_state.h"
 #include "../compat/resource_compat_binary.h"
 #include "../compat/resource_compat_text.h"
 #include "../utility/gdre_packed_source.h"
@@ -30,7 +29,7 @@ TEST_CASE("[GDSDecomp][SceneState] SceneState packed version format hasn't chang
 	auto d = state->get_bundled_scene();
 	CHECK(d.has("version"));
 	int version = d["version"];
-	CHECK(version == SceneStateInstanceGetter::CURRENT_PACKED_SCENE_VERSION);
+	CHECK(version == ResourceFormatLoaderCompatBinary::CURRENT_PACKED_SCENE_VERSION);
 }
 
 TEST_CASE("[GDSDecomp][ResourceLoaderText] ResourceLoaderText::FORMAT_VERSION hasn't changed") {

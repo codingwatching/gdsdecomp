@@ -151,6 +151,7 @@ protected:
 	static void _bind_methods();
 
 public:
+	static constexpr int CURRENT_PACKED_SCENE_VERSION = 3;
 	static Error get_ver_major_minor(const String &p_path, uint32_t &r_ver_major, uint32_t &r_ver_minor, bool &r_suspicious);
 	static bool is_binary_resource(const String &p_path);
 
