@@ -1,6 +1,6 @@
 #pragma once
 #include "core/io/file_access.h"
-#include "core/object/gdvirtual.gen.inc"
+#include "core/object/gdvirtual.gen.h"
 #include "core/object/ref_counted.h"
 #include "core/variant/variant.h"
 
