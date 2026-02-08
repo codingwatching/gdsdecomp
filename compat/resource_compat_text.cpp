@@ -3178,7 +3178,9 @@ Variant scan_variant(const Variant &v, HashMap<String, Ref<Resource>> &p_seen_re
 				Variant value = scan_variant(kv.value, p_seen_resources, seen_objects, recursion_depth);
 				d[key] = value;
 			}
-			result = d;
+			v.operator Dictionary().clear();
+			v.operator Dictionary().assign(d);
+			result = v;
 		} break;
 		default: {
 		}
