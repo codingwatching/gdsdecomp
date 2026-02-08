@@ -1737,7 +1737,7 @@ void ImportExporter::make_git_repo() {
 	}
 
 	// set core.autocrlf to input
-	OS::get_singleton()->execute("git", { "-C", output_dir, "config", "set", "--local", "core.autocrlf", "input" }, &output, &exit_code, true);
+	OS::get_singleton()->execute("git", { "-C", output_dir, "config", "--local", "core.autocrlf", "input" }, &output, &exit_code, true);
 	if (exit_code != 0) {
 		ERR_FAIL_MSG("Failed to set core.autocrlf to input: " + output);
 	}
