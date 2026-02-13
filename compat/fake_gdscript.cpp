@@ -550,7 +550,7 @@ Error FakeGDScript::parse_script() {
 								} else {
 									break;
 								}
-								j++;
+								j--;
 							}
 						}
 						int arg_count = 0;
