@@ -3403,7 +3403,12 @@ Error ResourceFormatSaverCompatBinaryInstance::write_v2_import_metadata(Ref<File
 }
 
 void ResourceLoaderCompatBinary::check_suspect_version() {
-	if (ver_major < 2) {
+	// Redot switched to using the year as the major version
+	if (ver_major == 26 && ver_minor == 1) {
+		// Redot 26.1 == Godot 4.5.2
+		ver_major = 4;
+		ver_minor = 5;
+	} else if (ver_major < 2 || ver_major > 25) { // catch other Redot versions
 		switch (ver_format) {
 			case 0:
 				// Version 1.x, format 0

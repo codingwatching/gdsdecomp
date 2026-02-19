@@ -2271,7 +2271,7 @@ Error GDRESettings::load_import_files() {
 		v2wildcards.push_back("*.gde");
 		v2wildcards.push_back("*.gdc");
 		resource_files = get_file_list(v2wildcards);
-	} else if (_ver_major == 3 || _ver_major == 4) {
+	} else if (_ver_major >= 3) {
 		resource_files = get_file_list(v3wildcards);
 	} else {
 		ERR_FAIL_V_MSG(ERR_BUG, "Can't determine major version!");

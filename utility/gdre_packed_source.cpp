@@ -431,7 +431,7 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 
 	Ref<GodotVer> godot_ver;
 	bool suspect_version = false;
-	if (ver_major < 2) {
+	if (ver_major < 2 || ver_major > 25) { // 1.x or Redot
 		// it is very unlikely that we will encounter Godot 1.x games in the wild.
 		// This is likely a pck created with a creation tool.
 		// We need to determine the version number from the binary resources.
