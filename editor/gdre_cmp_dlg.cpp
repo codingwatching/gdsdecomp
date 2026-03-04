@@ -11,8 +11,8 @@
 #include "gdre_cmp_dlg.h"
 
 #include "bytecode/bytecode_versions.h"
-#include "core/object/class_db.h"
 #include "core/object/callable_mp.h"
+#include "core/object/class_db.h"
 
 #include "scene/gui/option_button.h"
 
