@@ -10,6 +10,7 @@
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/http_client.h"
+#include "core/object/class_db.h"
 #include "modules/regex/regex.h"
 #include "modules/zip/zip_reader.h"
 #include "utility/gdre_logger.h"
@@ -295,7 +296,7 @@ bool gdre::dir_has_any_matching_wildcards(const String &p_dir, const Vector<Stri
 
 Error gdre::ensure_dir(const String &dst_dir) {
 	Error err = OK;
-	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+	Ref<DirAccess> da = DirAccess::create_for_path(dst_dir);
 	ERR_FAIL_COND_V(da.is_null(), ERR_FILE_CANT_OPEN);
 	// make_dir_recursive requires a mutex lock for every directory in the path, so it behooves us to check if the directory exists first
 	if (!da->dir_exists(dst_dir)) {
@@ -374,7 +375,27 @@ void gdre::get_strings_from_variant(const Variant &p_var, Vector<String> &r_stri
 	}
 }
 
+String gdre::remove_url_query_params(const String &p_url) {
+	String base = p_url.get_base_dir();
+	// get the substring of the url after the base
+	String file = p_url.substr(base.length());
+	auto pos = file.rfind("?");
+	if (pos == -1) {
+		return p_url;
+	}
+	return p_url.substr(0, pos + base.length());
+}
+
 Error gdre::unzip_file_to_dir(const String &zip_path, const String &output_dir) {
+	// check if the zip file is a tar archive
+	if (is_path_tar(zip_path)) {
+		ERR_FAIL_COND_V_MSG(ensure_dir(output_dir) != OK, ERR_FILE_CANT_OPEN, "Failed to create output directory: " + output_dir);
+		int exit_code = 0;
+		String pipe;
+		Error err = OS::get_singleton()->execute("tar", { "-xf", zip_path, "-C", output_dir }, &pipe, &exit_code, true);
+		ERR_FAIL_COND_V_MSG(err != OK || exit_code != 0, ERR_FILE_CANT_OPEN, vformat("Failed to extract tar archive: %s\n%s", zip_path, pipe));
+		return OK;
+	}
 	Ref<ZIPReader> zip;
 	zip.instantiate();
 
@@ -1512,6 +1533,18 @@ String gdre::path_to_uri(const String &p_path) {
 	return (!s.begins_with("/") ? "file:///" : "file://") + s;
 }
 
+bool gdre::is_path_tar(const String &p_path) {
+	static HashSet<String> tar_extensions = { "tar", "tgz", "tbz2", "txz", "tzst" };
+	if (tar_extensions.has(p_path.get_extension().to_lower()) || p_path.get_basename().has_extension("tar")) {
+		return true;
+	}
+	return false;
+}
+
+bool gdre::is_path_archive(const String &p_path) {
+	return is_path_tar(p_path) || p_path.has_extension("zip");
+}
+
 bool gdre::is_zip_file(const String &p_path) {
 	Ref<FileAccess> fa = FileAccess::open(p_path, FileAccess::READ);
 	if (fa.is_null()) {
@@ -1535,6 +1568,29 @@ Ref<Image> gdre::load_image_from_file(const String &p_path) {
 	GDRELogger::set_thread_local_silent_errors(false);
 #endif
 	return image;
+}
+
+Error gdre::clear_dir_except_for(const String &p_dir, const Vector<String> &p_files_or_dirs) {
+	if (!DirAccess::dir_exists_absolute(p_dir)) {
+		return OK;
+	}
+	HashSet<String> files_or_dirs_set = gdre::vector_to_hashset(p_files_or_dirs);
+	auto da = DirAccess::create_for_path(p_dir);
+	if (da.is_null()) {
+		return ERR_FILE_CANT_OPEN;
+	}
+	da->change_dir(p_dir);
+	da->list_dir_begin();
+	String file = da->get_next();
+	while (!file.is_empty()) {
+		if (file == "." || file == ".." || files_or_dirs_set.has(file)) {
+			file = da->get_next();
+			continue;
+		}
+		rimraf(p_dir.path_join(file));
+		file = da->get_next();
+	}
+	return OK;
 }
 
 void GDRECommon::_bind_methods() {
@@ -1565,4 +1621,5 @@ void GDRECommon::_bind_methods() {
 	ClassDB::bind_static_method("GDRECommon", D_METHOD("get_dirs_at", "dir", "wildcards", "absolute"), &gdre::get_dirs_at);
 	ClassDB::bind_static_method("GDRECommon", D_METHOD("get_recursive_dir_list_multithread", "dir", "wildcards", "absolute", "include_hidden", "exclude_filters", "files_first", "exclude_dot_prefix_and_gdignore", "show_progress"), &gdre::get_recursive_dir_list_multithread, DEFVAL(PackedStringArray()), DEFVAL(true), DEFVAL(true), DEFVAL(PackedStringArray()), DEFVAL(false), DEFVAL(false), DEFVAL(false));
 	ClassDB::bind_static_method("GDRECommon", D_METHOD("get_safe_dir_name", "dir_name", "allow_paths"), &gdre::get_safe_dir_name, DEFVAL(false));
+	ClassDB::bind_static_method("GDRECommon", D_METHOD("clear_dir_except_for", "dir", "files_or_dirs"), &gdre::clear_dir_except_for);
 }

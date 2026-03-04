@@ -1,5 +1,4 @@
-#ifndef __AXML_PARSER_H__
-#define __AXML_PARSER_H__
+#pragma once
 #include <core/string/ustring.h>
 #include <core/templates/vector.h>
 
@@ -37,7 +36,6 @@ class AXMLParser {
 	Vector<String> perms;
 
 public:
-	String get_godot_library_version_string() { return godot_library_version; };
+	String get_godot_library_version_string() { return godot_library_version; }
 	Error parse_manifest(Vector<uint8_t> &p_manifest);
 };
-#endif // __AMXL_PARSER_H__

@@ -1,6 +1,7 @@
 #include "diff_result.h"
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
+#include "core/object/class_db.h"
 #include "core/object/object.h"
 #include "core/variant/variant.h"
 #include "scene/main/node.h"
@@ -38,7 +39,7 @@ Dictionary DiffResult::get_file_diffs() const {
 }
 
 HashMap<String, Ref<FileDiffResult>> DiffResult::get_file_diff_map() const {
-	return file_diffs;
+	return HashMap<String, Ref<FileDiffResult>>(file_diffs);
 }
 
 void DiffResult::set_file_diff_map(const HashMap<String, Ref<FileDiffResult>> &p_diffs) {
@@ -122,7 +123,7 @@ Dictionary FileDiffResult::get_node_diffs() const {
 }
 
 HashMap<String, Ref<NodeDiffResult>> FileDiffResult::get_node_diff_map() const {
-	return node_diffs;
+	return HashMap<String, Ref<NodeDiffResult>>(node_diffs);
 }
 
 void FileDiffResult::set_node_diff(const Ref<NodeDiffResult> &p_diff) {
@@ -234,7 +235,7 @@ Dictionary ObjectDiffResult::get_property_diffs() const {
 }
 
 HashMap<String, Variant> ObjectDiffResult::get_property_diff_map() const {
-	return property_diffs;
+	return HashMap<String, Variant>(property_diffs);
 }
 
 void ObjectDiffResult::set_property_diff(const Ref<PropertyDiffResult> &p_diff) {

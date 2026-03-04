@@ -1,5 +1,6 @@
 #pragma once
 #include "exporters/resource_exporter.h"
+
 class AudioStreamWAV;
 class SampleExporter : public ResourceExporter {
 	GDCLASS(SampleExporter, ResourceExporter);

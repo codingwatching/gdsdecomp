@@ -1,5 +1,4 @@
-#ifndef PCK_DUMPER_H
-#define PCK_DUMPER_H
+#pragma once
 
 #include "core/object/object.h"
 #include "core/object/ref_counted.h"
@@ -23,6 +22,7 @@ class PckDumper : public RefCounted {
 	struct ExtractToken {
 		Ref<PackedFileInfo> file;
 		Error err = OK;
+		String path_to_extract;
 	};
 	void _do_extract(uint32_t i, ExtractToken *tokens);
 	String get_extract_token_description(int64_t i, ExtractToken *userdata);
@@ -41,5 +41,3 @@ public:
 
 	//Error pck_dump_to_dir(const String &dir, const Vector<String> &files_to_extract);
 };
-
-#endif // PCK_DUMPER_H

@@ -1,5 +1,4 @@
-#ifndef GITHUB_SOURCE_H
-#define GITHUB_SOURCE_H
+#pragma once
 
 #include "core/object/object.h"
 #include "core/string/ustring.h"
@@ -97,5 +96,3 @@ public:
 	// void load_cache_data(const String &plugin_name, const Dictionary &data) override; // Deprecated
 	Vector<ReleaseInfo> find_release_infos_by_tag(const String &plugin_name, const String &tag, Error &r_error) override;
 };
-
-#endif // GITHUB_SOURCE_H

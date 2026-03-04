@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-#ifndef FILE_ACCESS_APK_H
-#define FILE_ACCESS_APK_H
+#pragma once
 
 #ifdef MINIZIP_ENABLED
 
@@ -68,8 +67,8 @@ public:
 
 	bool file_exists(String p_name) const;
 
-	virtual bool try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset) override;
-	Ref<FileAccess> get_file(const String &p_path, PackedData::PackedFile *p_file) override;
+	virtual bool try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset = 0, const Vector<uint8_t> &p_decryption_key = Vector<uint8_t>()) override;
+	Ref<FileAccess> get_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key = Vector<uint8_t>()) override;
 
 	static APKArchive *get_singleton();
 
@@ -128,5 +127,3 @@ public:
 };
 
 #endif // MINIZIP_ENABLED
-
-#endif // FILE_ACCESS_ZIP_H

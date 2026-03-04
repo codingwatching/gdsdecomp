@@ -36,6 +36,7 @@ PLUGINS_TO_PREPOP = [
     "spine_godot_extension",
     "sentry",
     "wwise",
+    "gd_cubism"
 ]
 
 

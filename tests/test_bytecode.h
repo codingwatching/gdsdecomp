@@ -1,5 +1,4 @@
-#ifndef TEST_BYTECODE_H
-#define TEST_BYTECODE_H
+#pragma once
 
 #include "../bytecode/bytecode_base.h"
 #include "bytecode/bytecode_versions.h"
@@ -471,5 +470,3 @@ TEST_CASE("[GDSDecomp][Bytecode][EOFNewline] Test indented newline at EOF") {
 }
 
 } //namespace TestBytecode
-
-#endif // TEST_BYTECODE_H

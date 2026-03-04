@@ -86,7 +86,7 @@ namespace GodotMonoDecomp
 		};
 
 
-		// bool IProjectInfoProvider.CheckForOverflowUnderflow => Settings.CheckForOverflowUnderflow;
+		bool IProjectInfoProvider.CheckForOverflowUnderflow => Settings.CheckForOverflowUnderflow;
 
 		public IAssemblyResolver AssemblyResolver { get; }
 
@@ -130,7 +130,7 @@ namespace GodotMonoDecomp
 		{
 		}
 
-		protected GodotProjectDecompiler(
+		public GodotProjectDecompiler(
 			GodotMonoDecompSettings settings,
 			Guid projectGuid,
 			IAssemblyResolver assemblyResolver,

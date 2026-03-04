@@ -4,6 +4,7 @@
 
 // clang-format off
 
+#include "core/object/class_db.h"
 #include "bytecode/bytecode_versions.h"
 
 #include "bytecode/bytecode_custom.h"

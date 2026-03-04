@@ -1,5 +1,4 @@
 #pragma once
-#include "../compat/fake_scene_state.h"
 #include "../compat/resource_compat_binary.h"
 #include "../compat/resource_compat_text.h"
 
@@ -42,7 +41,7 @@ inline Error store_file_as_string(const String &path, const String &content) {
 	return OK;
 }
 
-inline void test_pck_files(HashMap<String, String> files) {
+inline void test_pck_files(const HashMap<String, String> &files) {
 	for (const auto &file : files) {
 		CHECK(FileAccess::exists(file.key));
 		auto fa = FileAccess::open(file.key, FileAccess::READ);

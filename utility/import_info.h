@@ -1,12 +1,12 @@
-#ifndef GDRE_IMPORT_INFO_H
-#define GDRE_IMPORT_INFO_H
+#pragma once
 
 #include "compat/resource_import_metadatav2.h"
 
-#include "core/io/config_file.h"
 #include "core/object/object.h"
 #include "core/object/ref_counted.h"
 #include "core/os/shared_object.h"
+#include "core/variant/binder_common.h"
+
 #include "utility/resource_info.h"
 namespace V2ImportEnums {
 enum TextureFormat {
@@ -327,7 +327,7 @@ protected:
 public:
 	virtual String get_type() const override { return type; }
 	virtual void set_type(const String &p_type) override { type = p_type; }
-	virtual String get_compat_type() const override { return ClassDB::get_compatibility_remapped_class(get_type()); }
+	virtual String get_compat_type() const override;
 
 	virtual String get_importer() const override { return importer; }
 
@@ -414,4 +414,3 @@ public:
 
 VARIANT_ENUM_CAST(ImportInfo::LossType);
 VARIANT_ENUM_CAST(ImportInfo::IInfoType);
-#endif

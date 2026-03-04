@@ -1,4 +1,6 @@
 #include "resource_info.h"
+
+#include "core/object/class_db.h"
 #include <core/io/json.h>
 
 bool ResourceInfo::using_script_class() const {

@@ -2,7 +2,6 @@
 #include "import_exporter.h"
 
 #include "bytecode/bytecode_base.h"
-#include "compat/oggstr_loader_compat.h"
 #include "compat/resource_loader_compat.h"
 #include "core/error/error_list.h"
 #include "core/error/error_macros.h"
@@ -24,6 +23,7 @@
 
 #include "godot_mono_decomp_wrapper.h"
 
+#include "core/io/config_file.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/json.h"
@@ -784,7 +784,7 @@ struct ProcessRunnerStruct : public TaskRunnerStruct {
 	String command;
 	Vector<String> arguments;
 	int error_code = -1;
-	OS::ProcessID process_id = -1;
+	ProcessID process_id = -1;
 	String description;
 	bool is_cancelled = false;
 	Ref<FileAccess> fa_stdout;
@@ -1737,7 +1737,7 @@ void ImportExporter::make_git_repo() {
 	}
 
 	// set core.autocrlf to input
-	OS::get_singleton()->execute("git", { "-C", output_dir, "config", "set", "--local", "core.autocrlf", "input" }, &output, &exit_code, true);
+	OS::get_singleton()->execute("git", { "-C", output_dir, "config", "--local", "core.autocrlf", "input" }, &output, &exit_code, true);
 	if (exit_code != 0) {
 		ERR_FAIL_MSG("Failed to set core.autocrlf to input: " + output);
 	}
@@ -1766,6 +1766,7 @@ void ImportExporter::make_git_repo() {
 	if (DirAccess::dir_exists_absolute(output_dir.path_join(".assets"))) {
 		files_to_add.push_back(".assets/");
 	}
+	String game_version = get_settings()->get_game_app_version();
 	int ver_major = get_ver_major();
 	if (!include_imports && ver_major == 3) {
 		gitignore_lines.insert(".import/");
@@ -1814,7 +1815,11 @@ void ImportExporter::make_git_repo() {
 		ERR_FAIL_MSG("Failed to add files to git repo: " + add_runner->output);
 	}
 	// commit the files
-	auto commit_runner = std::make_shared<ProcessRunnerStruct>("git", Vector<String>{ "-C", output_dir, "commit", "-m", "Initial commit" });
+	String commit_message = "Initial commit";
+	if (!game_version.is_empty()) {
+		commit_message += " @ version " + game_version;
+	}
+	auto commit_runner = std::make_shared<ProcessRunnerStruct>("git", Vector<String>{ "-C", output_dir, "commit", "-m", commit_message });
 	err = TaskManager::get_singleton()->run_task(commit_runner, nullptr, "Committing files to git repo...", -1, true, true);
 	if (err == ERR_SKIP) {
 		return;

@@ -246,7 +246,7 @@ public static class Common
 			.Select(field => field.Name).ToArray();
 	}
 
-	public static string GetEnumValueName(IType type, int value, string defaultValue = "")
+	public static string GetEnumValueName(IType type, long value, string defaultValue = "")
 	{
 		var names = GetEnumValueNames(type);
 		if (names.Length == 0 || value >= names.Length)
@@ -254,5 +254,29 @@ public static class Common
 			return defaultValue;
 		}
 		return names[value];
+	}
+
+	public static Guid GenerateDeterministicGuidFromString(string input)
+	{
+		const byte Variant10xxMask = 0xC0;
+		const byte Variant10xxValue = 0x80;
+
+		const ushort VersionMask = 0xF000;
+		const ushort Version4Value = 0x4000;
+		using (var md5 = System.Security.Cryptography.MD5.Create())
+		{
+			byte[] inputBytes = Encoding.UTF8.GetBytes(input);
+			byte[] hashBytes = md5.ComputeHash(inputBytes);
+			short _c = (short)(hashBytes[3] | hashBytes[4] << 8);
+			byte _d = hashBytes[5];
+			_c = (short)((_c & ~VersionMask) | Version4Value);
+			_d = (byte)((_d & ~Variant10xxMask) | Variant10xxValue);
+
+			hashBytes[3] = (byte)(_c & 0xFF);
+			hashBytes[4] = (byte)((_c >> 8) & 0xFF);
+			hashBytes[5] = _d;
+
+			return new Guid(hashBytes);
+		}
 	}
 }

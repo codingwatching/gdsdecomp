@@ -8,6 +8,10 @@
 /*************************************************************************/
 
 #include "gdre_enc_key.h"
+
+#include "core/object/callable_mp.h"
+#include "core/object/class_db.h"
+
 #include "utility/gdre_settings.h"
 
 EncKeyDialog::EncKeyDialog() {

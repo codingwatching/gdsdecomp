@@ -1,8 +1,6 @@
 
-#ifndef RESOURCE_IMPORT_METADATAV2_H
-#define RESOURCE_IMPORT_METADATAV2_H
+#pragma once
 
-#include "core/io/resource.h"
 #include "core/object/ref_counted.h"
 #include "core/templates/rb_map.h"
 
@@ -46,5 +44,3 @@ public:
 	static Ref<ResourceImportMetadatav2> from_json(const Dictionary &p_dict);
 	ResourceImportMetadatav2();
 };
-
-#endif //RESOURCE_IMPORT_METADATAV2_H

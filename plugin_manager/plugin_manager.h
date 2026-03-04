@@ -1,5 +1,4 @@
-#ifndef PLUGIN_MANAGER_H
-#define PLUGIN_MANAGER_H
+#pragma once
 
 #include "core/object/object.h"
 #include "core/object/ref_counted.h"
@@ -25,7 +24,7 @@ private:
 
 	// Source management
 	static Ref<PluginSource> get_source(const String &plugin_name);
-	static void load_plugin_version_cache_file(const String &cache_file);
+	static void load_plugin_version_cache_file(const String &cache_file, bool prepop = false);
 	static void load_plugin_version_cache();
 	static void save_plugin_version_cache();
 	static Error populate_plugin_version_hashes(PluginVersion &plugin_version);
@@ -55,5 +54,3 @@ public:
 	static void unregister_source(Ref<PluginSource> source);
 	static void print_plugin_cache();
 };
-
-#endif // PLUGIN_MANAGER_H

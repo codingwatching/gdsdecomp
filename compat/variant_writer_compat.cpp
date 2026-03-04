@@ -2,6 +2,7 @@
 #include "core/crypto/crypto_core.h"
 
 #include "compat/resource_loader_compat.h"
+#include "core/object/class_db.h"
 #include "core/object/script_language.h"
 
 #include "image_parser_v2.h"
@@ -1544,8 +1545,9 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 		case Variant::FLOAT: { // "REAL" in v2 and v3
 			String s = rtosfix(p_variant.operator double());
 			if (!float_special_values.has(s)) {
-				if (s.find(".") == -1 && s.find("e") == -1)
+				if (s.find(".") == -1 && s.find("e") == -1) {
 					s += ".0";
+				}
 			}
 			p_store_string_func(p_store_string_ud, s);
 		} break;
@@ -1573,8 +1575,9 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 			Transform2D m3 = p_variant;
 			for (int i = 0; i < 3; i++) {
 				for (int j = 0; j < 2; j++) {
-					if (i != 0 || j != 0)
+					if (i != 0 || j != 0) {
 						s += ", ";
+					}
 					s += rtosfix(m3.columns[i][j]);
 				}
 			}
@@ -1604,8 +1607,9 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 			Basis m3 = p_variant;
 			for (int i = 0; i < 3; i++) {
 				for (int j = 0; j < 3; j++) {
-					if (i != 0 || j != 0)
+					if (i != 0 || j != 0) {
 						s += ", ";
+					}
 					s += rtosfix(m3.rows[i][j]);
 				}
 			}
@@ -1619,8 +1623,9 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 			Basis &m3 = t.basis;
 			for (int i = 0; i < 3; i++) {
 				for (int j = 0; j < 3; j++) {
-					if (i != 0 || j != 0)
+					if (i != 0 || j != 0) {
 						s += ", ";
+					}
 					s += rtosfix(m3.rows[i][j]);
 				}
 			}
@@ -1742,8 +1747,9 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 				write_compat_v2_v3(E, p_store_string_func, p_store_string_ud, p_encode_res_func, p_encode_res_ud);
 				p_store_string_func(p_store_string_ud, ": ");
 				write_compat_v2_v3(dict[E], p_store_string_func, p_store_string_ud, p_encode_res_func, p_encode_res_ud);
-				if (i < keys.size() - 1)
+				if (i < keys.size() - 1) {
 					p_store_string_func(p_store_string_ud, is_v2_pcfg ? ", " : ",\n");
+				}
 			}
 
 			p_store_string_func(p_store_string_ud, is_v2_pcfg ? "}" : "\n}");

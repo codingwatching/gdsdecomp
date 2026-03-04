@@ -43,6 +43,7 @@ if env["platform"] == "android" or (is_using_clang and env["platform"] == "macos
     # force shared on macos with clang++, because `ld` does not support multiple definitions of the same symbol
     mono_native_lib_type = "Shared"
 
+mbedtlsthirdparty_dir = "#thirdparty/mbedtls/include/"
 mmp3thirdparty_dir = "#thirdparty/minimp3/"
 liboggthirdparty_dir = "#thirdparty/libogg/"
 libtheorathirdparty_dir = "#thirdparty/libtheora/"
@@ -82,6 +83,7 @@ env_gdsdecomp.Append(CPPPATH=[godot_mono_decomp_include_dir])
 env_gdsdecomp.Append(CPPPATH=["#modules/gdsdecomp/"])
 env_gdsdecomp.Append(CPPPATH=["#thirdparty/thorsvg/"])
 env_gdsdecomp.Append(CPPPATH=[libtheorathirdparty_dir])
+env_gdsdecomp.Append(CPPPATH=[mbedtlsthirdparty_dir])
 if env["disable_exceptions"]:
     env_gdsdecomp.Append(CPPDEFINES=["DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS"])
 
@@ -850,6 +852,7 @@ module_obj = []
 env_gdsdecomp.add_source_files(module_obj, "*.cpp")
 env_gdsdecomp.add_source_files(module_obj, "bytecode/*.cpp")
 env_gdsdecomp.add_source_files(module_obj, "compat/*.cpp")
+env_gdsdecomp.add_source_files(module_obj, "crypto/*.cpp")
 if env["target"] == "editor":
     env_gdsdecomp.add_source_files(module_obj, "editor/*.cpp")
 env_gdsdecomp.add_source_files(module_obj, "exporters/*.cpp")

@@ -1,6 +1,7 @@
 #include "task_manager.h"
 #include "gui/gdre_progress.h"
 #include "main/main.h"
+#include "servers/rendering/rendering_server.h"
 #include "utility/common.h"
 #include "utility/gdre_settings.h"
 
@@ -12,7 +13,8 @@ int64_t TaskManager::maximum_memory_usage = TWELVE_GB;
 
 TaskManager *TaskManager::singleton = nullptr;
 
-TaskManager::TaskManager() {
+TaskManager::TaskManager() :
+		main_thread_dispatch_queue(WorkerThreadPool::get_singleton()->get_thread_count() * 2) {
 	singleton = this;
 	Dictionary mem_info = OS::get_singleton()->get_memory_info();
 	// 3/4ths of the physical memory, but no more than 12GB
@@ -20,7 +22,24 @@ TaskManager::TaskManager() {
 	if (max_usage <= 0) {
 		max_usage = FOUR_GB;
 	}
+	named_pool = WorkerThreadPool::get_named_pool("TaskManager");
 	maximum_memory_usage = MIN(max_usage, TWELVE_GB);
+	auto thread_count = named_pool->get_thread_count();
+	thread_index_to_thread_id.resize(thread_count);
+	thread_index_to_task_ids.resize(thread_count);
+	for (int i = 0; i < thread_count; i++) {
+		thread_index_to_thread_id[i] = -1;
+		thread_index_to_task_ids[i] = -1;
+	}
+	auto task_id = named_pool->add_template_group_task(
+			this,
+			&TaskManager::_set_thread_name_task,
+			nullptr,
+			thread_count,
+			thread_count,
+			true,
+			"TaskManagerThreadSetup");
+	named_pool->wait_for_group_task_completion(task_id);
 }
 
 TaskManager::~TaskManager() {
@@ -28,12 +47,27 @@ TaskManager::~TaskManager() {
 	singleton = nullptr;
 }
 
+void TaskManager::_set_thread_name_task(uint32_t i, void *p_userdata) {
+	// delaying here to ensure all the threads are started
+	OS::get_singleton()->delay_usec(10000);
+	int thread_index = named_pool->get_thread_index();
+	thread_index_to_thread_id[thread_index] = Thread::get_caller_id();
+	Thread::set_name(vformat("GDRETask %d (%d)", thread_index, Thread::get_caller_id()));
+}
+
 TaskManager *TaskManager::get_singleton() {
 	return singleton;
 }
 
 int TaskManager::get_max_thread_count() {
+	if (get_singleton() && get_singleton()->named_pool) {
+		return get_singleton()->named_pool->get_thread_count();
+	}
 	return WorkerThreadPool::get_singleton()->get_thread_count();
+}
+
+WorkerThreadPool *TaskManager::get_thread_pool() {
+	return get_singleton() ? get_singleton()->named_pool : WorkerThreadPool::get_singleton();
 }
 
 void TaskManager::BaseTemplateTaskData::start() {
@@ -62,15 +96,17 @@ bool TaskManager::BaseTemplateTaskData::is_progress_enabled() const {
 
 bool TaskManager::BaseTemplateTaskData::wait_update_progress(bool p_force_refresh) {
 	bool bg_ret = false;
-	if (!dont_update_progress_bg) {
-		// We only want to force a redraw for the other tasks if the progress is not enabled, since `update_progress` can force the redraw itself
-		bool force_redraw_bg = !progress_enabled ? p_force_refresh : false;
-		// This will not update this task's progress, as `is_waiting` is true here.
-		bg_ret = TaskManager::get_singleton()->update_progress_bg(force_redraw_bg);
-	} else if (!progress_enabled) {
-		bg_ret = TaskManager::get_singleton()->is_current_task_canceled();
+	if (not_in_main_queue && progress_enabled) {
+		update_progress(false);
 	}
-	update_progress(p_force_refresh);
+	if (Thread::is_main_thread()) {
+		bg_ret = TaskManager::get_singleton()->wait_until_next_frame();
+	} else {
+		bg_ret = TaskManager::get_singleton()->is_current_task_canceled();
+		if (!bg_ret) {
+			OS::get_singleton()->delay_usec(10000);
+		}
+	}
 	// Only use the cancel value if the progress is not enabled
 	if (!progress_enabled && bg_ret && !is_canceled()) {
 		cancel();
@@ -117,9 +153,8 @@ bool TaskManager::BaseTemplateTaskData::_wait_after_cancel() {
 	}
 
 	auto curr_time = OS::get_singleton()->get_ticks_msec();
-	constexpr uint64_t ABORT_THRESHOLD_MS = 10000;
+	constexpr uint64_t ABORT_THRESHOLD_MS = 15000;
 	while (!is_done() && OS::get_singleton()->get_ticks_msec() - curr_time < ABORT_THRESHOLD_MS) {
-		OS::get_singleton()->delay_usec(10000);
 		wait_update_progress(is_main_thread);
 	}
 	if (is_done()) {
@@ -146,11 +181,12 @@ bool TaskManager::BaseTemplateTaskData::wait_for_completion(uint64_t timeout_s_n
 			start();
 		} else {
 			while (!started && !is_canceled()) {
-				OS::get_singleton()->delay_usec(10000);
-				if (!dont_update_progress_bg) {
-					if (TaskManager::get_singleton()->update_progress_bg(is_main_thread)) {
+				if (is_main_thread) {
+					if (TaskManager::get_singleton()->wait_until_next_frame()) {
 						break;
 					}
+				} else {
+					OS::get_singleton()->delay_usec(10000);
 				}
 			}
 		}
@@ -180,7 +216,6 @@ bool TaskManager::BaseTemplateTaskData::wait_for_completion(uint64_t timeout_s_n
 				last_reported_mem_usage_ms = OS::get_singleton()->get_ticks_msec();
 			}
 #endif
-			OS::get_singleton()->delay_usec(10000);
 			if (timeout_s_no_progress != 0) {
 				auto curr_progress = get_current_task_step_value();
 				auto curr_time = OS::get_singleton()->get_ticks_msec();
@@ -257,50 +292,148 @@ Error TaskManager::wait_for_task_completion(TaskManagerID p_group_id, uint64_t t
 	return err;
 }
 
-bool TaskManager::update_progress_bg(bool p_force_refresh, bool called_from_process) {
-	if (updating_bg || (group_id_to_description.empty() && !Thread::is_main_thread())) {
-		return false;
+bool TaskManager::wait_until_next_frame(int64_t p_time_usec) {
+	uint64_t curr_time = OS::get_singleton()->get_ticks_usec();
+	if (!Thread::is_main_thread()) {
+		OS::get_singleton()->delay_usec(p_time_usec);
+		return is_current_task_canceled();
 	}
-	if (Thread::is_main_thread()) {
-		std::shared_ptr<BaseMainThreadDispatchData> data;
-		// only once per loop
-		if (main_thread_dispatch_queue.try_pop(data)) {
-			data->callback();
+	process_main_thread_dispatch_queue_for(p_time_usec);
+	bool did_redraw = false;
+	if (update_progress_bg(true, false, &did_redraw)) {
+		cancel_main_thread_dispatch_queue();
+		return true;
+	}
+	if (!did_redraw) {
+		GDRESettings::main_iteration();
+	}
+	int64_t elapsed_time = OS::get_singleton()->get_ticks_usec() - curr_time;
+	constexpr int64_t SYNC_WAIT_TIME_US = 1000;
+	if (elapsed_time < p_time_usec) {
+		while (elapsed_time < p_time_usec) {
+			RS::get_singleton()->sync();
+			elapsed_time = OS::get_singleton()->get_ticks_usec() - curr_time;
+			if (p_time_usec - elapsed_time > SYNC_WAIT_TIME_US) {
+				OS::get_singleton()->delay_usec(SYNC_WAIT_TIME_US);
+			} else {
+				if (p_time_usec - elapsed_time > 0) {
+					OS::get_singleton()->delay_usec(p_time_usec - elapsed_time);
+				}
+				break;
+			}
 		}
+	}
+	return false;
+}
+
+bool TaskManager::update_progress_bg(bool p_force_refresh, bool called_from_process, bool *r_did_redraw) {
+	if (updating_bg || (group_id_to_description.empty() && !Thread::is_main_thread())) {
+		if (r_did_redraw) {
+			*r_did_redraw = false;
+		}
+		return false;
 	}
 	updating_bg = true;
 	bool main_loop_iterating = false;
-	bool has_non_waiting_tasks = false;
 	bool canceled = false;
 	Vector<TaskManagerID> task_ids_to_erase;
-	bool is_headless = GDRESettings::get_singleton() && GDRESettings::get_singleton()->is_headless();
-	bool force_headless_progress = p_force_refresh && is_headless;
 	group_id_to_description.for_each_m([&](auto &v) {
-		if (v.second->is_progress_enabled() && v.second->is_started()) {
-			main_loop_iterating = true;
-			if (!v.second->is_waiting) {
-				has_non_waiting_tasks = true;
-				v.second->update_progress(force_headless_progress);
-			} else if (v.second->_is_aborted() && v.second->is_done()) {
+		if (v.second->_is_aborted()) {
+			if (v.second->is_done()) {
 				task_ids_to_erase.push_back(v.first);
 			}
-		}
-		if (v.second->is_canceled()) {
-			canceled = true;
+		} else {
+			if (v.second->is_progress_enabled() && v.second->is_started()) {
+				main_loop_iterating = true;
+				v.second->update_progress(false);
+			}
+			if (v.second->is_canceled()) {
+				canceled = true;
+			}
 		}
 	});
 	for (auto &task_id : task_ids_to_erase) {
 		group_id_to_description.erase(task_id);
 	}
-	if (p_force_refresh && !is_headless && has_non_waiting_tasks && GDREProgressDialog::is_safe_to_redraw() && GDREProgressDialog::get_singleton()) {
-		GDREProgressDialog::get_singleton()->main_thread_update();
+	if (p_force_refresh && main_loop_iterating && GDREProgressDialog::is_safe_to_redraw() && GDREProgressDialog::get_singleton()) {
+		bool did_redraw = GDREProgressDialog::get_singleton()->main_thread_update();
+		if (r_did_redraw) {
+			*r_did_redraw = did_redraw;
+		}
 	}
+	// TODO: remove this, move it into main loop
 	// this should only be called if this wasn't called from `GodotREEditorStandalone::process()` and there are tasks in the queue and none of them have progress enabled
 	if (!called_from_process && !main_loop_iterating && Thread::is_main_thread() && !MessageQueue::get_singleton()->is_flushing() && group_id_to_description.size() > 0) {
 		GDRESettings::main_iteration();
+		if (r_did_redraw) {
+			*r_did_redraw = true;
+		}
 	}
 	updating_bg = false;
 	return canceled;
+}
+
+void TaskManager::set_thread_task_id(TaskManagerID p_task_manager_id) {
+	if (Thread::is_main_thread()) {
+		main_thread_task_id = p_task_manager_id;
+	} else {
+		int thread_index = named_pool->get_thread_index();
+		ERR_FAIL_COND_MSG(thread_index == -1, "This can only be called from a task thread");
+		thread_index_to_task_ids[thread_index] = p_task_manager_id;
+	}
+}
+
+TaskManager::TaskManagerID TaskManager::get_thread_task_id() const {
+	if (Thread::is_main_thread()) {
+		return main_thread_task_id;
+	} else {
+		int thread_index = named_pool->get_thread_index();
+		ERR_FAIL_COND_V_MSG(thread_index == -1, -1, "This can only be called from a task thread");
+		return thread_index_to_task_ids[thread_index];
+	}
+}
+bool TaskManager::_dispatch_to_main_thread(std::shared_ptr<BaseMainThreadDispatchData> p_data) {
+	if (Thread::is_main_thread()) {
+		p_data->callback();
+		return p_data->is_canceled();
+	}
+	while (!main_thread_dispatch_queue.try_push(p_data)) {
+		OS::get_singleton()->delay_usec(10000); // wait for a slot to become available
+	}
+	p_data->wait_for_completion();
+	return p_data->is_canceled();
+}
+
+void TaskManager::process_main_thread_dispatch_queue_for(int64_t time_usec) {
+	if (!Thread::is_main_thread()) {
+		return;
+	}
+	int64_t start_time_usec = OS::get_singleton()->get_ticks_usec();
+	int64_t elapsed_time_usec = 0;
+	while (elapsed_time_usec < time_usec) {
+		std::shared_ptr<BaseMainThreadDispatchData> data;
+		if (!main_thread_dispatch_queue.try_pop(data)) {
+			break;
+		}
+		TaskManagerID previous_main_thread_task_id = main_thread_task_id;
+		if (previous_main_thread_task_id == data->get_calling_task_id()) {
+			WARN_PRINT("Trying to dispatch to the same task id, this is not supported!");
+		}
+		set_thread_task_id(data->get_calling_task_id());
+		data->callback();
+		set_thread_task_id(previous_main_thread_task_id);
+		elapsed_time_usec = OS::get_singleton()->get_ticks_usec() - start_time_usec;
+	}
+}
+
+void TaskManager::cancel_main_thread_dispatch_queue() {
+	if (!Thread::is_main_thread()) {
+		return;
+	}
+	std::shared_ptr<BaseMainThreadDispatchData> data;
+	while (main_thread_dispatch_queue.try_pop(data)) {
+		data->cancel();
+	}
 }
 
 TaskManager::DownloadTaskID TaskManager::add_download_task(const String &p_download_url, const String &p_save_path, bool silent) {
@@ -402,7 +535,7 @@ void TaskManager::DownloadTaskData::start_internal() {
 
 TaskManager::DownloadTaskData::DownloadTaskData(const String &p_download_url, const String &p_save_path, bool p_silent) :
 		download_url(p_download_url), save_path(p_save_path), silent(p_silent) {
-	dont_update_progress_bg = true;
+	not_in_main_queue = true;
 	auto_start = false;
 }
 
@@ -476,10 +609,12 @@ Error TaskManager::DownloadQueueThread::wait_for_task_completion(DownloadTaskID 
 	Error err = OK;
 	while (!task->is_started()) {
 		if (is_main_thread) {
-			if (TaskManager::get_singleton()->update_progress_bg(true)) {
+			if (TaskManager::get_singleton()->wait_until_next_frame()) {
 				err = ERR_SKIP;
 				break;
 			}
+		} else {
+			OS::get_singleton()->delay_usec(10000);
 		}
 		if (task->is_canceled()) {
 			err = ERR_SKIP;
@@ -488,7 +623,6 @@ Error TaskManager::DownloadQueueThread::wait_for_task_completion(DownloadTaskID 
 		if (task->is_done()) {
 			break;
 		}
-		OS::get_singleton()->delay_usec(10000);
 	}
 	if (err) {
 		return err;
@@ -520,9 +654,11 @@ void TaskManager::DownloadQueueThread::worker_main_loop() {
 }
 
 void TaskManager::DownloadQueueThread::thread_func(void *p_userdata) {
+	Thread::set_name("DownloadQueueThread");
 	((DownloadQueueThread *)p_userdata)->main_loop();
 }
 void TaskManager::DownloadQueueThread::worker_thread_func(void *p_userdata) {
+	Thread::set_name("DownloadWorkerThread");
 	((DownloadQueueThread *)p_userdata)->worker_main_loop();
 }
 TaskManager::DownloadQueueThread::DownloadQueueThread() {

@@ -1,6 +1,7 @@
-#ifndef GDRE_SETTINGS_H
-#define GDRE_SETTINGS_H
+#pragma once
 #include "core/object/class_db.h"
+#include "core/variant/binder_common.h"
+
 #include "gd_parallel_hashmap.h"
 #include "import_info.h"
 #include "packed_file_info.h"
@@ -14,6 +15,8 @@
 class GDRELogger;
 class GDREPackedData;
 class GodotMonoDecompWrapper;
+class CustomDecryptor;
+
 class GDRESettings : public Object {
 	GDCLASS(GDRESettings, Object);
 	_THREAD_SAFE_CLASS_
@@ -44,10 +47,11 @@ public:
 		Ref<ProjectConfigLoader> pcfg;
 		bool encrypted = false;
 		bool suspect_version = false;
+		String non_standard_header;
 
 	public:
 		void init(
-				String f, Ref<GodotVer> godot_ver, uint32_t fver, uint32_t flags, uint64_t base, uint32_t count, PackType tp, bool p_encrypted = false, bool p_suspect_version = false) {
+				String f, Ref<GodotVer> godot_ver, uint32_t fver, uint32_t flags, uint64_t base, uint32_t count, PackType tp, bool p_encrypted = false, bool p_suspect_version = false, String p_non_standard_header = {}) {
 			pack_file = f;
 			// copy the version, or set it to null if it's invalid
 			if (godot_ver.is_valid() && godot_ver->is_valid_semver()) {
@@ -61,6 +65,7 @@ public:
 			pcfg.instantiate();
 			encrypted = p_encrypted;
 			suspect_version = p_suspect_version;
+			non_standard_header = p_non_standard_header;
 		}
 		bool has_unknown_version() {
 			return !version.is_valid() || !version->is_valid_semver();
@@ -81,6 +86,7 @@ public:
 		PackType get_type() const { return type; }
 		bool is_encrypted() const { return encrypted; }
 		bool has_suspect_version() const { return suspect_version; }
+		String get_non_standard_header() const { return non_standard_header; }
 
 	protected:
 		static void _bind_methods() {
@@ -115,6 +121,7 @@ public:
 		int bytecode_revision = 0;
 		bool suspect_version = false;
 		bool detected_csharp = false;
+		String non_standard_header;
 		String assembly_path;
 		Ref<GodotMonoDecompWrapper> decompiler;
 		String assembly_temp_dir;
@@ -163,6 +170,8 @@ private:
 	Vector<Ref<Script>> cached_scripts;
 
 	Vector<uint8_t> enc_key;
+	String custom_decryption_script_path;
+	Ref<CustomDecryptor> custom_decryptor;
 
 	bool in_editor = false;
 	bool first_load = true;
@@ -297,6 +306,15 @@ public:
 	Error set_encryption_key(Vector<uint8_t> key);
 	// Sets the encryption key from a string
 	Error set_encryption_key_string(const String &key);
+
+	Error set_custom_decryption_script(const String &p_decryptor_script_path);
+
+	void set_custom_decryptor(const Ref<CustomDecryptor> &p_decryptor);
+	void reset_custom_decryptor();
+
+	Ref<CustomDecryptor> get_custom_decryptor() const;
+	String get_custom_decryption_script_path() const;
+
 	// Resets the encryption key
 	void reset_encryption_key();
 	// Adds a pack info to the list of packs (used by the pack sources in GDREPackedData)
@@ -335,6 +353,10 @@ public:
 	uint32_t get_ver_rev() const;
 	// Get the total number of files in all loaded packs
 	uint32_t get_file_count() const;
+	// Returns whether the project's PCKs use non-standard headers
+	bool uses_nonstandard_headers() const;
+	// Returns the non-standard header for the current project
+	String get_non_standard_header() const;
 	// Converts a local path to a global filesystem path (e.g. "res://icon.png" -> "/path/to/game/icon.png")
 	String globalize_path(const String &p_path, const String &resource_path = "") const;
 	// Converts a global filesystem path to a local path (e.g. "/path/to/game/icon.png" -> "res://icon.png")
@@ -418,6 +440,9 @@ public:
 	// ResourceUID does not provide a way to get a UID for a given path, so we have to do it ourselves
 	ResourceUID::ID get_uid_for_path(const String &p_path) const;
 	String get_game_name() const;
+
+	// Get the game's declared version from the project config
+	String get_game_app_version() const;
 	// the reverse of `get_remap()`; gets the source path for the given destination path
 	String get_remapped_source_path(const String &p_dst) const;
 
@@ -462,4 +487,3 @@ public:
 };
 
 VARIANT_ENUM_CAST(GDRESettings::PackInfo::PackType);
-#endif

@@ -23,6 +23,7 @@ public class GodotModule
 	public readonly PEFile Module;
 	public readonly DotNetCoreDepInfo? depInfo;
 	public readonly LanguageVersion languageVersion;
+	public readonly Guid moduleGuid;
 	public readonly IDebugInfoProvider? debugInfoProvider;
 	public readonly string? SubDirectory;
 	public Dictionary<string, TypeDefinitionHandle> fileMap;
@@ -54,7 +55,11 @@ public class GodotModule
 		var moduleSettings = p_settings!.Clone();
 		moduleSettings.SetLanguageVersion(languageVersion);
 
-		ProjectDecompiler = new GodotProjectDecompiler(moduleSettings, assemblyResolver, assemblyResolver, debugInfoProvider);
+
+		// generate a UUID for the module based on its name
+		moduleGuid = Common.GenerateDeterministicGuidFromString(Module.FileName);
+
+		ProjectDecompiler = new GodotProjectDecompiler(moduleSettings, moduleGuid, assemblyResolver, assemblyResolver, debugInfoProvider);
 		TypeSystem = ProjectDecompiler.CreateTypeSystem(Module);
 	}
 
@@ -325,6 +330,20 @@ public class GodotModuleDecompiler
 			foreach (var module in AdditionalModules)
 			{
 				projectIDs.Add(decompileFile(module, moduleToCsProjPath[module.Name]));
+				var dir = Path.GetDirectoryName(moduleToCsProjPath[module.Name]);
+				if (dir != null)
+				{
+					Common.EnsureDir(dir);
+					// create a .gitignore file in the directory
+					var gitignorePath = Path.Combine(dir, ".gitignore");
+					if (!File.Exists(gitignorePath))
+					{
+						var gitignore = File.CreateText(gitignorePath);
+						gitignore.WriteLine("bin/*");
+						gitignore.WriteLine("obj/*");
+						gitignore.Close();
+					}
+				}
 			}
 			var solutionPath = Path.ChangeExtension(outputCSProjectPath, ".sln");
 			removeIfExists(solutionPath);
@@ -447,7 +466,18 @@ public class GodotModuleDecompiler
 			string propUsage = "";
 			if (exportAttr?.FixedArguments.Length >= 2)
 			{
-				int hintValue = exportAttr.FixedArguments[0].Value as int? ?? 0;
+				long hintValue = 0;
+				if (exportAttr.FixedArguments[0].Value != null)
+				{
+					if (exportAttr.FixedArguments[0].Value is int intVal)
+					{
+						hintValue = intVal;
+					}
+					else if (exportAttr.FixedArguments[0].Value is long longVal)
+					{
+						hintValue = longVal;
+					}
+				}
 				propHint = Common.GetEnumValueName(exportAttr.FixedArguments[0].Type, hintValue, "None");
 				propUsage = exportAttr.FixedArguments[1].Value?.ToString() ?? "";
 			}

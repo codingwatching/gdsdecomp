@@ -6,7 +6,6 @@
 #include "scene/gui/label.h"
 #include "scene/gui/line_edit.h"
 #include "scene/gui/panel_container.h"
-#include "scene/gui/text_edit.h"
 
 class GDREFindReplaceBar : public PanelContainer {
 	GDCLASS(GDREFindReplaceBar, PanelContainer);

@@ -30,8 +30,7 @@
 
 #include <core/io/file_access_encrypted.h>
 
-#ifndef FILE_ACCESS_ENCRYPTED_V3_H
-#define FILE_ACCESS_ENCRYPTED_V3_H
+#pragma once
 
 #include "core/io/file_access.h"
 
@@ -48,7 +47,7 @@ public:
 	};
 
 private:
-	Mode mode;
+	Mode mode = MODE_READ;
 	Vector<uint8_t> key;
 	bool writing = false;
 	Ref<FileAccess> file;
@@ -104,5 +103,3 @@ public:
 	FileAccessEncryptedv3() {}
 	~FileAccessEncryptedv3();
 };
-
-#endif //FILE_ACCESS_ENCRYPTED_V3_H

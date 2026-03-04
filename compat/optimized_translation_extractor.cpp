@@ -32,6 +32,7 @@
 
 #include "utility/resource_info.h"
 
+#include "core/object/class_db.h"
 #include "core/templates/pair.h"
 
 extern "C" {

@@ -30,6 +30,8 @@
 
 #include "gdre_audio_stream_preview.h"
 
+#include "core/object/class_db.h"
+
 /////////////////////
 
 float GDREAudioStreamPreview::get_length() const {

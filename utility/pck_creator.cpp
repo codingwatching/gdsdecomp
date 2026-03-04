@@ -1,6 +1,7 @@
 #include "pck_creator.h"
 
 #include "core/error/error_list.h"
+#include "core/object/class_db.h"
 #include "gdre_packed_source.h"
 #include "gdre_settings.h"
 

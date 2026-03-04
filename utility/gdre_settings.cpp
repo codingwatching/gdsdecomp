@@ -9,11 +9,12 @@
 #include "core/error/error_macros.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
-#include "core/io/file_access_encrypted.h"
 #include "core/object/class_db.h"
 #include "core/string/print_string.h"
+#include "crypto/custom_decryptor.h"
 #include "exporters/translation_exporter.h"
 #include "main/main.h"
+#include "modules/gdscript/gdscript.h"
 #include "modules/zip/zip_reader.h"
 #include "plugin_manager/plugin_manager.h"
 #include "utility/common.h"
@@ -32,6 +33,7 @@
 #include "core/object/script_language.h"
 #include "core/string/translation.h"
 #include "modules/regex/regex.h"
+#include "servers/display/display_server.h"
 #include "servers/rendering/rendering_server.h"
 
 #ifdef TOOLS_ENABLED
@@ -120,10 +122,12 @@ int GDRESettings::get_ver_major_from_dir() {
 	if (check_if_dir_is_v2() && (FileAccess::exists("res://engine.cfb") || FileAccess::exists("res://engine.cfg"))) {
 		return 2;
 	}
-	if (check_if_dir_is_v4())
+	if (check_if_dir_is_v4()) {
 		return 4;
-	if (check_if_dir_is_v3())
+	}
+	if (check_if_dir_is_v3()) {
 		return 3;
+	}
 	bool not_v2 = !check_if_dir_is_v2() || FileAccess::exists("res://project.binary") || FileAccess::exists("res://project.godot");
 
 	// deeper checking; we know it's not v2, so we don't need to check that.
@@ -311,6 +315,20 @@ uint32_t GDRESettings::get_file_count() const {
 		count += pack->file_count;
 	}
 	return count;
+}
+
+bool GDRESettings::uses_nonstandard_headers() const {
+	if (!is_pack_loaded()) {
+		return false;
+	}
+	return !current_project->non_standard_header.is_empty();
+}
+
+String GDRESettings::get_non_standard_header() const {
+	if (!is_pack_loaded()) {
+		return "";
+	}
+	return current_project->non_standard_header;
 }
 
 void GDRESettings::set_project_path(const String &p_path) {
@@ -685,6 +703,7 @@ Error GDRESettings::_add_pack(const String &path) {
 
 Error GDRESettings::load_project(const Vector<String> &p_paths, bool _cmd_line_extract, const String &csharp_assembly_override) {
 	GDRELogger::clear_error_queues();
+	error_encryption = false;
 	if (is_pack_loaded()) {
 		return ERR_ALREADY_IN_USE;
 	}
@@ -1144,6 +1163,11 @@ Error GDRESettings::save_project_config_binary(const String &p_out_dir = "") {
 
 Error GDRESettings::unload_project(bool p_no_reset_ephemeral) {
 	logger->stop_prebuffering();
+	GDREPackedData::get_singleton()->clear();
+	// If this wasn't a custom decryptor set by the user, unload it.
+	if (custom_decryptor.is_valid() && custom_decryption_script_path.is_empty()) {
+		custom_decryptor = nullptr;
+	}
 	if (!is_pack_loaded()) {
 		return ERR_DOES_NOT_EXIST;
 	}
@@ -1151,7 +1175,6 @@ Error GDRESettings::unload_project(bool p_no_reset_ephemeral) {
 	error_encryption = false;
 
 	remove_current_pack();
-	GDREPackedData::get_singleton()->clear();
 	reset_uid_cache();
 	reset_gdscript_cache();
 	if (!p_no_reset_ephemeral && GDREConfig::get_singleton()) {
@@ -1169,6 +1192,7 @@ void GDRESettings::add_pack_info(Ref<PackInfo> packinfo) {
 		current_project->pack_file = packinfo->pack_file;
 		current_project->type = packinfo->type;
 		current_project->suspect_version = packinfo->suspect_version;
+		current_project->non_standard_header = packinfo->non_standard_header;
 	} else {
 		if (!current_project->version->eq(packinfo->version)) {
 			if ((!current_project->version->is_valid_semver() || current_project->version->get_major() == 0) &&
@@ -1286,25 +1310,63 @@ Error GDRESettings::set_encryption_key_string(const String &key_str) {
 		int v = 0;
 		if (i * 2 < skey.length()) {
 			char32_t ct = skey.to_lower()[i * 2];
-			if (ct >= '0' && ct <= '9')
+			if (ct >= '0' && ct <= '9') {
 				ct = ct - '0';
-			else if (ct >= 'a' && ct <= 'f')
+			} else if (ct >= 'a' && ct <= 'f') {
 				ct = 10 + ct - 'a';
+			}
 			v |= ct << 4;
 		}
 
 		if (i * 2 + 1 < skey.length()) {
 			char32_t ct = skey.to_lower()[i * 2 + 1];
-			if (ct >= '0' && ct <= '9')
+			if (ct >= '0' && ct <= '9') {
 				ct = ct - '0';
-			else if (ct >= 'a' && ct <= 'f')
+			} else if (ct >= 'a' && ct <= 'f') {
 				ct = 10 + ct - 'a';
+			}
 			v |= ct;
 		}
 		key.write[i] = v;
 	}
 	set_encryption_key(key);
 	return OK;
+}
+
+Error GDRESettings::set_custom_decryption_script(const String &p_decryptor_script_path) {
+	ERR_FAIL_COND_V_MSG(!FileAccess::exists(p_decryptor_script_path), ERR_FILE_NOT_FOUND, "Custom encryption script file '" + p_decryptor_script_path + "' does not exist");
+	ERR_FAIL_COND_V_MSG(p_decryptor_script_path.get_extension().to_lower() != "gd", ERR_INVALID_PARAMETER, "Custom encryption script file must be a GDScript!");
+	Error err = OK;
+	ResourceFormatLoaderGDScript loader;
+	Ref<Script> script = loader.load(p_decryptor_script_path, p_decryptor_script_path, &err, false, nullptr, ResourceFormatLoader::CACHE_MODE_IGNORE);
+	ERR_FAIL_COND_V_MSG(script.is_null() || err != OK, err, "Failed to load custom encryption script!");
+	auto base_type = script->get_instance_base_type();
+	ERR_FAIL_COND_V_MSG(base_type != "CustomDecryptor", ERR_INVALID_PARAMETER, "Custom encryption script does not inherit from CustomDecryptor!");
+	Ref<CustomDecryptor> decryptor;
+	decryptor.instantiate();
+	decryptor->set_script(script);
+	ERR_FAIL_COND_V_MSG(Ref<Script>(decryptor->get_script()).is_null(), ERR_INVALID_PARAMETER, "Failed to instantiate custom encryption script!");
+	ERR_FAIL_NULL_V_MSG(decryptor->get_script_instance(), ERR_INVALID_PARAMETER, "Failed to get script instance from custom encryption script!");
+	custom_decryption_script_path = p_decryptor_script_path;
+	set_custom_decryptor(decryptor);
+	return OK;
+}
+
+void GDRESettings::set_custom_decryptor(const Ref<CustomDecryptor> &p_decryptor) {
+	custom_decryptor = p_decryptor;
+}
+
+Ref<CustomDecryptor> GDRESettings::get_custom_decryptor() const {
+	return custom_decryptor;
+}
+
+String GDRESettings::get_custom_decryption_script_path() const {
+	return custom_decryption_script_path;
+}
+
+void GDRESettings::reset_custom_decryptor() {
+	custom_decryptor = nullptr;
+	custom_decryption_script_path = "";
 }
 
 void GDRESettings::reset_encryption_key() {
@@ -1755,7 +1817,7 @@ bool GDRESettings::is_headless() const {
 float GDRESettings::get_auto_display_scale() const {
 #ifdef LINUXBSD_ENABLED
 	if (DisplayServer::get_singleton()->get_name() == "Wayland") {
-		float main_window_scale = DisplayServer::get_singleton()->screen_get_scale(DisplayServer::SCREEN_OF_MAIN_WINDOW);
+		float main_window_scale = DisplayServer::get_singleton()->screen_get_scale(DisplayServerEnums::SCREEN_OF_MAIN_WINDOW);
 
 		if (DisplayServer::get_singleton()->get_screen_count() == 1 || Math::fract(main_window_scale) != 0) {
 			// If we have a single screen or the screen of the window is fractional, all
@@ -1989,6 +2051,14 @@ String GDRESettings::get_game_name() const {
 	return game_name;
 }
 
+String GDRESettings::get_game_app_version() const {
+	if (is_project_config_loaded()) {
+		const char *version_setting = get_ver_major() <= 3 ? "application/version" : "application/config/version";
+		return current_project->pcfg->get_setting(version_setting, "");
+	}
+	return "";
+}
+
 Error GDRESettings::load_pack_gdscript_cache(bool p_reset) {
 	if (!is_pack_loaded()) {
 		return ERR_UNAVAILABLE;
@@ -2202,7 +2272,7 @@ Error GDRESettings::load_import_files() {
 		v2wildcards.push_back("*.gde");
 		v2wildcards.push_back("*.gdc");
 		resource_files = get_file_list(v2wildcards);
-	} else if (_ver_major == 3 || _ver_major == 4) {
+	} else if (_ver_major >= 3) {
 		resource_files = get_file_list(v3wildcards);
 	} else {
 		ERR_FAIL_V_MSG(ERR_BUG, "Can't determine major version!");
@@ -2897,6 +2967,11 @@ void GDRESettings::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_encryption_key_string", "key"), &GDRESettings::set_encryption_key_string);
 	ClassDB::bind_method(D_METHOD("set_encryption_key", "key"), &GDRESettings::set_encryption_key);
 	ClassDB::bind_method(D_METHOD("reset_encryption_key"), &GDRESettings::reset_encryption_key);
+	ClassDB::bind_method(D_METHOD("set_custom_decryption_script", "p_decryptor_script_path"), &GDRESettings::set_custom_decryption_script);
+	ClassDB::bind_method(D_METHOD("get_custom_decryption_script_path"), &GDRESettings::get_custom_decryption_script_path);
+	ClassDB::bind_method(D_METHOD("set_custom_decryptor", "p_decryptor"), &GDRESettings::set_custom_decryptor);
+	ClassDB::bind_method(D_METHOD("get_custom_decryptor"), &GDRESettings::get_custom_decryptor);
+	ClassDB::bind_method(D_METHOD("reset_custom_decryptor"), &GDRESettings::reset_custom_decryptor);
 	ClassDB::bind_method(D_METHOD("had_encryption_error"), &GDRESettings::had_encryption_error);
 	ClassDB::bind_method(D_METHOD("get_file_list", "filters"), &GDRESettings::get_file_list, DEFVAL(Vector<String>()));
 	ClassDB::bind_method(D_METHOD("get_file_info_array", "filters"), &GDRESettings::get_file_info_array, DEFVAL(Vector<String>()));
@@ -2909,6 +2984,7 @@ void GDRESettings::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_ver_rev"), &GDRESettings::get_ver_rev);
 	ClassDB::bind_method(D_METHOD("get_file_count"), &GDRESettings::get_file_count);
 	ClassDB::bind_method(D_METHOD("get_game_name"), &GDRESettings::get_game_name);
+	ClassDB::bind_method(D_METHOD("get_game_app_version"), &GDRESettings::get_game_app_version);
 	ClassDB::bind_method(D_METHOD("globalize_path", "p_path", "resource_path"), &GDRESettings::globalize_path);
 	ClassDB::bind_method(D_METHOD("localize_path", "p_path", "resource_path"), &GDRESettings::localize_path);
 	ClassDB::bind_method(D_METHOD("set_project_path", "p_path"), &GDRESettings::set_project_path);

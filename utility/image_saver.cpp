@@ -1,14 +1,13 @@
 #include "image_saver.h"
 
-#include "compat/file_access_encrypted_v3.h"
 #include "core/error/error_list.h"
 #include "core/error/error_macros.h"
 #include "core/io/file_access.h"
 #include "core/io/image.h"
+#include "core/object/class_db.h"
 #include "core/string/ustring.h"
 #include "core/variant/variant.h"
 #include "external/tga/tga.h"
-#include "modules/tinyexr/image_saver_tinyexr.h"
 #include "utility/common.h"
 #ifndef GIFSKI_DISABLED
 #include "vtracer/gifski.h"

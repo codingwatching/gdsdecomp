@@ -1,9 +1,11 @@
 
-#ifndef STD_ALLOCATOR_H
-#define STD_ALLOCATOR_H
+#pragma once
 
 #include <core/os/memory.h>
 #include <core/typedefs.h>
+
+#include <limits>
+#include <memory>
 
 template <typename T>
 class GodotStdAllocator {
@@ -64,4 +66,3 @@ public:
 		return false;
 	}
 };
-#endif //STD_ALLOCATOR_H

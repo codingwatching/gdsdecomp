@@ -1,5 +1,4 @@
-#ifndef TEST_RESOURCE_LOADING_H
-#define TEST_RESOURCE_LOADING_H
+#pragma once
 
 #include <compat/resource_compat_text.h>
 #include <compat/resource_loader_compat.h>
@@ -735,5 +734,3 @@ TEST_CASE("[GDSDecomp][ResourceSaving] Test external resources") {
 }
 
 } //namespace TestResourceLoading
-
-#endif

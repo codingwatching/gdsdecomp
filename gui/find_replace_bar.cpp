@@ -1,11 +1,13 @@
 #include "find_replace_bar.h"
 
+#include "core/input/input.h"
 #include "core/input/input_map.h"
 #include "core/input/shortcut.h"
+#include "core/object/callable_mp.h"
+#include "core/object/class_db.h"
 #include "core/os/keyboard.h"
 #include "core/variant/array.h"
 #include "gui/gui_icons.h"
-#include "scene/resources/image_texture.h"
 #include "utility/gdre_settings.h"
 
 #include "gui/gdre_icons.gen.h"

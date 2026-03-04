@@ -28,7 +28,7 @@ env:
   # TODO: change this back to godotengine/godot and target master when #109685 and #109475 are merged
   GODOT_REPOSITORY: nikitalita/godot
   # Change the README too
-  GODOT_MAIN_SYNC_REF: gdre-wb-63227bb
+  GODOT_MAIN_SYNC_REF: gdre-wb-c53c5a1f49
   SCONSFLAGS: verbose=yes warnings=all werror=no module_text_server_fb_enabled=yes minizip=yes deprecated=yes
   SCONSFLAGS_TEMPLATE: no_editor_splash=yes module_camera_enabled=no module_mobile_vr_enabled=no module_upnp_enabled=no module_websocket_enabled=no module_csg_enabled=yes module_gridmap_enabled=yes use_static_cpp=yes builtin_freetype=yes builtin_libpng=yes builtin_zlib=yes builtin_libwebp=yes builtin_libvorbis=yes builtin_libogg=yes disable_3d=no
   SCONS_CACHE_MSVC_CONFIG: true
@@ -61,7 +61,7 @@ jobs:
             id: windows-template
             platform: windows
             target: template_release
-            sconsflags: debug_symbols=no
+            sconsflags: debug_symbols=no production=yes
             rust-arch: x86_64-pc-windows-msvc
             alt-rust-arch: none
             bin: ./bin/godot.windows.editor.x86_64.exe
@@ -91,7 +91,7 @@ jobs:
             id: linux-template-debug
             platform: linux
             target: template_debug
-            sconsflags: debug_symbols=no tests=yes
+            sconsflags: debug_symbols=no tests=yes production=yes
             rust-arch: x86_64-unknown-linux-gnu
             alt-rust-arch: none
             bin: ./bin/godot.linuxbsd.template_debug.x86_64
@@ -103,7 +103,7 @@ jobs:
             target: template_release
             rust-arch: x86_64-unknown-linux-gnu
             alt-rust-arch: none
-            sconsflags: debug_symbols=no optimize=size use_lto=yes
+            sconsflags: production=yes debug_symbols=no optimize=size use_lto=yes
             bin: ./bin/godot.linuxbsd.editor.x86_64
 
           - name: "🤖 Android Template Release"
@@ -113,7 +113,7 @@ jobs:
             target: template_release
             rust-arch: x86_64-linux-android
             alt-rust-arch: aarch64-linux-android
-            sconsflags: debug_symbols=no optimize=size use_lto=yes generate_android_binaries=yes
+            sconsflags: production=yes debug_symbols=no optimize=size use_lto=yes generate_android_binaries=yes
             bin: ./bin/godot.linuxbsd.editor.x86_64
 
           - name: "🍎 macOS Editor"
@@ -133,7 +133,7 @@ jobs:
             target: template_release
             rust-arch: x86_64-apple-darwin
             alt-rust-arch: aarch64-apple-darwin
-            sconsflags: debug_symbols=no optimize=size use_lto=yes use_volk=no vulkan=yes
+            sconsflags: production=yes debug_symbols=no optimize=size use_lto=yes use_volk=no vulkan=yes
             bin: ./bin/godot.macos.editor.arm64
 
     steps:
@@ -224,7 +224,7 @@ jobs:
       - name: setup-dotnet
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
 
       - name: Download pre-built Android Swappy Frame Pacing Library
         if: matrix.platform == 'android'

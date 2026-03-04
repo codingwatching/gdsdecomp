@@ -1,5 +1,4 @@
-#ifndef GITLAB_SOURCE_H
-#define GITLAB_SOURCE_H
+#pragma once
 
 #include "core/object/object.h"
 #include "core/string/ustring.h"
@@ -27,5 +26,3 @@ public:
 	CodebergSource();
 	~CodebergSource();
 };
-
-#endif // GITLAB_SOURCE_H

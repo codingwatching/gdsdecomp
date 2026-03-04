@@ -1,5 +1,4 @@
-#ifndef OBJ_EXPORTER_H
-#define OBJ_EXPORTER_H
+#pragma once
 
 #include "resource_exporter.h"
 #include "scene/resources/material.h"
@@ -41,5 +40,3 @@ public:
 	virtual String get_default_export_extension(const String &res_path) const override;
 	virtual Vector<String> get_export_extensions(const String &res_path) const override;
 };
-
-#endif // OBJ_EXPORTER_H

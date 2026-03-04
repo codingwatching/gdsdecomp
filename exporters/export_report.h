@@ -1,5 +1,7 @@
 #pragma once
 #include "core/object/ref_counted.h"
+#include "core/variant/binder_common.h"
+
 #include "utility/import_info.h"
 #include "utility/task_manager.h"
 #include <sys/types.h>

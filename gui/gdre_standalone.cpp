@@ -1,5 +1,7 @@
 #include "gdre_standalone.h"
-#include "core/object/callable_method_pointer.h"
+
+#include "core/object/callable_mp.h"
+#include "core/object/class_db.h"
 #include "gdre_audio_stream_preview.h"
 #include "gui/gdre_window.h"
 #include "scene/gui/dialogs.h"

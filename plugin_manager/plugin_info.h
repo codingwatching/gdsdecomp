@@ -1,8 +1,9 @@
 #pragma once
+
 #include "core/variant/variant.h"
 #include "utility/godotver.h"
 
-static constexpr int CACHE_VERSION = 3;
+static constexpr int CACHE_VERSION = 4;
 
 struct PluginBin {
 	String name;
@@ -132,6 +133,8 @@ struct PluginVersion {
 	String base_folder;
 	int64_t size = 0;
 	Vector<GDExtInfo> gdexts;
+	// non-serialized field
+	bool is_static_cached = false;
 
 	static PluginVersion invalid() {
 		PluginVersion version;

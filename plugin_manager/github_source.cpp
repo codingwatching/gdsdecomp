@@ -52,7 +52,8 @@ static const HashMap<String, String> plugin_map = {
 	{ "sentry", "https://github.com/getsentry/sentry-godot" },
 	{ "sentrysdk", "https://github.com/getsentry/sentry-godot" },
 	{ "wwise", "https://github.com/alessandrofama/wwise-godot-integration" },
-	{ "Wwise", "https://github.com/alessandrofama/wwise-godot-integration" }
+	{ "Wwise", "https://github.com/alessandrofama/wwise-godot-integration" },
+	{ "gd_cubism", "https://github.com/yakura/gd_cubism" }
 };
 } // namespace
 GitHubSource::GitHubSource() {
@@ -227,7 +228,9 @@ Error GitHubSource::recache_release_list(const String &plugin_name) {
 			int64_t asset_id = int64_t(asset.get("id", 0));
 			asset_map[asset_id] = asset;
 		}
-		cache.releases[release_id] = { release, asset_map };
+		cache.releases[release_id] = {};
+		cache.releases[release_id].release = release;
+		cache.releases[release_id].assets = asset_map;
 	}
 
 	{
@@ -264,11 +267,11 @@ ReleaseInfo GitHubSource::get_release_info(const String &plugin_name, int64_t pr
 				continue;
 			}
 			String download_url = asset.get("browser_download_url", "");
-			String ext = download_url.get_file().get_extension().to_lower();
-			if (ext.is_empty()) {
-				ext = name.get_extension().to_lower();
+			String download_file = gdre::remove_url_query_params(download_url).get_file();
+			if (download_file.is_empty()) {
+				download_file = name.get_file();
 			}
-			if (ext == "zip") {
+			if (gdre::is_path_archive(download_file)) {
 				if (is_empty_or_null(download_url)) {
 					continue;
 				}

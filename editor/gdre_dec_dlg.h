@@ -2,8 +2,7 @@
 /*  gdre_dec_dlg.h                                                       */
 /*************************************************************************/
 
-#ifndef GODOT_RE_DEC_DLG_H
-#define GODOT_RE_DEC_DLG_H
+#pragma once
 
 #include "core/io/resource.h"
 #include "core/templates/rb_map.h"
@@ -62,5 +61,3 @@ public:
 	ScriptDecompDialog();
 	~ScriptDecompDialog();
 };
-
-#endif

@@ -126,6 +126,13 @@ func end_recovery():
 func extract_and_recover(files_to_extract: PackedStringArray, output_dir: String, extract_only: bool):
 	%GdreRecover.hide_win()
 	if not extract_only:
+		if GDREConfig.get_setting("Recovery/clear_output_dir_except_git_before_full_recovery"):
+			if files_to_extract.size() >= GDRESettings.get_file_info_array().size():
+				var err = GDRECommon.clear_dir_except_for(output_dir, [".git", ".gitignore"])
+				if err != OK:
+					print("Error: failed to clear output directory except for git")
+					return 1
+
 		GDRESettings.open_log_file(output_dir)
 	var log_path = GDRESettings.get_log_file_path()
 	GDRESettings.get_errors()
@@ -230,6 +237,8 @@ func open_about_window():
 	$LegalNoticeWindow.popup_centered()
 
 func open_setenc_window():
+	%KeyText.text = GDRESettings.get_encryption_key_string()
+	%EncryptionScriptPathText.text = GDRESettings.get_custom_decryption_script_path()
 	$SetEncryptionKeyWindow.popup_centered()
 
 
@@ -447,6 +456,15 @@ func _on_setenc_key_ok_pressed():
 			# pop up an accept dialog
 			$SetEncryptionKeyWindow.popup_error_box("Invalid key!\nKey must be a hex string with 64 characters", "Error")
 			return
+
+	if %EncryptionScriptPathText.text.length() > 0:
+		GDRESettings.get_recent_error_string()
+		var err:int = GDRESettings.set_custom_decryption_script(%EncryptionScriptPathText.text)
+		if (err != OK):
+			$SetEncryptionKeyWindow.popup_error_box("Invalid encryption script!\n" + GDRESettings.get_recent_error_string(), "Error")
+			return
+	else:
+		GDRESettings.reset_custom_decryptor()
 	# close the window
 	$SetEncryptionKeyWindow.hide()
 
@@ -750,6 +768,7 @@ var RECOVER_OPTS_NOTES = """Recover/Extract Options:
 --load-custom-bytecode=<JSON_FILE>   Load a custom bytecode definition file from the specified JSON file and use it for the recovery session
 --translation-hint=<FILE>   		 Load a translation key hint file (.csv, .txt, .po, .mo) and use it during translation recovery
 --skip-loading-resource-strings   	 Skip loading resource strings from all resources during translation recovery
+--custom-decryption-script=<PATH>     Load a custom decryption script from the specified path and use it for the recovery session
 """
 # todo: handle --key option
 var COMPILE_OPTS_NOTES = """Decompile/Compile Options:
@@ -973,6 +992,15 @@ func recovery(  input_files:PackedStringArray,
 		if (da.file_exists(output_dir)):
 			print("Error: output dir appears to be a file, not extracting...")
 			return 1
+
+	var not_full_recovery = extract_only or translation_only or scripts_only or includes.size() > 0 or excludes.size() > 0
+	if !not_full_recovery and GDREConfig.get_setting("Recovery/clear_output_dir_except_git_before_full_recovery"):
+		var log_file = GDRESettings.get_log_file_path().get_file()
+		err = GDRECommon.clear_dir_except_for(output_dir, [".git", ".gitignore", log_file])
+		if (err != OK):
+			print("Error: failed to clear output directory except for git")
+			return 1
+
 	if is_dir:
 		if extract_only:
 			print("Why did you open a folder to extract it??? What's wrong with you?!!?")
@@ -1495,6 +1523,24 @@ func handle_cli(args: PackedStringArray) -> bool:
 			scripts_only = true
 		elif arg.begins_with("--key"):
 			enc_key = get_arg_value(arg)
+		elif arg.begins_with("--custom-decryption-script"):
+			var decryptor_script_path = get_cli_abs_path(get_arg_value(arg))
+			if decryptor_script_path.is_empty():
+				print_usage()
+				print("Error: path is required for --custom-decryption-script")
+				ret_code = 1
+				return true
+			decryptor_script_path = get_cli_abs_path(decryptor_script_path)
+			if not FileAccess.file_exists(decryptor_script_path):
+				print_usage()
+				print("Error: custom encryption script file '" + decryptor_script_path + "' does not exist")
+				ret_code = 1
+				return true
+			if GDRESettings.set_custom_decryption_script(decryptor_script_path) != OK:
+				print_usage()
+				print("Error: failed to set custom encryption script: " + decryptor_script_path)
+				ret_code = 1
+				return true
 		elif arg.begins_with("--ignore-checksum-errors"):
 			ignore_md5 = true
 		elif arg.begins_with("--skip-checksum-check"):
@@ -1651,7 +1697,7 @@ func handle_cli(args: PackedStringArray) -> bool:
 			var start_time = Time.get_ticks_msec()
 			var err = PluginManager.prepop_cache(prepop)
 			if err != OK:
-				print("Error: failed to prepop plugin cache: " + err)
+				print("Error: failed to prepop plugin cache: " + str(err))
 				ret_code = 1
 			var end_time = Time.get_ticks_msec()
 			var secs_taken = (end_time - start_time) / 1000
@@ -1815,3 +1861,16 @@ func _on_gdre_patch_pck_do_patch_pck(dest_pck: String, file_map: Dictionary[Stri
 		return
 	popup_error_box("PCK patching complete", "Success")
 	pass # Replace with function body.
+
+
+func _on_encryption_script_chooser_pressed() -> void:
+	%EncryptionScriptFileDialog.popup_centered()
+	pass # Replace with function body.
+
+
+func _on_encryption_script_clear_pressed() -> void:
+	%EncryptionScriptPathText.text = ""
+
+
+func _on_encryption_script_file_dialog_file_selected(path: String) -> void:
+	%EncryptionScriptPathText.text = path

@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef RESOURCE_COMPAT_BINARY_H
-#define RESOURCE_COMPAT_BINARY_H
+#pragma once
 
 #include "compat/resource_import_metadatav2.h"
 #include "compat/resource_loader_compat.h"
@@ -152,6 +151,7 @@ protected:
 	static void _bind_methods();
 
 public:
+	static constexpr int CURRENT_PACKED_SCENE_VERSION = 3;
 	static Error get_ver_major_minor(const String &p_path, uint32_t &r_ver_major, uint32_t &r_ver_minor, bool &r_suspicious);
 	static bool is_binary_resource(const String &p_path);
 
@@ -274,5 +274,3 @@ public:
 
 	ResourceFormatSaverCompatBinary();
 };
-
-#endif // RESOURCE_COMPAT_BINARY_H

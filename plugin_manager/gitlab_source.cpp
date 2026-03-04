@@ -115,7 +115,9 @@ Error GitLabSource::recache_release_list(const String &plugin_name) {
 			assets_arr[j] = asset;
 		}
 		release["assets"] = assets_arr;
-		cache.releases[release_id] = { release, asset_map };
+		cache.releases[release_id] = {};
+		cache.releases[release_id].release = release;
+		cache.releases[release_id].assets = asset_map;
 	}
 
 	{

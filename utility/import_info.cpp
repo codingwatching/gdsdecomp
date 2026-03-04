@@ -3,6 +3,7 @@
 #include "compat/resource_loader_compat.h"
 #include "core/error/error_list.h"
 #include "core/io/json.h"
+#include "core/object/class_db.h"
 #include "core/string/string_builder.h"
 
 #include "compat/config_file_compat.h"
@@ -658,6 +659,10 @@ Error ImportInfoDummy::_load(const String &p_path) {
 	dest_files = Vector<String>({ p_path });
 	import_md_path = "";
 	return OK;
+}
+
+String ImportInfoDummy::get_compat_type() const {
+	return ClassDB::get_compatibility_remapped_class(get_type());
 }
 
 void ImportInfoDummy::_set_from_json(const Dictionary &p_json) {

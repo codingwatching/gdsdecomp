@@ -11,7 +11,7 @@
 #include "packed_file_info.h"
 #include "utility/common.h"
 
-bool DirSource::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset) {
+bool DirSource::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key) {
 	if (!DirAccess::exists(p_path)) {
 		return false;
 	}
@@ -41,7 +41,7 @@ bool DirSource::try_open_pack(const String &p_path, bool p_replace_files, uint64
 	return true;
 }
 
-Ref<FileAccess> DirSource::get_file(const String &p_path, PackedData::PackedFile *p_file) {
+Ref<FileAccess> DirSource::get_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key) {
 	if (!p_file) {
 		return nullptr;
 	}
@@ -129,13 +129,14 @@ struct __ExpectedPackedFile {
 	bool encrypted;
 	bool bundle;
 	bool delta;
+	String salt;
 };
 CHECK_SIZE_MATCH_NO_PADDING(__ExpectedPackedFile, PackedData::PackedFile);
 } //namespace
 
 static_assert(has_same_signature<decltype(&GDREPackedData::add_path), decltype(&PackedData::add_path)>::value, "GDREPackedData::add_path does not have the same signature as PackedData::add_path");
 
-void GDREPackedData::add_path(const String &p_pkg_path, const String &p_path, uint64_t p_ofs, uint64_t p_size, const uint8_t *p_md5, PackSource *p_src, bool p_replace_files, bool p_encrypted, bool p_bundle, bool p_delta) {
+void GDREPackedData::add_path(const String &p_pkg_path, const String &p_path, uint64_t p_ofs, uint64_t p_size, const uint8_t *p_md5, PackSource *p_src, bool p_replace_files, bool p_encrypted, bool p_bundle, bool p_delta, const String &p_salt) {
 	// TODO: This might be a performance hit? If so, use the commented out one.
 	bool p_pck_src = dynamic_cast<GDREPackedSource *>(p_src) != nullptr;
 	// bool p_pck_src = p_src == sources[0];
@@ -146,6 +147,7 @@ void GDREPackedData::add_path(const String &p_pkg_path, const String &p_path, ui
 	pf.pack = p_pkg_path;
 	pf.offset = p_ofs;
 	pf.size = p_size;
+	pf.salt = p_salt;
 	for (int i = 0; i < 16; i++) {
 		pf.md5[i] = p_md5[i];
 	}
@@ -933,10 +935,11 @@ DirAccessGDRE::~DirAccessGDRE() {
 #include "drivers/windows/dir_access_windows.h"
 #include "drivers/windows/file_access_windows.h"
 #else // UNIX_ENABLED -- covers OSX, Linux, FreeBSD, Web.
-#include "drivers/unix/dir_access_unix.h"
 #include "drivers/unix/file_access_unix.h"
 #ifdef MACOS_ENABLED
 #include "platform/macos/dir_access_macos.h"
+#else
+#include "drivers/unix/dir_access_unix.h"
 #endif
 #ifdef ANDROID_ENABLED
 #include "platform/android/dir_access_jandroid.h"

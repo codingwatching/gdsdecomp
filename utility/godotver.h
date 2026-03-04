@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-#ifndef GODOTVER_H
-#define GODOTVER_H
+#pragma once
 
 #include "core/object/ref_counted.h"
 #include "core/string/ustring.h"
@@ -246,5 +245,3 @@ public:
 		is_strict = false;
 	}
 };
-
-#endif // GODOTVER_H

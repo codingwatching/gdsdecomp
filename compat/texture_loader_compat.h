@@ -1,5 +1,4 @@
-#ifndef TEXTURE_LOADER_COMPAT_H
-#define TEXTURE_LOADER_COMPAT_H
+#pragma once
 
 #include "compat/resource_loader_compat.h"
 #include "core/io/file_access.h"
@@ -160,5 +159,3 @@ public:
 	virtual Ref<ResourceInfo> get_resource_info(const String &p_path, Error *r_error) const override;
 	virtual bool handles_fake_load() const override { return false; }
 };
-
-#endif // TEXTURE_LOADER_COMPAT_H

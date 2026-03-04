@@ -36,17 +36,21 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 	TextWriter tw;
 	private bool isDict = false;
 
-	public GodotExpressionOutputVisitor(TextWriter w, CSharpFormattingOptions formattingOptions)
+	private GodotProjectDecompiler? godotDecompiler;
+
+	public GodotExpressionOutputVisitor(TextWriter w, CSharpFormattingOptions formattingOptions, GodotProjectDecompiler? godotDecompiler = null)
 		: base(new GodotExpressionTokenWriter(w), formattingOptions)
 	{
 		tw = w;
+		this.godotDecompiler = godotDecompiler;
 	}
 
 
 
-	public GodotExpressionOutputVisitor(TextWriter w)
-		: this(w, SingleLineFormattingOptions)
-	{}
+	public GodotExpressionOutputVisitor(TextWriter w, GodotProjectDecompiler? godotDecompiler = null)
+		: this(w, SingleLineFormattingOptions, godotDecompiler)
+	{
+	}
 
 	public static readonly CSharpFormattingOptions SingleLineFormattingOptions = GetSingleLineFormattingOptions();
 
@@ -231,10 +235,10 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 		return settings.CSharpFormattingOptions;
 	}
 
-	public static string GetString(AstNode node)
+	public static string GetString(AstNode node, GodotProjectDecompiler? godotDecompiler = null)
 	{
 		var stringWriter = new StringWriter();
-		var visitor = new GodotExpressionOutputVisitor(stringWriter);
+		var visitor = new GodotExpressionOutputVisitor(stringWriter, godotDecompiler);
 		node.AcceptVisitor(visitor);
 		return stringWriter.ToString();
 	}
@@ -501,7 +505,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 	}
 	public override void VisitMemberReferenceExpression(MemberReferenceExpression memberReferenceExpression)
 	{
-		string? text = GodotStuff.ReplaceMemberReference(memberReferenceExpression);
+		string? text = GodotStuff.ReplaceMemberReference(memberReferenceExpression, godotDecompiler);
 		if (text != null)
 		{
 			StartNode(memberReferenceExpression);

@@ -1,5 +1,4 @@
-#ifndef IMPORT_EXPORTER_H
-#define IMPORT_EXPORTER_H
+#pragma once
 
 #include "compat/resource_import_metadatav2.h"
 #include "import_info.h"
@@ -179,5 +178,3 @@ public:
 	ImportExporter();
 	~ImportExporter();
 };
-
-#endif

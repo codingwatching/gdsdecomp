@@ -9,6 +9,7 @@
 #include "utility/gdre_settings.h"
 
 #include "core/error/error_list.h"
+#include "core/object/class_db.h"
 #include "core/string/optimized_translation.h"
 #include "core/string/translation.h"
 #include "core/string/ustring.h"
@@ -987,7 +988,6 @@ struct KeyWorker {
 	}
 
 	void get_sanitized_message_strings(Vector<String> &new_strings) {
-		auto hshset = filtered_resource_strings;
 		for (const auto &msg_str : get_sanitized_strings(default_messages)) {
 			if (filtered_resource_strings.has(msg_str)) {
 				continue;
@@ -1332,7 +1332,7 @@ struct KeyWorker {
 #endif
 
 	template <typename T>
-	Vector<Pair<CharString, int>> get_strings_without_numeric_suffix(T strings) {
+	Vector<Pair<CharString, int>> get_strings_without_numeric_suffix(const T &strings) {
 		static_assert(std::is_same_v<T, HashSet<String>> || std::is_same_v<T, Vector<String>>, "T must be a HashSet or Vector of Strings");
 		HashSet<Pair<CharString, int>> stripped_strings_set;
 		for (auto &str : strings) {
@@ -2097,7 +2097,7 @@ struct KeyWorker {
 			auto check_suffixes = suffixes_for_DETECTED_PREFIX_SUFFIX_COMBINED;
 			common_prefixes = found_prefixes;
 			common_suffixes = found_suffixes;
-			auto keys_found = stage_keys_found.get("Detected prefix/suffix");
+			HashSet<String> keys_found = HashSet<String>(stage_keys_found.get("Detected prefix/suffix"));
 			if (stage_keys_found.has("Common prefix/suffix")) {
 				gdre::hashset_insert_iterable(keys_found, stage_keys_found.get("Common prefix/suffix"));
 			}

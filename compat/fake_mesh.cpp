@@ -31,6 +31,7 @@
 #include "fake_mesh.h"
 
 #include "core/math/convex_hull.h"
+#include "core/object/class_db.h"
 #include "core/templates/pair.h"
 #include "scene/resources/surface_tool.h"
 
@@ -130,7 +131,7 @@ void _fix_array_compatibility(const Vector<uint8_t> &p_src, uint64_t p_old_forma
 	uint32_t dst_attribute_stride;
 	uint32_t dst_skin_stride;
 	uint32_t dst_offsets[Mesh::ARRAY_MAX];
-	RenderingServer::get_singleton()->mesh_surface_make_offsets_from_format(p_new_format & (~RS::ARRAY_FORMAT_INDEX), p_elements, 0, dst_offsets, dst_vertex_stride, dst_normal_tangent_stride, dst_attribute_stride, dst_skin_stride);
+	RenderingServer::get_singleton()->mesh_surface_make_offsets_from_format(p_new_format & (~RSE::ARRAY_FORMAT_INDEX), p_elements, 0, dst_offsets, dst_vertex_stride, dst_normal_tangent_stride, dst_attribute_stride, dst_skin_stride);
 
 	vertex_data.resize((dst_vertex_stride + dst_normal_tangent_stride) * p_elements);
 	attribute_data.resize(dst_attribute_stride * p_elements);
@@ -616,8 +617,8 @@ Array FakeMesh::_get_surfaces() const {
 
 	Array ret;
 	for (int i = 0; i < surfaces.size(); i++) {
-		// RenderingServer::SurfaceData surface = RS::get_singleton()->mesh_get_surface(mesh, i);
-		const RenderingServer::SurfaceData &surface = surface_data[i];
+		// RenderingServerTypes::SurfaceData surface = RS::get_singleton()->mesh_get_surface(mesh, i);
+		const RenderingServerTypes::SurfaceData &surface = surface_data[i];
 		Dictionary data;
 		data["format"] = surface.format;
 		data["primitive"] = surface.primitive;
@@ -686,7 +687,7 @@ void FakeMesh::_create_if_empty() const {
 }
 
 void FakeMesh::_set_surfaces(const Array &p_surfaces) {
-	// Vector<RS::SurfaceData> surface_data;
+	// Vector<RenderingServerTypes::SurfaceData> surface_data;
 	surface_data.clear();
 
 	Vector<Ref<Material>> surface_materials;
@@ -694,7 +695,7 @@ void FakeMesh::_set_surfaces(const Array &p_surfaces) {
 	Vector<bool> surface_2d;
 
 	for (int i = 0; i < p_surfaces.size(); i++) {
-		RS::SurfaceData surface;
+		RenderingServerTypes::SurfaceData surface;
 		Dictionary d = p_surfaces[i];
 		ERR_FAIL_COND(!d.has("format"));
 		ERR_FAIL_COND(!d.has("primitive"));
@@ -702,7 +703,7 @@ void FakeMesh::_set_surfaces(const Array &p_surfaces) {
 		ERR_FAIL_COND(!d.has("vertex_count"));
 		ERR_FAIL_COND(!d.has("aabb"));
 		surface.format = d["format"];
-		surface.primitive = RS::PrimitiveType(int(d["primitive"]));
+		surface.primitive = RSE::PrimitiveType(int(d["primitive"]));
 		surface.vertex_data = d["vertex_data"];
 		surface.vertex_count = d["vertex_count"];
 		if (d.has("attribute_data")) {
@@ -727,7 +728,7 @@ void FakeMesh::_set_surfaces(const Array &p_surfaces) {
 			Array lods = d["lods"];
 			ERR_FAIL_COND(lods.size() & 1); //must be even
 			for (int j = 0; j < lods.size(); j += 2) {
-				RS::SurfaceData::LOD lod;
+				RenderingServerTypes::SurfaceData::LOD lod;
 				lod.edge_length = lods[j + 0];
 				lod.index_data = lods[j + 1];
 				surface.lods.push_back(lod);
@@ -768,11 +769,11 @@ void FakeMesh::_set_surfaces(const Array &p_surfaces) {
 		uint64_t surface_version = surface.format & (ARRAY_FLAG_FORMAT_VERSION_MASK << ARRAY_FLAG_FORMAT_VERSION_SHIFT);
 		if (surface_version != ARRAY_FLAG_FORMAT_CURRENT_VERSION) {
 			RS::get_singleton()->fix_surface_compatibility(surface, get_path());
-			surface_version = surface.format & (RS::ARRAY_FLAG_FORMAT_VERSION_MASK << RS::ARRAY_FLAG_FORMAT_VERSION_SHIFT);
-			ERR_FAIL_COND_MSG(surface_version != RS::ARRAY_FLAG_FORMAT_CURRENT_VERSION,
+			surface_version = surface.format & (RSE::ARRAY_FLAG_FORMAT_VERSION_MASK << RSE::ARRAY_FLAG_FORMAT_VERSION_SHIFT);
+			ERR_FAIL_COND_MSG(surface_version != RSE::ARRAY_FLAG_FORMAT_CURRENT_VERSION,
 					vformat("Surface version provided (%d) does not match current version (%d).",
-							(surface_version >> RS::ARRAY_FLAG_FORMAT_VERSION_SHIFT) & RS::ARRAY_FLAG_FORMAT_VERSION_MASK,
-							(RS::ARRAY_FLAG_FORMAT_CURRENT_VERSION >> RS::ARRAY_FLAG_FORMAT_VERSION_SHIFT) & RS::ARRAY_FLAG_FORMAT_VERSION_MASK));
+							(surface_version >> RSE::ARRAY_FLAG_FORMAT_VERSION_SHIFT) & RSE::ARRAY_FLAG_FORMAT_VERSION_MASK,
+							(RSE::ARRAY_FLAG_FORMAT_CURRENT_VERSION >> RSE::ARRAY_FLAG_FORMAT_VERSION_SHIFT) & RSE::ARRAY_FLAG_FORMAT_VERSION_MASK));
 		}
 #endif
 
@@ -887,7 +888,7 @@ void FakeMesh::_recompute_aabb() {
 }
 
 // TODO: Need to add binding to add_surface using future MeshSurfaceData object.
-void FakeMesh::add_surface(BitField<ArrayFormat> p_format, PrimitiveType p_primitive, const Vector<uint8_t> &p_array, const Vector<uint8_t> &p_attribute_array, const Vector<uint8_t> &p_skin_array, int p_vertex_count, const Vector<uint8_t> &p_index_array, int p_index_count, const AABB &p_aabb, const Vector<uint8_t> &p_blend_shape_data, const Vector<AABB> &p_bone_aabbs, const Vector<RS::SurfaceData::LOD> &p_lods, const Vector4 p_uv_scale) {
+void FakeMesh::add_surface(BitField<ArrayFormat> p_format, PrimitiveType p_primitive, const Vector<uint8_t> &p_array, const Vector<uint8_t> &p_attribute_array, const Vector<uint8_t> &p_skin_array, int p_vertex_count, const Vector<uint8_t> &p_index_array, int p_index_count, const AABB &p_aabb, const Vector<uint8_t> &p_blend_shape_data, const Vector<AABB> &p_bone_aabbs, const Vector<RenderingServerTypes::SurfaceData::LOD> &p_lods, const Vector4 p_uv_scale) {
 	_create_if_empty();
 
 	Surface s;
@@ -901,9 +902,9 @@ void FakeMesh::add_surface(BitField<ArrayFormat> p_format, PrimitiveType p_primi
 	surfaces.push_back(s);
 	_recompute_aabb();
 
-	RS::SurfaceData sd;
+	RenderingServerTypes::SurfaceData sd;
 	sd.format = p_format;
-	sd.primitive = RS::PrimitiveType(p_primitive);
+	sd.primitive = RSE::PrimitiveType(p_primitive);
 	sd.aabb = p_aabb;
 	sd.vertex_count = p_vertex_count;
 	sd.vertex_data = p_array;
@@ -929,9 +930,9 @@ void FakeMesh::add_surface_from_arrays(PrimitiveType p_primitive, const Array &p
 	ERR_FAIL_COND(p_blend_shapes.size() != blend_shapes.size());
 	ERR_FAIL_COND(p_arrays.size() != ARRAY_MAX);
 
-	RS::SurfaceData surface;
+	RenderingServerTypes::SurfaceData surface;
 
-	Error err = RS::get_singleton()->mesh_create_surface_data_from_arrays(&surface, (RenderingServer::PrimitiveType)p_primitive, p_arrays, p_blend_shapes, p_lods, p_flags);
+	Error err = RS::get_singleton()->mesh_create_surface_data_from_arrays(&surface, (RSE::PrimitiveType)p_primitive, p_arrays, p_blend_shapes, p_lods, p_flags);
 	ERR_FAIL_COND(err != OK);
 
 	/* Debug code.
@@ -955,12 +956,12 @@ Array FakeMesh::surface_get_arrays(int p_surface) const {
 
 TypedArray<Array> FakeMesh::surface_get_blend_shape_arrays(int p_surface) const {
 	ERR_FAIL_INDEX_V(p_surface, surfaces.size(), TypedArray<Array>());
-	const RenderingServer::SurfaceData &sd = surface_data[p_surface];
+	const RenderingServerTypes::SurfaceData &sd = surface_data[p_surface];
 	ERR_FAIL_COND_V(sd.vertex_count == 0, Array());
 	Vector<uint8_t> blend_shape_data = sd.blend_shape_data;
 	if (blend_shape_data.size() > 0) {
-		uint32_t bs_offsets[RS::ARRAY_MAX];
-		uint32_t bs_format = (sd.format & RS::ARRAY_FORMAT_BLEND_SHAPE_MASK);
+		uint32_t bs_offsets[RSE::ARRAY_MAX];
+		uint32_t bs_format = (sd.format & RSE::ARRAY_FORMAT_BLEND_SHAPE_MASK);
 		uint32_t vertex_elem_size;
 		uint32_t normal_elem_size;
 		uint32_t attrib_elem_size;
@@ -974,7 +975,7 @@ TypedArray<Array> FakeMesh::surface_get_blend_shape_arrays(int p_surface) const 
 		blend_shape_array.resize(blend_shapes.size());
 		for (uint32_t i = 0; i < blend_shape_count; i++) {
 			Vector<uint8_t> unused;
-			RS::SurfaceData fake_sd;
+			RenderingServerTypes::SurfaceData fake_sd;
 			fake_sd.format = bs_format;
 			fake_sd.vertex_data = blend_shape_data.slice(i * divisor, (i + 1) * divisor);
 			fake_sd.uv_scale = sd.uv_scale;

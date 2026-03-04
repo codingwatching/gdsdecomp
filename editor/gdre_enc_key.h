@@ -2,8 +2,7 @@
 /*  gdre_enc_key.h                                                       */
 /*************************************************************************/
 
-#ifndef GODOT_RE_ENC_KEY_H
-#define GODOT_RE_ENC_KEY_H
+#pragma once
 #ifdef TOOLS_ENABLED
 #include "core/io/resource.h"
 #include "core/templates/rb_map.h"
@@ -39,4 +38,3 @@ public:
 };
 
 #endif // TOOLS_ENABLED
-#endif // GODOT_RE_ENC_KEY_H

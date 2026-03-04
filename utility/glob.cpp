@@ -25,6 +25,7 @@
 
 #include "glob.h"
 #include "core/io/dir_access.h"
+#include "core/object/class_db.h"
 #include "core/os/os.h"
 #include "core/templates/hash_map.h"
 #include "modules/regex/regex.h"
@@ -406,8 +407,9 @@ String get_user_home_dir() {
 }
 
 String expand_tilde(String path) {
-	if (path.is_empty() || path[0] != '~')
+	if (path.is_empty() || path[0] != '~') {
 		return path;
+	}
 
 	String home = get_user_home_dir();
 

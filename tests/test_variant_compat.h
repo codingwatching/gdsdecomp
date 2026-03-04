@@ -1,11 +1,11 @@
 
-#ifndef TEST_VARIANT_COMPAT_H
-#define TEST_VARIANT_COMPAT_H
+#pragma once
 #include "compat/image_enum_compat.h"
 #include "compat/image_parser_v2.h"
 #include "compat/input_event_parser_v2.h"
 #include "compat/resource_compat_binary.h"
 #include "compat/variant_decoder_compat.h"
+#include "core/input/input_event.h"
 #include "core/io/image.h"
 #include "core/variant/variant.h"
 #include "core/version_generated.gen.h"
@@ -410,7 +410,7 @@ Ref<InputEventKey> parse_and_get_ie_key(const String &str) {
 void expect_ie_key(const Ref<InputEventKey> &iek, Key key, int device = 0, bool ctrl_pressed = false, bool shift_pressed = false, bool alt_pressed = false, bool meta_pressed = false) {
 	REQUIRE(iek.is_valid());
 	CHECK(iek->get_keycode() == key);
-	CHECK(iek->get_device() == 0);
+	CHECK(iek->get_device() == InputEventKey::DEVICE_ID_KEYBOARD);
 	CHECK(iek->is_ctrl_pressed() == ctrl_pressed);
 	CHECK(iek->is_shift_pressed() == shift_pressed);
 	CHECK(iek->is_alt_pressed() == alt_pressed);
@@ -510,7 +510,7 @@ TEST_CASE("[GDSDecomp][VariantCompat] v2 InputEvent") {
 			Ref<InputEventMouseButton> iem = iem_parsed;
 			REQUIRE(iem.is_valid());
 			CHECK(iem->get_button_index() == MouseButton(i));
-			CHECK(iem->get_device() == 0);
+			CHECK(iem->get_device() == InputEvent::DEVICE_ID_MOUSE);
 			expect_iek_decode_encode_write_match(iem, iem_str, 2, false);
 		}
 	}
@@ -1081,4 +1081,3 @@ TEST_CASE("[GDSDecomp][VariantCompat] Writer recursive dictionary") {
 }
 
 } //namespace TestVariantCompat
-#endif //TEST_VARIANT_COMPAT_H

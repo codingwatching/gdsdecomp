@@ -7,6 +7,9 @@
 
 #include "gdre_npck_dlg.h"
 
+#include "core/object/callable_mp.h"
+#include "core/object/class_db.h"
+
 #include "core/version.h"
 
 #include "utility/gdre_version.gen.h"

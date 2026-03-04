@@ -198,6 +198,9 @@ class GLBExporterInstance {
 
 	String demangle_name(const String &obj_name);
 
+	static Ref<Image> _parse_image_bytes_into_image(const Ref<GLTFState> &p_state, const Vector<uint8_t> &p_bytes, const String &p_mime_type, int p_index, String &r_file_extension);
+	static String get_gltf_image_hash(const Ref<GLTFState> &p_state, const Dictionary &dict, int p_index);
+
 public:
 	GLBExporterInstance(String p_output_dir, Dictionary curr_options = {}, bool p_project_recovery = false);
 

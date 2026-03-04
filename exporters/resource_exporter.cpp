@@ -5,6 +5,7 @@
 
 #include "core/error/error_list.h"
 #include "core/error/error_macros.h"
+#include "core/object/class_db.h"
 
 Ref<ResourceExporter> Exporter::exporters[MAX_EXPORTERS];
 int Exporter::exporter_count = 0;

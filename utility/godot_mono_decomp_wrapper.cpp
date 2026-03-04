@@ -1,5 +1,7 @@
 #include "godot_mono_decomp_wrapper.h"
+
 #include "core/io/json.h"
+#include "core/object/class_db.h"
 #include "core/templates/vector.h"
 
 #include "utility/gd_parallel_queue.h"
@@ -79,8 +81,8 @@ struct DecompileModuleTaskData : public TaskRunnerStruct {
 
 	String get_current_task_step_description() override {
 		// pop them all off until we get the current one
-		while (queue.try_pop(current_step_description))
-			;
+		while (queue.try_pop(current_step_description)) {
+		}
 		return current_step_description;
 	}
 

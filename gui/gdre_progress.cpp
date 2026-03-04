@@ -30,9 +30,9 @@
 
 #include "gui/gdre_progress.h"
 
+#include "core/object/callable_mp.h"
+#include "core/object/class_db.h"
 #include "core/os/os.h"
-#include "gdre_standalone.h"
-#include "main/main.h"
 #include "scene/gui/file_dialog.h"
 #include "servers/display/display_server.h"
 #include "utility/gdre_logger.h"
@@ -174,9 +174,37 @@ void GDREProgressDialog::Task::set_step(const String &p_state, int p_step, bool 
 		current_step.step = p_step;
 	}
 	force_next_redraw = force_next_redraw || p_force_redraw;
+	constexpr int width = 30;
+	constexpr uint64_t PROGRESS_TICK_THRESHOLD = 500000;
+
+	if (is_headless) {
+		auto current_tick = OS::get_singleton()->get_ticks_usec();
+		float print_progress = MAX(0, (float)current_step.step / (float)steps);
+		size_t progress_percent = MIN(static_cast<size_t>(print_progress * 100), static_cast<size_t>(100));
+		size_t prev_progress_percent = MIN(static_cast<size_t>((static_cast<float>(current_step.step) / static_cast<float>(steps)) * 100), static_cast<size_t>(100));
+		should_print = progress_percent != prev_progress_percent;
+		if (indeterminate) {
+			uint16_t prev_width = indeterminate_width;
+			indeterminate_width = (indeterminate_width + ((current_tick - last_progress_tick) / 100000)) % width;
+			should_print = should_print || prev_width != indeterminate_width;
+		}
+		should_print = should_print || last_progress_tick - current_tick >= PROGRESS_TICK_THRESHOLD;
+	}
+}
+
+void GDREProgressDialog::Task::print_status_bar() const {
+	if (!is_headless) {
+		return;
+	}
+	constexpr int width = 30;
+	float print_progress = MIN(MAX(0.0f, (float)current_step.step / (float)steps), 100.0f);
+	GDRELogger::print_status_bar(label, print_progress, indeterminate ? (float)indeterminate_width / (float)width : -1);
 }
 
 bool GDREProgressDialog::Task::should_redraw(uint64_t curr_time_us) const {
+	if (is_headless) {
+		return should_print;
+	}
 	return force_next_redraw || curr_time_us - last_progress_tick >= 200000;
 }
 
@@ -195,31 +223,31 @@ bool GDREProgressDialog::Task::update() {
 	if (!vb) {
 		return false;
 	}
+	// 1 frame at 60fps
+	constexpr uint64_t REDRAW_THRESHOLD = 1000000 / 60;
 	auto curr_time_us = OS::get_singleton()->get_ticks_usec();
 	if (!should_redraw(curr_time_us)) {
-		if (!(curr_time_us - last_progress_tick >= 50000 &&
-					(progress->get_value() != current_step.step ||
-							state->get_text() != current_step.state ||
-							indeterminate != progress->is_indeterminate() ||
-							steps != progress->get_max()))) {
+		if (!is_headless && !(curr_time_us - last_progress_tick >= REDRAW_THRESHOLD && (progress->get_value() != current_step.step || state->get_text() != current_step.state || indeterminate != progress->is_indeterminate() || steps != progress->get_max()))) {
 			return false;
 		}
 	}
 	force_next_redraw = false;
 
-	if (indeterminate != progress->is_indeterminate()) {
-		progress->set_indeterminate(indeterminate);
-	}
-	if (steps != progress->get_max()) {
-		progress->set_max(steps);
-	}
-	if (!indeterminate) {
-		if (progress->get_value() != current_step.step) {
-			progress->set_value(current_step.step);
+	if (!is_headless) {
+		if (indeterminate != progress->is_indeterminate()) {
+			progress->set_indeterminate(indeterminate);
 		}
-	}
-	if (state->get_text() != current_step.state) {
-		state->set_text(current_step.state);
+		if (steps != progress->get_max()) {
+			progress->set_max(steps);
+		}
+		if (!indeterminate) {
+			if (progress->get_value() != current_step.step) {
+				progress->set_value(current_step.step);
+			}
+		}
+		if (state->get_text() != current_step.state) {
+			state->set_text(current_step.state);
+		}
 	}
 	last_progress_tick = OS::get_singleton()->get_ticks_usec();
 	return true;
@@ -348,7 +376,7 @@ bool GDREProgressDialog::is_safe_to_redraw() {
 }
 
 void GDREProgressDialog::add_task(const String &p_task, const String &p_label, int p_steps, bool p_can_cancel) {
-	bool exists = tasks.try_emplace_l(p_task, [](auto &v) {}, Task{ p_task, p_label, p_steps, p_can_cancel, p_steps == -1 });
+	bool exists = tasks.try_emplace_l(p_task, [](auto &v) {}, Task{ p_task, p_label, p_steps, p_can_cancel, p_steps == -1, GDRESettings::get_singleton() && GDRESettings::get_singleton()->is_headless() });
 	ERR_FAIL_COND_MSG(!exists, "Task '" + p_task + "' already exists.");
 
 	canceled = false;
@@ -416,11 +444,11 @@ void GDREProgressDialog::end_task(const String &p_task) {
 	main_thread_update();
 }
 
-void GDREProgressDialog::main_thread_update() {
-	ERR_FAIL_COND_MSG(!is_safe_to_redraw(), "Cannot update progress dialog from non-main thread or while flushing messages.");
+bool GDREProgressDialog::main_thread_update() {
+	ERR_FAIL_COND_V_MSG(!is_safe_to_redraw(), false, "Cannot update progress dialog from non-main thread or while flushing messages.");
 	// This prevents recursive calls to main_thread_update caused by main iteration calling `process()`
 	if (is_updating) {
-		return;
+		return false;
 	}
 	is_updating = true;
 	bool removed = _process_removals();
@@ -434,20 +462,32 @@ void GDREProgressDialog::main_thread_update() {
 	if (last_tick - last_tick_updated > 500000) {
 		should_force_redraw = true;
 	}
+	Vector<String> tasks_to_print;
 	tasks.for_each_m([&](TaskMap::value_type &E) {
 		Task &t = E.second;
 		if (!t.initialized) {
 			task_initialized = true;
+			should_update = true;
 			t.init(main);
 		}
 		t.force_next_redraw = t.force_next_redraw || should_force_redraw;
-		if (t.update()) {
+		if (t.update() || (t.is_headless && should_force_redraw)) {
 			should_update = true;
+			if (t.is_headless) {
+				tasks_to_print.push_back(E.first);
+			}
 		}
 		p_can_cancel = p_can_cancel || t.can_cancel;
 		task_count++;
 	});
-	if (should_update || task_initialized) {
+	tasks_to_print.reverse();
+	for (const String &task : tasks_to_print) {
+		tasks.if_contains(task, [&](TaskMap::value_type &E) {
+			GDRELogger::stdout_print(GDRELogger::STATUS_BAR_CLEAR);
+			E.second.print_status_bar();
+		});
+	}
+	if (should_update) {
 		last_tick_updated = last_tick;
 		if (task_count == 0) {
 			_hide();
@@ -458,6 +498,7 @@ void GDREProgressDialog::main_thread_update() {
 		}
 	}
 	is_updating = false;
+	return should_update;
 }
 
 void GDREProgressDialog::add_host_window(Window *p_window) {
@@ -511,47 +552,6 @@ Ref<EditorProgressGDDC> EditorProgressGDDC::create(Node *p_parent, const String 
 	return memnew(EditorProgressGDDC(nullptr, p_task, p_label, p_amount, p_can_cancel));
 }
 
-bool StdOutProgress::step(int p_step, bool p_force_refresh) {
-	const int prev_step = current_step;
-	if (p_step == -1) {
-		current_step++;
-	} else {
-		current_step = p_step;
-	}
-	auto current_tick = OS::get_singleton()->get_ticks_usec();
-	float progress = MAX(0, (float)current_step / (float)amount);
-	size_t progress_percent = MIN(static_cast<size_t>(progress * 100), static_cast<size_t>(100));
-	size_t prev_progress_percent = MIN(static_cast<size_t>((static_cast<float>(prev_step) / static_cast<float>(amount)) * 100), static_cast<size_t>(100));
-	bool should_redraw = progress_percent != prev_progress_percent;
-	float indeterminate_progress = -1;
-	if (is_indeterminate) {
-		uint16_t prev_width = indeterminate_width;
-		indeterminate_width = (indeterminate_width + ((current_tick - last_progress_tick) / 100000)) % 30;
-		indeterminate_progress = (float)indeterminate_width / (float)width;
-		should_redraw = should_redraw || prev_width != indeterminate_width;
-	}
-	// We only print a new status bar if the progress has changed or if it's been more than 500ms since the last update;
-	// We don't use p_force_refresh here because print_status_bar does not iterate the main loop,
-	// and it's not really needed if there's nothing to update (and printing involves locking, so it can cause contention).
-	constexpr uint64_t PROGRESS_TICK_THRESHOLD = 500000;
-	constexpr uint64_t ITERATION_TICK_THRESHOLD = 10000;
-	if (should_redraw || (current_tick - last_progress_tick) > PROGRESS_TICK_THRESHOLD) {
-		GDRELogger::print_status_bar(label, progress, indeterminate_progress);
-		last_progress_tick = current_tick;
-	}
-	if ((p_force_refresh || current_tick - last_iteration_tick > ITERATION_TICK_THRESHOLD) && GDREProgressDialog::is_safe_to_redraw()) {
-		// force the main loop to iterate; this is needed to allow for input events to be processed and the command queue to be flushed.
-		GDRESettings::main_iteration();
-		last_iteration_tick = current_tick;
-	}
-	return false;
-}
-
-void StdOutProgress::end() {
-	GDRELogger::print_status_bar(label, 1.0f);
-	GDRELogger::stdout_print("\n");
-}
-
 void EditorProgressGDDC::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("step", "state", "step", "force_refresh"), &EditorProgressGDDC::step, DEFVAL(-1), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("get_task"), &EditorProgressGDDC::get_task);
@@ -560,15 +560,6 @@ void EditorProgressGDDC::_bind_methods() {
 }
 
 bool EditorProgressGDDC::step(const String &p_state, int p_step, bool p_force_refresh) {
-	if (GDRESettings::get_singleton() && GDRESettings::get_singleton()->is_headless()) {
-		return stdout_progress.step(p_step, p_force_refresh);
-	} else {
-		if (p_step == -1) {
-			stdout_progress.current_step++;
-		} else {
-			stdout_progress.current_step = p_step;
-		}
-	}
 	if (GDREProgressDialog::get_singleton()) {
 		return GDREProgressDialog::get_singleton()->task_step(task, p_state, p_step, p_force_refresh);
 	} else {
@@ -587,13 +578,7 @@ bool EditorProgressGDDC::step(const String &p_state, int p_step, bool p_force_re
 }
 
 void EditorProgressGDDC::set_progress_length(bool p_indeterminate, int p_new_amount) {
-	stdout_progress.is_indeterminate = p_indeterminate;
-	if (p_new_amount != -1) {
-		stdout_progress.amount = p_new_amount;
-	}
-	if (GDRESettings::get_singleton() && GDRESettings::get_singleton()->is_headless()) {
-		stdout_progress.step(stdout_progress.current_step, true);
-	} else if (GDREProgressDialog::get_singleton()) {
+	if (GDREProgressDialog::get_singleton()) {
 		GDREProgressDialog::get_singleton()->task_set_length(task, p_indeterminate, p_new_amount);
 	}
 }
@@ -603,10 +588,6 @@ EditorProgressGDDC::EditorProgressGDDC(const String &p_task, const String &p_lab
 		EditorProgressGDDC(nullptr, p_task, p_label, p_amount, p_can_cancel) {}
 EditorProgressGDDC::EditorProgressGDDC(Node *p_parent, const String &p_task, const String &p_label, int p_amount, bool p_can_cancel) {
 	task = p_task;
-	stdout_progress = { p_label, p_amount, 0, p_amount == -1 };
-	if (GDRESettings::get_singleton() && GDRESettings::get_singleton()->is_headless()) {
-		return;
-	}
 	if (GDREProgressDialog::get_singleton()) {
 		if (p_parent) {
 			GDREProgressDialog::get_singleton()->add_host_window(p_parent->get_window());
@@ -627,9 +608,7 @@ EditorProgressGDDC::EditorProgressGDDC(Node *p_parent, const String &p_task, con
 
 EditorProgressGDDC::~EditorProgressGDDC() {
 	// if no EditorNode...
-	if (GDRESettings::get_singleton() && GDRESettings::get_singleton()->is_headless()) {
-		stdout_progress.end();
-	} else if (GDREProgressDialog::get_singleton()) {
+	if (GDREProgressDialog::get_singleton()) {
 		GDREProgressDialog::get_singleton()->end_task(task);
 	} else {
 #ifdef TOOLS_ENABLED

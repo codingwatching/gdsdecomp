@@ -1,5 +1,4 @@
-#ifndef ASSET_LIBRARY_SOURCE_H
-#define ASSET_LIBRARY_SOURCE_H
+#pragma once
 
 #include "core/variant/dictionary.h"
 #include "plugin_source.h"
@@ -52,5 +51,3 @@ public:
 	String get_plugin_name() override;
 	Vector<ReleaseInfo> find_release_infos_by_tag(const String &plugin_name, const String &tag, Error &r_error) override;
 };
-
-#endif // ASSET_LIBRARY_SOURCE_H

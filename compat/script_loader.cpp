@@ -1,11 +1,7 @@
 
 #include "script_loader.h"
 
-#include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
-#include "core/io/resource_saver.h"
-#include "core/os/os.h"
-#include "core/variant/variant_parser.h"
 
 #include "bytecode/bytecode_base.h"
 #include "compat/fake_csharp_script.h"

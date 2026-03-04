@@ -1,6 +1,5 @@
 
-#ifndef STD_HASH_H
-#define STD_HASH_H
+#pragma once
 #include <core/math/aabb.h>
 #include <core/typedefs.h>
 #include <core/variant/variant.h>
@@ -233,5 +232,3 @@ struct godot_hashmap_equal_to {
 		return HashMapComparatorDefault<T>::compare(p_lhs, p_rhs);
 	}
 };
-
-#endif //STD_HASH_H

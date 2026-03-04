@@ -1,6 +1,6 @@
 #include "test_resource_export.h"
 
-#include "compat/oggstr_loader_compat.h"
+#include "modules/vorbis/audio_stream_ogg_vorbis.h"
 #include "test_common.h"
 #include "tests/test_macros.h"
 #include <compat/resource_compat_text.h>

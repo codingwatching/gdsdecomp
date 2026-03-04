@@ -1,5 +1,4 @@
-#ifndef GDRE_PACKED_FILE_INFO_H
-#define GDRE_PACKED_FILE_INFO_H
+#pragma once
 
 #include "core/io/file_access_pack.h"
 #include "core/object/object.h"
@@ -73,5 +72,3 @@ protected:
 private:
 	void fix_path();
 };
-
-#endif

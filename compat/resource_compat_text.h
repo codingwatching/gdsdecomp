@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef RESOURCE_COMPAT_TEXT_H
-#define RESOURCE_COMPAT_TEXT_H
+#pragma once
 
 #include "compat/resource_loader_compat.h"
 #include "utility/resource_info.h"
@@ -252,6 +251,8 @@ class ResourceFormatSaverCompatTextInstance {
 
 	static String get_local_path(const String &p_path, const Ref<Resource> &p_resource);
 
+	Ref<PackedScene> ensure_packed_scenes(const Ref<Resource> &p_resource);
+
 public:
 	Error save_to_file(const Ref<FileAccess> &f, const String &p_path, const Ref<Resource> &p_resource, uint32_t p_flags = 0);
 	Error save(const String &p_path, const Ref<Resource> &p_resource, uint32_t p_flags = 0);
@@ -274,5 +275,3 @@ public:
 
 	ResourceFormatSaverCompatText();
 };
-
-#endif // RESOURCE_COMPAT_TEXT_H
