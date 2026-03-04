@@ -4,6 +4,7 @@
 
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
+#include "core/object/class_db.h"
 #include "utility/common.h"
 #include "utility/packed_file_info.h"
 

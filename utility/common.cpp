@@ -10,6 +10,7 @@
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/http_client.h"
+#include "core/object/class_db.h"
 #include "modules/regex/regex.h"
 #include "modules/zip/zip_reader.h"
 #include "utility/gdre_logger.h"

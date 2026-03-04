@@ -1,4 +1,6 @@
 #include "video_stream_compat.h"
+
+#include "core/object/class_db.h"
 #include "utility/gdre_settings.h"
 
 #include "modules/theora/video_stream_theora.h"

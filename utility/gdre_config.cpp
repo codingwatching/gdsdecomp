@@ -4,6 +4,8 @@
 #include "common.h"
 #include "core/io/config_file.h"
 #include "core/io/json.h"
+#include "core/object/class_db.h"
+#include "core/os/os.h"
 #include "gdre_logger.h"
 #include "gdre_settings.h"
 #include "godot_mono_decomp_wrapper.h"

@@ -11,8 +11,8 @@ class DirSource : public PackSource {
 
 public:
 	static DirSource *get_singleton();
-	virtual bool try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset) override;
-	virtual Ref<FileAccess> get_file(const String &p_path, PackedData::PackedFile *p_file) override;
+	virtual bool try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key = Vector<uint8_t>()) override;
+	virtual Ref<FileAccess> get_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key = Vector<uint8_t>()) override;
 	bool file_exists(const String &p_path) const;
 	String get_pack_path(const String &p_path) const;
 	bool loaded_pack() const;

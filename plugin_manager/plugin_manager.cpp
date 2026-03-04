@@ -1,7 +1,9 @@
 #include "plugin_manager.h"
+
 #include "core/error/error_macros.h"
 #include "core/io/dir_access.h"
 #include "core/io/json.h"
+#include "core/object/class_db.h"
 #include "core/os/os.h"
 #include "modules/zip/zip_reader.h"
 #include "plugin_source.h"

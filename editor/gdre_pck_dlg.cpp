@@ -7,6 +7,9 @@
 
 #include "gdre_pck_dlg.h"
 
+#include "core/object/class_db.h"
+#include "core/object/callable_mp.h"
+
 #include "utility/gdre_settings.h"
 
 PackDialog::PackDialog() {

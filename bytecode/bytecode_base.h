@@ -8,6 +8,7 @@
 #include "core/object/object.h"
 #include "core/object/ref_counted.h"
 #include "core/templates/hash_map.h"
+#include "core/variant/binder_common.h"
 
 class FakeGDScript;
 

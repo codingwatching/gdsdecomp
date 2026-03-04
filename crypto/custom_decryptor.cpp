@@ -1,4 +1,5 @@
 #include "custom_decryptor.h"
+#include "core/object/class_db.h"
 #include "core/variant/variant.h"
 
 void CustomDecryptor::_bind_methods() {

@@ -37,6 +37,7 @@
 #include "core/io/file_access_compressed.h"
 #include "core/io/missing_resource.h"
 #include "core/io/resource.h"
+#include "core/object/class_db.h"
 #include "core/version.h"
 #include "core/version_generated.gen.h"
 #include "scene/property_utils.h"

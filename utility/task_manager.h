@@ -1,6 +1,7 @@
 #pragma once
 #include "core/error/error_macros.h"
 #include "core/object/worker_thread_pool.h"
+#include "core/os/os.h"
 
 #include "gui/gdre_progress.h"
 #include "utility/gd_parallel_hashmap.h"

@@ -302,7 +302,7 @@ String GDREPackedSource::get_magic_ascii(uint32_t magic) {
 	return String::chr(magic & 0xFF) + String::chr((magic >> 8) & 0xFF) + String::chr((magic >> 16) & 0xFF) + String::chr((magic >> 24) & 0xFF);
 }
 
-bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset) {
+bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key) {
 	String ext = p_path.get_extension().to_lower();
 	if (ext == "apk" || ext == "zip") {
 		return false;
@@ -518,7 +518,7 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 	return true;
 }
 
-Ref<FileAccess> GDREPackedSource::get_file(const String &p_path, PackedData::PackedFile *p_file) {
+Ref<FileAccess> GDREPackedSource::get_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key) {
 	// if we call the constructor for FileAccessPack if it's a bundle,
 	// it'll cause an infinite loop; we need to just create the thing ourselves
 	Ref<FileAccess> file;

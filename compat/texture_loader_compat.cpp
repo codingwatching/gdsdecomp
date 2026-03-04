@@ -5,6 +5,7 @@
 #include "compat/webp_compat.h"
 #include "core/io/resource_loader.h"
 #include "utility/common.h"
+#include "utility/gdre_settings.h"
 #include "utility/resource_info.h"
 
 #include "core/error/error_list.h"
@@ -15,7 +16,7 @@
 #include "core/variant/dictionary.h"
 #include "scene/resources/compressed_texture.h"
 #include "scene/resources/texture.h"
-#include "utility/gdre_settings.h"
+#include "servers/rendering/rendering_server.h"
 
 enum FormatBits {
 	FORMAT_MASK_IMAGE_FORMAT = (1 << 20) - 1,
@@ -1028,28 +1029,28 @@ String ResourceFormatLoaderCompatTextureLayered::get_resource_type(const String 
 Ref<CompressedTextureLayered> ResourceFormatLoaderCompatTextureLayered::_set_tex(const String &p_path, ResourceInfo::LoadType p_type, int tw, int th, int td, int type, bool mipmaps, const Vector<Ref<Image>> &images) {
 	Ref<CompressedTextureLayered> texture;
 	if (p_type != ResourceInfo::LoadType::REAL_LOAD) {
-		if (type == RS::TEXTURE_LAYERED_2D_ARRAY) {
+		if (type == RSE::TEXTURE_LAYERED_2D_ARRAY) {
 			Ref<OverrideTextureLayered<CompressedTexture2DArray>> override_texture;
 			override_texture.instantiate();
 			override_texture->layer_data = images;
 			texture = override_texture;
-		} else if (type == RS::TEXTURE_LAYERED_CUBEMAP) {
+		} else if (type == RSE::TEXTURE_LAYERED_CUBEMAP) {
 			Ref<OverrideTextureLayered<CompressedCubemap>> override_texture;
 			override_texture.instantiate();
 			override_texture->layer_data = images;
 			texture = override_texture;
-		} else if (type == RS::TEXTURE_LAYERED_CUBEMAP_ARRAY) {
+		} else if (type == RSE::TEXTURE_LAYERED_CUBEMAP_ARRAY) {
 			Ref<OverrideTextureLayered<CompressedCubemapArray>> override_texture;
 			override_texture.instantiate();
 			override_texture->layer_data = images;
 			texture = override_texture;
 		}
 	} else {
-		if (type == RS::TEXTURE_LAYERED_2D_ARRAY) {
+		if (type == RSE::TEXTURE_LAYERED_2D_ARRAY) {
 			texture = memnew(CompressedTexture2DArray);
-		} else if (type == RS::TEXTURE_LAYERED_CUBEMAP) {
+		} else if (type == RSE::TEXTURE_LAYERED_CUBEMAP) {
 			texture = memnew(CompressedCubemap);
-		} else if (type == RS::TEXTURE_LAYERED_CUBEMAP_ARRAY) {
+		} else if (type == RSE::TEXTURE_LAYERED_CUBEMAP_ARRAY) {
 			texture = memnew(CompressedCubemapArray);
 		}
 	}
@@ -1062,7 +1063,7 @@ Ref<CompressedTextureLayered> ResourceFormatLoaderCompatTextureLayered::_set_tex
 	fake->mipmaps = mipmaps;
 	fake->layered_type = TextureLayered::LayeredType(type);
 	if (p_type == ResourceInfo::LoadType::REAL_LOAD) {
-		RID texture_rid = RS::get_singleton()->texture_2d_layered_create(images, RS::TextureLayeredType(type));
+		RID texture_rid = RS::get_singleton()->texture_2d_layered_create(images, RSE::TextureLayeredType(type));
 		fake->texture = texture_rid;
 	}
 	return texture;
@@ -1088,7 +1089,7 @@ Ref<Resource> ResourceFormatLoaderCompatTextureLayered::custom_load(const String
 	Image::Format fmt;
 	if (t == TextureLoaderCompat::FORMAT_V3_STREAM_TEXTUREARRAY) {
 		err = TextureLoaderCompat::_load_layered_texture_v3(p_path, images, fmt, lw, lh, ld, mipmaps);
-		ltype = RS::TEXTURE_LAYERED_2D_ARRAY;
+		ltype = RSE::TEXTURE_LAYERED_2D_ARRAY;
 	} else if (t == TextureLoaderCompat::FORMAT_V4_COMPRESSED_TEXTURELAYERED) {
 		err = TextureLoaderCompat::_load_data_ctexlayered_v4(p_path, images, fmt, lw, lh, ld, ltype, mipmaps, data_format);
 	} else {
@@ -1359,7 +1360,7 @@ Ref<Resource> LargeTextureConverterCompat::convert(const Ref<MissingResource> &r
 		}
 	}
 
-	texture = ResourceFormatLoaderCompatTextureLayered::_set_tex(res->get_path(), p_type, whole_size.x, whole_size.y, images.size(), RS::TEXTURE_LAYERED_2D_ARRAY, false, images);
+	texture = ResourceFormatLoaderCompatTextureLayered::_set_tex(res->get_path(), p_type, whole_size.x, whole_size.y, images.size(), RSE::TEXTURE_LAYERED_2D_ARRAY, false, images);
 	auto new_info = TextureLoaderCompat::_get_resource_info(res->get_path(), TextureLoaderCompat::FORMAT_V2_LARGE_TEXTURE);
 	new_info->extra["offsets"] = offsets;
 	new_info->extra["whole_size"] = whole_size;

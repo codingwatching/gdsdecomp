@@ -1,5 +1,7 @@
 #include "packed_file_info.h"
 
+#include "core/object/class_db.h"
+
 void PackedFileInfo::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_pack"), &PackedFileInfo::get_pack);
 	ClassDB::bind_method(D_METHOD("get_path"), &PackedFileInfo::get_path);

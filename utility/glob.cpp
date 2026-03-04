@@ -25,6 +25,7 @@
 
 #include "glob.h"
 #include "core/io/dir_access.h"
+#include "core/object/class_db.h"
 #include "core/os/os.h"
 #include "core/templates/hash_map.h"
 #include "modules/regex/regex.h"

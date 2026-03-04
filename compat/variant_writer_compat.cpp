@@ -2,6 +2,7 @@
 #include "core/crypto/crypto_core.h"
 
 #include "compat/resource_loader_compat.h"
+#include "core/object/class_db.h"
 #include "core/object/script_language.h"
 
 #include "image_parser_v2.h"

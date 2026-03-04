@@ -24,6 +24,7 @@
 #include "scene/resources/3d/sphere_shape_3d.h"
 #include "scene/resources/surface_tool.h"
 #include "scene/resources/texture.h"
+#include "servers/rendering/rendering_server.h"
 #include "utility/common.h"
 #include "utility/gdre_config.h"
 #include "utility/gdre_logger.h"
@@ -32,6 +33,7 @@
 #include "core/crypto/crypto_core.h"
 #include "core/error/error_list.h"
 #include "core/error/error_macros.h"
+#include "core/object/class_db.h"
 #include "main/main.h"
 #include "scene/resources/compressed_texture.h"
 #include "scene/resources/packed_scene.h"
@@ -3903,17 +3905,17 @@ struct BatchExportTokenSort {
 };
 
 size_t SceneExporter::get_vram_usage() {
-	List<RS::MeshInfo> mesh_info;
+	List<RenderingServerTypes::MeshInfo> mesh_info;
 	RS::get_singleton()->mesh_debug_usage(&mesh_info);
-	List<RS::TextureInfo> tinfo;
+	List<RenderingServerTypes::TextureInfo> tinfo;
 	RS::get_singleton()->texture_debug_usage(&tinfo);
 
 	size_t total_vmem = 0;
 
-	for (const RS::MeshInfo &E : mesh_info) {
+	for (const RenderingServerTypes::MeshInfo &E : mesh_info) {
 		total_vmem += E.vertex_buffer_size + E.attribute_buffer_size + E.skin_buffer_size + E.index_buffer_size + E.blend_shape_buffer_size + E.lod_index_buffers_size;
 	}
-	for (const RS::TextureInfo &E : tinfo) {
+	for (const RenderingServerTypes::TextureInfo &E : tinfo) {
 		total_vmem += E.bytes;
 	}
 	return total_vmem;

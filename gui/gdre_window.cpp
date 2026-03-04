@@ -1,6 +1,8 @@
 #include "gdre_window.h"
 #include "gui/gdre_progress.h"
 
+#include "core/object/class_db.h"
+
 void GDREWindow::popup_box(Node *p_parent, Window *p_box, const String &p_message, const String &p_title, const Callable &p_confirm_callback, const Callable &p_cancel_callback, const String &p_ok_button_text, const String &p_cancel_button_text) {
 	if (p_parent && p_box->get_parent() != p_parent) {
 		if (p_box->get_parent()) {

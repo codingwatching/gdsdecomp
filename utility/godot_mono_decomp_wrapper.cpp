@@ -1,5 +1,7 @@
 #include "godot_mono_decomp_wrapper.h"
+
 #include "core/io/json.h"
+#include "core/object/class_db.h"
 #include "core/templates/vector.h"
 
 #include "utility/gd_parallel_queue.h"

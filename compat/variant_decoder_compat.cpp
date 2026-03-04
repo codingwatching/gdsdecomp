@@ -7,6 +7,7 @@
 #include "compat/image_parser_v2.h"
 #include "core/io/image.h"
 #include "core/io/marshalls.h"
+#include "core/object/class_db.h"
 
 #define _S(a) ((int32_t)a)
 #define ERR_FAIL_ADD_OF(a, b, err) ERR_FAIL_COND_V(_S(b) < 0 || _S(a) < 0 || _S(a) > INT_MAX - _S(b), err)

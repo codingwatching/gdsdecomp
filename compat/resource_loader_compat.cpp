@@ -173,7 +173,7 @@ void ResourceCompatLoader::get_base_extensions_for_type(const String &p_type, Li
 		unique_extensions.insert(ext);
 	}
 	if (type_to_exts.has(p_type)) {
-		HashSet<String> old_exts = type_to_exts.get(p_type);
+		const HashSet<String> &old_exts = type_to_exts.get(p_type);
 		for (const String &ext : old_exts) {
 			unique_extensions.insert(ext);
 		}

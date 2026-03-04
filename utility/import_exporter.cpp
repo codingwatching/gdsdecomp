@@ -784,7 +784,7 @@ struct ProcessRunnerStruct : public TaskRunnerStruct {
 	String command;
 	Vector<String> arguments;
 	int error_code = -1;
-	OS::ProcessID process_id = -1;
+	ProcessID process_id = -1;
 	String description;
 	bool is_cancelled = false;
 	Ref<FileAccess> fa_stdout;

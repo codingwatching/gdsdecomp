@@ -167,7 +167,7 @@ Error APKArchive::get_version_string_from_manifest(String &version_string) {
 	return OK;
 }
 
-bool APKArchive::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset = 0) {
+bool APKArchive::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key) {
 	// load with offset feature only supported for PCK files
 	ERR_FAIL_COND_V_MSG(p_offset != 0, false, "Invalid PCK data. Note that loading files with a non-zero offset isn't supported with ZIP archives.");
 	String pack_path = p_path.replace("_GDRE_a_really_dumb_hack", "");
@@ -285,7 +285,7 @@ bool APKArchive::file_exists(String p_name) const {
 	return files.has(p_name);
 }
 
-Ref<FileAccess> APKArchive::get_file(const String &p_path, PackedData::PackedFile *p_file) {
+Ref<FileAccess> APKArchive::get_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key) {
 	return memnew(FileAccessAPK(p_path, *p_file));
 }
 

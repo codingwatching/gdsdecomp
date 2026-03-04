@@ -30,6 +30,8 @@
 
 #include "gui/gdre_progress.h"
 
+#include "core/object/callable_mp.h"
+#include "core/object/class_db.h"
 #include "core/os/os.h"
 #include "scene/gui/file_dialog.h"
 #include "servers/display/display_server.h"

@@ -1,7 +1,9 @@
 #include "test_common.h"
 #include "core/os/main_loop.h"
 #include "servers/audio/audio_server.h"
-
+#ifndef XR_DISABLED
+#include "servers/xr/xr_server.h"
+#endif // XR_DISABLED
 #ifdef WINDOWS_ENABLED
 #include "platform/windows/os_windows.h"
 #define PLATFORM_OS OS_Windows
@@ -43,7 +45,9 @@ public:
 
 struct GDRETestListener : public doctest::IReporter {
 	MainLoop *main_loop = nullptr;
+#ifndef XR_DISABLED
 	XRServer *xr_server = nullptr;
+#endif // XR_DISABLED
 	// SignalWatcher *signal_watcher = nullptr;
 public:
 	GDRETestListener(const doctest::ContextOptions &p_in) {}

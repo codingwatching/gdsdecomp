@@ -1,6 +1,7 @@
 #include "task_manager.h"
 #include "gui/gdre_progress.h"
 #include "main/main.h"
+#include "servers/rendering/rendering_server.h"
 #include "utility/common.h"
 #include "utility/gdre_settings.h"
 

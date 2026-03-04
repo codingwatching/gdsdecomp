@@ -30,6 +30,8 @@
 
 #include "crypto_core_gdre_contexts.h"
 
+#include "core/object/class_db.h"
+
 // AESContext with CFB support
 Error AESContextGDRE::start(Mode p_mode, const PackedByteArray &p_key, const PackedByteArray &p_iv) {
 	ERR_FAIL_COND_V_MSG(mode != MODE_MAX, ERR_ALREADY_IN_USE, "AESContextGDRE already started. Call 'finish' before starting a new one.");

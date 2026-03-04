@@ -4,6 +4,7 @@
 #include "compat/resource_loader_compat.h"
 #include "compat/variant_decoder_compat.h"
 #include "core/io/missing_resource.h"
+#include "core/object/class_db.h"
 #include "core/object/object.h"
 #include "core/string/ustring.h"
 #include "modules/gdscript/gdscript.h"

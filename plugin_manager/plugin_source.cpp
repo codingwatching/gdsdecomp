@@ -1,6 +1,8 @@
 #include "plugin_source.h"
+
 #include "core/error/error_list.h"
 #include "core/error/error_macros.h"
+#include "core/object/class_db.h"
 #include "plugin_info.h"
 #include "utility/common.h"
 

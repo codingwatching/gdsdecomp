@@ -5,6 +5,7 @@
 #include "compat/variant_writer_compat.h"
 #include "core/error/error_list.h"
 #include "core/math/expression.h"
+#include "core/object/class_db.h"
 #include "core/object/object.h"
 #include "core/string/ustring.h"
 #include "modules/regex/regex.h"

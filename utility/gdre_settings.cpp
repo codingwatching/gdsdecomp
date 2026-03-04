@@ -33,6 +33,7 @@
 #include "core/object/script_language.h"
 #include "core/string/translation.h"
 #include "modules/regex/regex.h"
+#include "servers/display/display_server.h"
 #include "servers/rendering/rendering_server.h"
 
 #ifdef TOOLS_ENABLED

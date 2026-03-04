@@ -32,8 +32,9 @@
 
 #include "core/crypto/crypto_core.h"
 #include "core/object/ref_counted.h"
-#include "crypto/crypto_core_gdre.h"
+#include "core/variant/binder_common.h"
 
+#include "crypto/crypto_core_gdre.h"
 class AESContextGDRE : public RefCounted {
 	GDCLASS(AESContextGDRE, RefCounted);
 

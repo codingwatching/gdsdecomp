@@ -32,6 +32,7 @@
 
 #include "compat/variant_writer_compat.h"
 #include "core/io/file_access_encrypted.h"
+#include "core/object/class_db.h"
 #include "core/string/string_builder.h"
 
 #include "utility/gdre_settings.h"

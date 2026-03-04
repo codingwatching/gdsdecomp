@@ -1,6 +1,7 @@
 #include "diff_result.h"
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
+#include "core/object/class_db.h"
 #include "core/object/object.h"
 #include "core/variant/variant.h"
 #include "scene/main/node.h"

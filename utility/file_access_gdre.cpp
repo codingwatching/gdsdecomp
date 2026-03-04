@@ -11,7 +11,7 @@
 #include "packed_file_info.h"
 #include "utility/common.h"
 
-bool DirSource::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset) {
+bool DirSource::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key) {
 	if (!DirAccess::exists(p_path)) {
 		return false;
 	}
@@ -41,7 +41,7 @@ bool DirSource::try_open_pack(const String &p_path, bool p_replace_files, uint64
 	return true;
 }
 
-Ref<FileAccess> DirSource::get_file(const String &p_path, PackedData::PackedFile *p_file) {
+Ref<FileAccess> DirSource::get_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key) {
 	if (!p_file) {
 		return nullptr;
 	}

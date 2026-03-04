@@ -29,6 +29,8 @@
 /*************************************************************************/
 
 #include "godotver.h"
+
+#include "core/object/class_db.h"
 #include "modules/regex/regex.h"
 
 // initialized by register_types.cpp

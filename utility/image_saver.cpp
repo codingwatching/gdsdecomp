@@ -4,6 +4,7 @@
 #include "core/error/error_macros.h"
 #include "core/io/file_access.h"
 #include "core/io/image.h"
+#include "core/object/class_db.h"
 #include "core/string/ustring.h"
 #include "core/variant/variant.h"
 #include "external/tga/tga.h"

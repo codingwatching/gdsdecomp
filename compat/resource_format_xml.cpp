@@ -32,6 +32,7 @@
 #include "compat/image_enum_compat.h"
 #include "compat/input_event_parser_v2.h"
 #include "core/io/image.h"
+#include "core/object/class_db.h"
 #include "core/string/ustring.h"
 
 #include "utility/gdre_settings.h"

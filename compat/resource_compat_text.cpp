@@ -34,6 +34,7 @@
 #include "core/error/error_macros.h"
 #include "core/io/dir_access.h"
 #include "core/io/missing_resource.h"
+#include "core/object/class_db.h"
 #include "scene/property_utils.h"
 
 #include "compat/variant_writer_compat.h"

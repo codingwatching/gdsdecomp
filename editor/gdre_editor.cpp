@@ -21,6 +21,9 @@
 #include "utility/pck_dumper.h"
 
 #include "core/io/resource_format_binary.h"
+#include "core/object/callable_mp.h"
+#include "core/object/class_db.h"
+
 #include "modules/svg/image_loader_svg.h"
 #include "scene/gui/button.h"
 #include "scene/gui/texture_rect.h"

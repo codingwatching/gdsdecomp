@@ -3,6 +3,7 @@
 #include "compat/variant_writer_compat.h"
 
 #include "core/io/file_access.h"
+#include "core/object/class_db.h"
 #include "core/variant/variant_parser.h"
 #include "utility/file_access_buffer.h"
 #include "utility/gdre_settings.h"
