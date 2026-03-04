@@ -61,7 +61,7 @@ jobs:
             id: windows-template
             platform: windows
             target: template_release
-            sconsflags: debug_symbols=no
+            sconsflags: debug_symbols=no production=yes
             rust-arch: x86_64-pc-windows-msvc
             alt-rust-arch: none
             bin: ./bin/godot.windows.editor.x86_64.exe
@@ -91,7 +91,7 @@ jobs:
             id: linux-template-debug
             platform: linux
             target: template_debug
-            sconsflags: debug_symbols=no tests=yes
+            sconsflags: debug_symbols=no tests=yes production=yes
             rust-arch: x86_64-unknown-linux-gnu
             alt-rust-arch: none
             bin: ./bin/godot.linuxbsd.template_debug.x86_64
@@ -103,7 +103,7 @@ jobs:
             target: template_release
             rust-arch: x86_64-unknown-linux-gnu
             alt-rust-arch: none
-            sconsflags: debug_symbols=no optimize=size use_lto=yes
+            sconsflags: production=yes debug_symbols=no optimize=size use_lto=yes
             bin: ./bin/godot.linuxbsd.editor.x86_64
 
           - name: "🤖 Android Template Release"
@@ -113,7 +113,7 @@ jobs:
             target: template_release
             rust-arch: x86_64-linux-android
             alt-rust-arch: aarch64-linux-android
-            sconsflags: debug_symbols=no optimize=size use_lto=yes generate_android_binaries=yes
+            sconsflags: production=yes debug_symbols=no optimize=size use_lto=yes generate_android_binaries=yes
             bin: ./bin/godot.linuxbsd.editor.x86_64
 
           - name: "🍎 macOS Editor"
@@ -133,7 +133,7 @@ jobs:
             target: template_release
             rust-arch: x86_64-apple-darwin
             alt-rust-arch: aarch64-apple-darwin
-            sconsflags: debug_symbols=no optimize=size use_lto=yes use_volk=no vulkan=yes
+            sconsflags: production=yes debug_symbols=no optimize=size use_lto=yes use_volk=no vulkan=yes
             bin: ./bin/godot.macos.editor.arm64
 
     steps:
