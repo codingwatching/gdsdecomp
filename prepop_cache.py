@@ -35,8 +35,7 @@ PLUGINS_TO_PREPOP = [
     "godotsteam_server",
     "spine_godot_extension",
     "sentry",
-    "wwise",
-    "gd_cubism"
+    "wwise"
 ]
 
 
