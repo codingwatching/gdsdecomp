@@ -1759,36 +1759,14 @@ void ImportExporter::make_git_repo() {
 		".mono/",
 		".godot/*",
 	};
-	auto da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
-	ERR_FAIL_COND_MSG(da.is_null(), "Failed to create DirAccess for " + output_dir);
 	bool include_imports = GDREConfig::get_singleton()->get_setting("Recovery/git/add_imports_to_git_repo", true);
-	Vector<String> files_to_add = { ".gitignore" };
-	if (DirAccess::dir_exists_absolute(output_dir.path_join(".assets"))) {
-		files_to_add.push_back(".assets/");
-	}
 	String game_version = get_settings()->get_game_app_version();
 	int ver_major = get_ver_major();
 	if (!include_imports && ver_major == 3) {
 		gitignore_lines.insert(".import/");
-	} else if (include_imports) {
-		if (ver_major >= 4) {
-			gitignore_lines.insert("!.godot/imported/");
-			files_to_add.push_back(".godot/imported/");
-		} else if (ver_major == 3) {
-			files_to_add.push_back(".import/");
-		}
+	} else if (include_imports && ver_major >= 4) {
+		gitignore_lines.insert("!.godot/imported/");
 	}
-	da->change_dir(output_dir);
-	da->set_include_hidden(false);
-	da->list_dir_begin();
-	String file = da->get_next();
-	while (file != "") {
-		if (file[0] != '.' && !gitignore_lines.has(file) && !gitignore_lines.has(file + "/")) {
-			files_to_add.push_back(file);
-		}
-		file = da->get_next();
-	}
-	da->list_dir_end();
 
 	if (!FileAccess::exists(gitignore_path)) {
 		Ref<FileAccess> gitignore = FileAccess::open(gitignore_path, FileAccess::WRITE);
@@ -1802,10 +1780,7 @@ void ImportExporter::make_git_repo() {
 		gitignore->close();
 	}
 
-	Vector<String> add_args = { "-C", output_dir, "add" };
-	for (int i = 0; i < files_to_add.size(); i++) {
-		add_args.push_back(files_to_add[i]);
-	}
+	Vector<String> add_args = { "-C", output_dir, "add", "." };
 	auto add_runner = std::make_shared<ProcessRunnerStruct>("git", add_args);
 	Error err = TaskManager::get_singleton()->run_task(add_runner, nullptr, "Adding files to git repo...", -1, true, true);
 	if (err == ERR_SKIP) {
