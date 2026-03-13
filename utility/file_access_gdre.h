@@ -21,6 +21,17 @@ public:
 	~DirSource();
 };
 
+class DummySource : public PackSource {
+	static DummySource *singleton;
+
+public:
+	static DummySource *get_singleton();
+	virtual bool try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key = Vector<uint8_t>()) override;
+	virtual Ref<FileAccess> get_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key = Vector<uint8_t>()) override;
+	DummySource();
+	~DummySource();
+};
+
 class GDREPackedData {
 	friend class FileAccessPack;
 	friend class DirAccessGDRE;
@@ -64,6 +75,7 @@ private:
 	PackedDir *root = nullptr;
 
 	DirSource dir_source;
+	DummySource dummy_source;
 
 	static GDREPackedData *singleton;
 	bool disabled = false;
@@ -80,6 +92,7 @@ public:
 	void set_default_file_access();
 	void reset_default_file_access();
 	void add_pack_source(PackSource *p_source);
+	void add_dummy_path(const String &p_pkg_path, const String &p_path);
 	void add_path(const String &p_pkg_path, const String &p_path, uint64_t p_ofs, uint64_t p_size, const uint8_t *p_md5, PackSource *p_src, bool p_replace_files, bool p_encrypted = false, bool p_bundle = false, bool p_delta = false, const String &p_salt = String()); // for PackSource
 	void remove_path(const String &p_path);
 	uint8_t *get_file_hash(const String &p_path);
