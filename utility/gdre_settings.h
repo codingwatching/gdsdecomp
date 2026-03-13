@@ -120,6 +120,7 @@ public:
 		String pack_file;
 		int bytecode_revision = 0;
 		bool suspect_version = false;
+		bool has_cs_files = false;
 		bool detected_csharp = false;
 		String non_standard_header;
 		String assembly_path;

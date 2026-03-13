@@ -947,7 +947,7 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 
 	// check if the pack has .cs files
 	auto cs_files = GDRESettings::get_singleton()->get_file_list({ "*.cs" });
-	if (get_settings()->project_requires_dotnet_assembly() && cs_files.size() > 0) {
+	if (get_settings()->project_requires_dotnet_assembly() && (cs_files.size() > 0 || GDRESettings::get_singleton()->has_loaded_dotnet_assembly())) {
 		report->mono_detected = true;
 		Vector<String> exclude_files;
 		for (int i = 0; i < cs_files.size(); i++) {
@@ -955,7 +955,7 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 				exclude_files.push_back(cs_files[i]);
 			}
 		}
-		if (exclude_files.size() == cs_files.size()) {
+		if (exclude_files.size() == cs_files.size() && !cs_files.is_empty()) {
 			// nothing to do
 		} else if (GDRESettings::get_singleton()->has_loaded_dotnet_assembly()) {
 			auto decompiler = GDRESettings::get_singleton()->get_dotnet_decompiler();

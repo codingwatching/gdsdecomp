@@ -2733,6 +2733,12 @@ Error GDRESettings::load_project_dotnet_assembly() {
 	}
 	String assembly_path = find_dotnet_assembly_path(search_dirs);
 	if (assembly_path.is_empty()) {
+		// We didn't find an assembly, but if there's no C# files, we can just assume it's not a C# project
+		if (!current_project->has_cs_files) {
+			current_project->detected_csharp = false;
+			WARN_PRINT("No assembly file '" + assembly_file + "' found in any directory in " + project_dir + " and no C# files found, assuming it's not a C# project");
+			return OK;
+		}
 		ERR_FAIL_V_MSG(ERR_FILE_NOT_FOUND, "Could not load dotnet assembly: Assembly file '" + assembly_file + "' not found in any directory in " + project_dir);
 	}
 	return reload_dotnet_assembly(assembly_path);
@@ -2834,19 +2840,16 @@ void GDRESettings::_detect_csharp() {
 		return;
 	}
 	bool has_assembly_setting = false;
-	auto cs_files = get_file_info_list({ "*.cs" });
-	if (cs_files.is_empty()) {
-		current_project->detected_csharp = false;
-		return;
-	}
 	if (is_project_config_loaded()) {
 		has_assembly_setting = !get_project_setting(DOTNET_ASSEMBLY_NAME_SETTING_4x, String()).operator String().is_empty() ||
 				!get_project_setting(DOTNET_ASSEMBLY_NAME_SETTING_3x, String()).operator String().is_empty() ||
 				get_project_setting("_custom_features", String()).operator String().contains("dotnet") ||
 				get_project_setting("application/config/features", Vector<String>()).operator Vector<String>().has("C#");
 	}
-	if (has_assembly_setting) {
+	auto cs_files = get_file_info_list({ "*.cs" });
+	if (has_assembly_setting || !cs_files.is_empty()) {
 		current_project->detected_csharp = true;
+		current_project->has_cs_files = !cs_files.is_empty();
 		return;
 	}
 	if (get_ver_major() <= 3 || !is_project_config_loaded()) {
@@ -2854,6 +2857,7 @@ void GDRESettings::_detect_csharp() {
 			// at least one file should be empty
 			if (file->get_size() <= 1) {
 				current_project->detected_csharp = true;
+				current_project->has_cs_files = true;
 				return;
 			}
 		}
