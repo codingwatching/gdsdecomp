@@ -2780,6 +2780,15 @@ Error GDRESettings::reload_dotnet_assembly(const String &p_path) {
 	Ref<GodotMonoDecompWrapper> decompiler = GodotMonoDecompWrapper::create(current_project->assembly_path, originalProjectFiles, { current_project->assembly_path.get_base_dir() }, settings);
 	ERR_FAIL_COND_V_MSG(decompiler.is_null(), ERR_CANT_CREATE, "Failed to load assembly " + current_project->assembly_path + " (Not a valid .NET assembly?)");
 	current_project->decompiler = decompiler;
+
+	auto packed_data = GDREPackedData::get_singleton();
+	DEV_ASSERT(packed_data != nullptr);
+	Vector<String> files_in_file_map = decompiler->get_files_in_file_map();
+	for (const String &file_path : files_in_file_map) {
+		if (!packed_data->has_path(file_path)) {
+			packed_data->add_dummy_path(current_project->assembly_path, file_path);
+		}
+	}
 	return OK;
 }
 
