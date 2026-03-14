@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using ICSharpCode.Decompiler;
 using ICSharpCode.Decompiler.CSharp;
@@ -255,6 +255,19 @@ static public class Lib
 			Marshal.WriteIntPtr(arrayPtr + i * IntPtr.Size, Marshal.StringToHGlobalAnsi(files[i]));
 		}
 		return arrayPtr;
+	}
+
+	[UnmanagedCallersOnly(EntryPoint = "GodotMonoDecomp_IsCustomVersionDetected")]
+	public static int AOTIsCustomVersionDetected(
+		IntPtr decompilerHandle
+	)
+	{
+		var decompiler = GCHandle.FromIntPtr(decompilerHandle).Target as GodotModuleDecompiler;
+		if (decompiler == null)
+		{
+			return 0;
+		}
+		return decompiler.IsCustomVersionDetected() ? 1 : 0;
 	}
 
 	[UnmanagedCallersOnly(EntryPoint = "GodotMonoDecomp_GetAllUtf32StringsInModule")]

@@ -47,6 +47,7 @@ public:
 	Dictionary get_script_info(const String &file);
 	Vector<String> get_files_not_present_in_file_map();
 	Vector<String> get_files_in_file_map();
+	bool is_custom_version_detected() const;
 	Vector<String> get_all_strings_in_module();
 
 	GodotMonoDecompSettings get_settings() const;

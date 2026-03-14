@@ -123,6 +123,7 @@ void GodotMonoDecomp_FreeString(void* str);
 
 int* GodotMonoDecomp_GetLanguageVersions(int* r_num_versions);
 
+int GodotMonoDecomp_IsCustomVersionDetected(void *decompilerHandle);
 
 #ifdef __cplusplus
 }
