@@ -183,6 +183,27 @@ Vector<String> GodotMonoDecompWrapper::get_files_not_present_in_file_map() {
 	return files_not_present_in_file_map_strs;
 }
 
+Vector<String> GodotMonoDecompWrapper::get_files_in_file_map() {
+	ERR_FAIL_COND_V_MSG(decompilerHandle == nullptr, Vector<String>(), "Decompiler handle is null");
+	int num = GodotMonoDecomp_GetNumberOfFilesInFileMap(decompilerHandle);
+	if (num == 0) {
+		return Vector<String>();
+	}
+	ERR_FAIL_COND_V_MSG(num < 0, Vector<String>(), "Failed to get number of files in file map");
+	const char **files_in_file_map_c_array = GodotMonoDecomp_GetFilesInFileMap(decompilerHandle);
+	Vector<String> files_in_file_map_strs;
+	for (int i = 0; i < num; i++) {
+		files_in_file_map_strs.push_back("res://" + String::utf8(files_in_file_map_c_array[i]).trim_prefix("res://"));
+	}
+	GodotMonoDecomp_FreeArray((void *)files_in_file_map_c_array, num);
+	return files_in_file_map_strs;
+}
+
+bool GodotMonoDecompWrapper::is_custom_version_detected() const {
+	ERR_FAIL_COND_V_MSG(decompilerHandle == nullptr, false, "Decompiler handle is null");
+	return GodotMonoDecomp_IsCustomVersionDetected(decompilerHandle) != 0;
+}
+
 Vector<String> GodotMonoDecompWrapper::get_all_strings_in_module() {
 	ERR_FAIL_COND_V_MSG(decompilerHandle == nullptr, Vector<String>(), "Decompiler handle is null");
 	int num_strings = 0;
@@ -251,6 +272,12 @@ Dictionary GodotMonoDecompWrapper::get_script_info(const String &file) {
 Vector<String> GodotMonoDecompWrapper::get_files_not_present_in_file_map() {
 	ERR_FAIL_V_MSG({}, GODOT_MONO_DECOMP_DISABLED_ERROR_MESSAGE);
 }
+Vector<String> GodotMonoDecompWrapper::get_files_in_file_map() {
+	ERR_FAIL_V_MSG({}, GODOT_MONO_DECOMP_DISABLED_ERROR_MESSAGE);
+}
+bool GodotMonoDecompWrapper::is_custom_version_detected() const {
+	ERR_FAIL_V_MSG(false, GODOT_MONO_DECOMP_DISABLED_ERROR_MESSAGE);
+}
 Vector<String> GodotMonoDecompWrapper::get_all_strings_in_module() {
 	ERR_FAIL_V_MSG({}, GODOT_MONO_DECOMP_DISABLED_ERROR_MESSAGE);
 }
@@ -302,4 +329,6 @@ void GodotMonoDecompWrapper::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("decompile_individual_file", "file"), &GodotMonoDecompWrapper::decompile_individual_file);
 	ClassDB::bind_method(D_METHOD("get_script_info", "file"), &GodotMonoDecompWrapper::get_script_info);
 	ClassDB::bind_method(D_METHOD("get_files_not_present_in_file_map"), &GodotMonoDecompWrapper::get_files_not_present_in_file_map);
+	ClassDB::bind_method(D_METHOD("get_files_in_file_map"), &GodotMonoDecompWrapper::get_files_in_file_map);
+	ClassDB::bind_method(D_METHOD("is_custom_version_detected"), &GodotMonoDecompWrapper::is_custom_version_detected);
 }

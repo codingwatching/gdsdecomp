@@ -67,6 +67,10 @@ public static class NugetDetails
 				p = await DownloadPackageToLocalCache(name, version, cancellationToken);
 			}
         }
+        catch (HttpRequestException e) when (e.StatusCode == HttpStatusCode.NotFound)
+        {
+            throw;
+        }
         catch (Exception e)
         {
             Console.WriteLine($"Error downloading package {name}.{version}: {e.Message}");
@@ -174,6 +178,10 @@ public static class NugetDetails
 		}
         catch (HttpRequestException e)
 		{
+			if (e.StatusCode == HttpStatusCode.NotFound)
+			{
+				throw;
+			}
 			Console.WriteLine($"Error downloading package: {e.Message}");
 			// check the inner exception for more details
 			if (e.InnerException != null)

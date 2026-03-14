@@ -97,7 +97,11 @@ func add_ver_string(ver_string: String):
 			ver_string += " (Steam edition)"
 	elif report.is_mono_detected():
 		ver_string += " (Mono)"
+	var custom_version_note := ""
+	if report.is_custom_version_detected():
+		custom_version_note = "[b]Custom Godot engine version detected!\nYou may encounter errors when opening the project in the editor.[/b]\n" + custom_version_note
 	EDITOR_MESSAGE_LABEL.text = EDITOR_MESSAGE_LABEL.text.replace("<GODOT_VER>", "[url=" + get_url_for_tag(tag, report.is_steam_detected()) + "]"+ ver_string + "[/url]")
+	EDITOR_MESSAGE_LABEL.text = EDITOR_MESSAGE_LABEL.text.replace("<CUSTOM_VER_NOTE>", custom_version_note)
 
 func add_log_file(log_path: String):
 	recovery_folder = log_path.get_base_dir()

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2016 Daniel Grunwald
+// Copyright (c) 2016 Daniel Grunwald
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -155,6 +155,7 @@ namespace GodotMonoDecomp
 		public Dictionary<string, string> SubProjectMap { get; private set; } = [];
 
 		public string ProjectCSProjPath { get; private set; } = "";
+		public bool CustomVersionDetected { get; private set; } = false;
 
 		DotNetCoreDepInfo? depInfo;
 
@@ -165,12 +166,14 @@ namespace GodotMonoDecomp
 											Dictionary<TypeDefinitionHandle, string> handleToFileMap,
 											Dictionary<string, string> subProjectMap,
 											DotNetCoreDepInfo? depInfo,
+											bool customVersionDetected = false,
 											CancellationToken cancellationToken = default(CancellationToken))
 		{
 			this.excludeTypes = excludeTypes?.ToHashSet() ?? [];
 			this.handleToFileMap = handleToFileMap ?? [];
 			this.depInfo = depInfo;
 			this.SubProjectMap = subProjectMap ?? [];
+			this.CustomVersionDetected = customVersionDetected;
 			ProjectId projectId;
 			if (projectFileWriter == null)
 			{
@@ -193,6 +196,7 @@ namespace GodotMonoDecomp
 			this.SubProjectMap = [];
 			this.directories = [];
 			this.ProjectCSProjPath = "";
+			this.CustomVersionDetected = false;
 			return projectId;
 		}
 

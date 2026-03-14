@@ -10,6 +10,7 @@
 #include "gdre_settings.h"
 #include "packed_file_info.h"
 #include "utility/common.h"
+#include "utility/file_access_buffer.h"
 
 bool DirSource::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key) {
 	if (!DirAccess::exists(p_path)) {
@@ -92,6 +93,44 @@ DirSource::~DirSource() {
 
 DirSource *DirSource::get_singleton() {
 	return singleton;
+}
+
+DummySource *DummySource::singleton = nullptr;
+
+DummySource::DummySource() {
+	singleton = this;
+}
+
+DummySource::~DummySource() {
+	if (singleton == this) {
+		singleton = nullptr;
+	}
+}
+
+DummySource *DummySource::get_singleton() {
+	return singleton;
+}
+
+bool DummySource::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key) {
+	(void)p_path;
+	(void)p_replace_files;
+	(void)p_offset;
+	(void)p_decryption_key;
+	return false;
+}
+
+Ref<FileAccess> DummySource::get_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key) {
+	(void)p_path;
+	(void)p_file;
+	(void)p_decryption_key;
+	Ref<FileAccessBuffer> buffer = FileAccessBuffer::create();
+	Vector<uint8_t> data = { '\0' };
+	Error err = buffer->open_custom(data);
+	if (err != OK) {
+		return nullptr;
+	}
+	buffer->seek(0);
+	return buffer;
 }
 
 Error GDREPackedData::add_pack(const String &p_path, bool p_replace_files, uint64_t p_offset) {
@@ -205,6 +244,11 @@ void GDREPackedData::add_pack_source(PackSource *p_source) {
 	if (p_source != nullptr) {
 		sources.push_back(p_source);
 	}
+}
+
+void GDREPackedData::add_dummy_path(const String &p_pkg_path, const String &p_path) {
+	// Dummy files must have non-zero offset to avoid being treated as erased.
+	add_path(p_pkg_path, p_path, 1, 1, MD5_EMPTY, &dummy_source, false, false, false, false);
 }
 
 uint8_t *GDREPackedData::get_file_hash(const String &p_path) {

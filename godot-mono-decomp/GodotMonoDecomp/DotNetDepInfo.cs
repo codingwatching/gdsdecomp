@@ -1,6 +1,7 @@
 using ICSharpCode.Decompiler.Metadata;
 using ICSharpCode.Decompiler.Util;
 using Newtonsoft.Json.Linq;
+using System.Net;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -241,7 +242,17 @@ public class DotNetCoreDepInfo
 			return;
 		}
 
-		var hash = await NugetDetails.ResolvePackageAndGetContentHash(Name, Version, cancellationToken);
+		string? hash;
+		try
+		{
+			hash = await NugetDetails.ResolvePackageAndGetContentHash(Name, Version, cancellationToken);
+		}
+		catch (HttpRequestException e) when (e.StatusCode == HttpStatusCode.NotFound)
+		{
+			// If the package/version is missing from nuget.org, treat it as a definitive mismatch.
+			HashMatchesNugetOrgStatus = HashMatchesNugetOrg.NoMatch;
+			return;
+		}
 		if (hash == null)
 		{
 			HashMatchesNugetOrgStatus = HashMatchesNugetOrg.Unknown;

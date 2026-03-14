@@ -144,12 +144,12 @@ public static class Common
 		}
 
 		// find the ns in the path
-		if (!path.StartsWith(ns))
+		if (!path.ToLower().StartsWith(ns.ToLower()))
 		{
 			ns = ns.Replace('.', '/');
 		}
 
-		if (path.StartsWith(ns))
+		if (path.ToLower().StartsWith(ns.ToLower()))
 		{
 			return path.Substring(ns.Length + 1);
 		}
