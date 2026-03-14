@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2020 Siegfried Pammer
+// Copyright (c) 2020 Siegfried Pammer
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -36,6 +36,8 @@ public interface IGodotProjectWithSettingsProvider : IProjectInfoProvider
 	public Dictionary<string, string> SubProjectMap { get; }
 
 	public string ProjectCSProjPath { get; }
+
+	public bool CustomVersionDetected { get; }
 
 }
 
@@ -126,6 +128,10 @@ namespace GodotMonoDecomp
 					gdver = new Version(3, 0, 0);
 				}
 				var godotVersion = gdver?.ToString(3);
+				// if (project.CustomVersionDetected)
+				// {
+				// 	godotVersion = GodotStuff.GetGodotSharpPackageDep(depInfo)?.Version ?? godotVersion;
+				// }
 				// GodotSharp for 3.x always wrote the version number as "1.0.0" in the project file
 				if (gdver == null || gdver.Major < 3)
 				{
@@ -150,7 +156,7 @@ namespace GodotMonoDecomp
 			xml.WriteAttributeString("Sdk", sdkString);
 
 			PlaceIntoTag("PropertyGroup", xml, () => WriteAssemblyInfo(xml, module, project, projectType));
-			PlaceIntoTag("PropertyGroup", xml, () => WriteProjectInfo(xml, project));
+			PlaceIntoTag("PropertyGroup", xml, () => WriteProjectInfo(xml, project, projectType));
 			PlaceIntoTag("PropertyGroup", xml, () => WriteMiscellaneousPropertyGroup(xml, files));
 			PlaceIntoTag("ItemGroup", xml, () => WriteResources(xml, files));
 			if (settings.CreateAdditionalProjectsForProjectReferences && depInfo != null)
@@ -391,12 +397,16 @@ namespace GodotMonoDecomp
 			}
 		}
 
-		static void WriteProjectInfo(XmlTextWriter xml, IProjectInfoProvider project)
+		static void WriteProjectInfo(XmlTextWriter xml, IGodotProjectWithSettingsProvider project, ProjectType projectType)
 		{
 			xml.WriteElementString("LangVersion",
 				project.LanguageVersion.ToString().Replace("CSharp", "").Replace('_', '.'));
 			xml.WriteElementString("AllowUnsafeBlocks", TrueString);
 			xml.WriteElementString("CheckForOverflowUnderflow", project.CheckForOverflowUnderflow ? TrueString : FalseString);
+			if (project.CustomVersionDetected && projectType == ProjectType.Godot)
+			{
+				xml.WriteElementString("DisableImplicitGodotSharpReferences", TrueString);
+			}
 
 			if (project.StrongNameKeyFile != null)
 			{
@@ -582,7 +592,7 @@ namespace GodotMonoDecomp
 			}
 		}
 
-		static void WriteReferences(XmlTextWriter xml, MetadataFile module, IProjectInfoProvider project,
+		static void WriteReferences(XmlTextWriter xml, MetadataFile module, IGodotProjectWithSettingsProvider project,
 			ProjectType projectType, DotNetCoreDepInfo? deps, GodotMonoDecompSettings settings)
 		{
 			string copyToDir = Path.Combine(project.TargetDirectory, "_mono_referenced_assemblies");
@@ -625,23 +635,30 @@ namespace GodotMonoDecomp
 
 				if (ImplicitGodotReferences.Contains(reference.Name))
 				{
-					godotSharpRefs.Add(reference);
-					continue;
+					if (project.CustomVersionDetected){
+						xml.WriteComment($"Implicitly-included assembly '{reference.Name}' is force-included because a custom version is detected");
+					} else {
+						godotSharpRefs.Add(reference);
+						continue;
+					}
 				}
-
-				if (DepExistsInPackages(reference))
+				else if (DepExistsInPackages(reference))
 				{
 					packageReferences.Add(reference);
 					continue;
 				}
-
-				if (IsProjectReference(reference))
+				else if (IsProjectReference(reference))
 				{
 					projectReferences.Add(reference);
 					continue;
 				}
 
 				WriteRef(xml, reference, true);
+				// if the reference is GodotSharp and there is no GodotSharpEditor reference, we have to add it manually
+				if (reference.Name.Equals("GodotSharp", StringComparison.OrdinalIgnoreCase) && !module.AssemblyReferences.Any(r => r.Name.Equals("GodotSharpEditor", StringComparison.OrdinalIgnoreCase)))
+				{
+					WriteRef(xml, reference, true, "GodotSharpEditor");
+				}
 			}
 
 			if (godotSharpRefs.Count > 0)
@@ -770,10 +787,10 @@ namespace GodotMonoDecomp
 				}
 			}
 
-			void WriteRef(XmlTextWriter newXml, AssemblyReference reference, bool realRef)
+			void WriteRef(XmlTextWriter newXml, AssemblyReference reference, bool realRef, string? nameOverride = null)
 			{
 				newXml.WriteStartElement("Reference");
-				newXml.WriteAttributeString("Include", reference.Name);
+				newXml.WriteAttributeString("Include", nameOverride ?? reference.Name);
 
 				var asembly = project.AssemblyResolver.Resolve(reference);
 				if (asembly != null && !project.AssemblyReferenceClassifier.IsGacAssembly(reference))

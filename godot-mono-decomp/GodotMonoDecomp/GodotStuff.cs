@@ -230,6 +230,11 @@ public static class GodotStuff
 {
 	public const string BACKING_FIELD_PREFIX = "backing_";
 
+	public static DotNetCoreDepInfo? GetGodotSharpPackageDep(DotNetCoreDepInfo? depInfo)
+	{
+		return depInfo?.deps.FirstOrDefault(dep =>
+			dep.Type == "package" && string.Equals(dep.Name, "GodotSharp", StringComparison.OrdinalIgnoreCase));
+	}
 
 	public static string? GetScriptPathAttributeValue(MetadataReader metadata, TypeDefinitionHandle h)
 	{

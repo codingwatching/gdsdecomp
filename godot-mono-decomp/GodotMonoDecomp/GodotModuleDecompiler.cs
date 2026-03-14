@@ -90,9 +90,74 @@ public class GodotModuleDecompiler
 	public readonly List<string> originalProjectFiles;
 	public readonly Version godotVersion;
 	public readonly Dictionary<string, GodotScriptMetadata>? godot3xMetadata;
+	public bool CustomVersionDetected { get; private set; }
 
 	private readonly List<Task> packageHashTasks;
 	private readonly CancellationTokenSource packageHashTaskCancelSrc;
+
+
+	private static string? GetPreReleaseLabel(string? versionText)
+	{
+		if (string.IsNullOrWhiteSpace(versionText))
+		{
+			return null;
+		}
+
+		int dashIndex = versionText.IndexOf('-');
+		if (dashIndex < 0 || dashIndex >= versionText.Length - 1)
+		{
+			return null;
+		}
+
+		string prereleaseText = versionText[(dashIndex + 1)..];
+		int buildMetadataSeparator = prereleaseText.IndexOf('+');
+		if (buildMetadataSeparator >= 0)
+		{
+			prereleaseText = prereleaseText[..buildMetadataSeparator];
+		}
+
+		if (string.IsNullOrWhiteSpace(prereleaseText))
+		{
+			return null;
+		}
+
+		var label = prereleaseText.Split('.')[0].Trim();
+		return string.IsNullOrEmpty(label) ? null : label.ToLowerInvariant();
+	}
+
+	private static bool IsAllowedGodotPreReleaseLabel(string label)
+	{
+		return label.ToLower().StartsWith("alpha") || label.ToLower().StartsWith("beta") || label.ToLower().StartsWith("rc") || label.ToLower().StartsWith("dev");
+	}
+
+	private bool DetectCustomVersionFromPrerelease(DotNetCoreDepInfo? mainDepInfo)
+	{
+		var versionText = GodotStuff.GetGodotSharpPackageDep(mainDepInfo)?.Version
+		                  ?? Settings.GodotVersionOverride?.ToString();
+		var prereleaseLabel = GetPreReleaseLabel(versionText);
+		return prereleaseLabel != null && !IsAllowedGodotPreReleaseLabel(prereleaseLabel);
+	}
+
+	private bool DetectCustomVersionFromPackageHash()
+	{
+		if (!Settings.VerifyNuGetPackageIsFromNugetOrg)
+		{
+			return false;
+		}
+
+		return new List<GodotModule> { MainModule }
+			.Concat(AdditionalModules)
+			.SelectMany(module => module.depInfo?.deps ?? [])
+			.Any(dep =>
+				dep.Type == "package" &&
+				string.Equals(dep.Name, "GodotSharp", StringComparison.OrdinalIgnoreCase) &&
+				dep.HashMatchesNugetOrgStatus == DotNetCoreDepInfo.HashMatchesNugetOrg.NoMatch);
+	}
+
+	public bool IsCustomVersionDetected()
+	{
+		return CustomVersionDetected;
+	}
 
 
 	public void AddSubProjects(string assemblyPath, DotNetCoreDepInfo depInfo, List<string> names, HashSet<string> canonicalSubDirs)
@@ -155,6 +220,7 @@ public class GodotModuleDecompiler
 			AssemblyResolver.AddSearchDirectory(path);
 		}
 		MainModule = new GodotModule(mod, _mainDepInfo, null, Settings, AssemblyResolver);
+		CustomVersionDetected = DetectCustomVersionFromPrerelease(_mainDepInfo);
 
 		godotVersion = Settings.GodotVersionOverride ?? GodotStuff.GetGodotVersion(MainModule.Module) ?? new Version(0, 0, 0, 0);
 		if (godotVersion.Major <= 3)
@@ -178,22 +244,20 @@ public class GodotModuleDecompiler
 
 			AddSubProjects(assemblyPath, MainModule.depInfo, names, canonicalSubDirs);
 
-			if (Settings.VerifyNuGetPackageIsFromNugetOrg)
+		}
+
+		if (Settings.VerifyNuGetPackageIsFromNugetOrg)
+		{
+			foreach (var module in new List<GodotModule> { MainModule }.Concat(AdditionalModules))
 			{
-				foreach (var dep in MainModule.depInfo.deps.Where(d => d is { Type: "package" } && !ProjectFileWriterGodotStyle.ImplicitGodotReferences.Contains(d.Name)))
+				foreach (var dep in module.depInfo?.deps.Where(d =>
+					         d is { Type: "package" } &&
+					         (!ProjectFileWriterGodotStyle.ImplicitGodotReferences.Contains(d.Name) ||
+					          string.Equals(d.Name, "GodotSharp", StringComparison.OrdinalIgnoreCase))) ?? [])
 				{
 					packageHashTasks.Add(
 						Task.Run(async () => await dep.StartResolvePackageAndCheckHash(packageHashTaskCancelSrc.Token), packageHashTaskCancelSrc.Token)
 						);
-				}
-				foreach (var module in AdditionalModules)
-				{
-					foreach (var dep in module.depInfo?.deps.Where(d => d is { Type: "package" } && !ProjectFileWriterGodotStyle.ImplicitGodotReferences.Contains(d.Name)) ?? [])
-					{
-						packageHashTasks.Add(
-							Task.Run(async () => await dep.StartResolvePackageAndCheckHash(packageHashTaskCancelSrc.Token), packageHashTaskCancelSrc.Token)
-							);
-					}
 				}
 			}
 		}
@@ -276,6 +340,7 @@ public class GodotModuleDecompiler
 				Console.WriteLine("Waiting for package hash tasks to complete...");
 				Task.WaitAll([waitTask], token);
 				Console.WriteLine("Package hash tasks completed.");
+				CustomVersionDetected = CustomVersionDetected || DetectCustomVersionFromPackageHash();
 				packageHashTasks.Clear();
 			}
 			else
@@ -317,7 +382,7 @@ public class GodotModuleDecompiler
 				using (var projectFileWriter = new StreamWriter(File.OpenWrite(csprojPath)))
 				{
 					projectId = godotProjectDecompiler.DecompileGodotProject(
-						module.Module, targetDirectory, projectFileWriter, typesToExclude, module.fileMap.ToDictionary(pair => pair.Value, pair => pair.Key), moduleToCsProjPath, module.depInfo, token);
+						module.Module, targetDirectory, projectFileWriter, typesToExclude, module.fileMap.ToDictionary(pair => pair.Value, pair => pair.Key), moduleToCsProjPath, module.depInfo, CustomVersionDetected, token);
 				}
 
 				ProjectItem item = new ProjectItem(csprojPath, projectId.PlatformName, projectId.Guid, projectId.TypeGuid);
