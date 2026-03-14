@@ -970,6 +970,7 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 				ERR_PRINT("Failed to decompile C# scripts!");
 				report->failed_scripts.append_array(cs_files);
 			} else {
+				report->custom_version_detected = decompiler->is_custom_version_detected();
 				// compile the project to prevent editor errors
 				if (GDREConfig::get_singleton()->get_setting("CSharp/compile_after_decompile", false)) {
 					int ret_code;
@@ -1923,6 +1924,14 @@ Dictionary ImportExporterReport::get_session_notes() {
 	base_ext_set.insert("ogg");
 	base_ext_set.insert("mp3");
 
+	if (custom_version_detected) {
+		Dictionary custom_version;
+		custom_version["title"] = "Custom Godot engine version detected";
+		custom_version["message"] = "Detected a custom version of the GodotSharp assembly.\nThis project is likely using a custom version of the Godot engine.\nYou may encounter errors when opening the project in the editor.";
+		custom_version["details"] = PackedStringArray();
+		notes["custom_version"] = custom_version;
+	}
+
 	if (!unsupported_types.is_empty()) {
 		Dictionary unsupported;
 		unsupported["title"] = "Unsupported Resources Detected";
@@ -2274,9 +2283,10 @@ String ImportExporterReport::get_editor_message_string() {
 	if (godotsteam_detected) {
 		report += "GodotSteam can be found here: https://github.com/CoaguCo-Industries/GodotSteam/releases \n";
 	}
-	report += "Note: the project may be using a custom version of Godot. Detection for this has not been implemented yet." + String("\n");
-	report += "If you find that you have many non-import errors upon opening the project " + String("\n");
-	report += "(i.e. scripts or shaders have many errors), use the original game's binary as the export template." + String("\n");
+	if (custom_version_detected) {
+		report += "Custom Godot engine version detected!" + String("\n");
+		report += "You may encounter errors when opening the project in the editor." + String("\n");
+	}
 
 	return report;
 }
@@ -2425,6 +2435,10 @@ bool ImportExporterReport::is_mono_detected() const {
 	return mono_detected;
 }
 
+bool ImportExporterReport::is_custom_version_detected() const {
+	return custom_version_detected;
+}
+
 void ImportExporterReport::print_report() {
 	print_line("\n\n********************************EXPORT REPORT********************************" + String("\n"));
 	print_line(get_report_string());
@@ -2471,6 +2485,7 @@ Dictionary ImportExporterReport::to_json() const {
 	json["had_encryption_error"] = had_encryption_error;
 	json["godotsteam_detected"] = godotsteam_detected;
 	json["mono_detected"] = mono_detected;
+	json["custom_version_detected"] = custom_version_detected;
 	json["exported_scenes"] = exported_scenes;
 	json["show_headless_warning"] = show_headless_warning;
 	json["session_files_total"] = session_files_total;
@@ -2512,6 +2527,7 @@ Ref<ImportExporterReport> ImportExporterReport::from_json(const Dictionary &p_js
 	report->gdre_version = p_json.get("gdre_version", "");
 	report->godotsteam_detected = p_json.get("godotsteam_detected", false);
 	report->mono_detected = p_json.get("mono_detected", false);
+	report->custom_version_detected = p_json.get("custom_version_detected", false);
 	report->exported_scenes = p_json.get("exported_scenes", false);
 	report->show_headless_warning = p_json.get("show_headless_warning", false);
 	report->session_files_total = p_json.get("session_files_total", 0);
@@ -2556,6 +2572,9 @@ bool ImportExporterReport::is_equal_to(const Ref<ImportExporterReport> &p_import
 		return false;
 	}
 	if (mono_detected != p_import_exporter_report->mono_detected) {
+		return false;
+	}
+	if (custom_version_detected != p_import_exporter_report->custom_version_detected) {
 		return false;
 	}
 	if (exported_scenes != p_import_exporter_report->exported_scenes) {
@@ -2637,6 +2656,7 @@ void ImportExporterReport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_ver"), &ImportExporterReport::get_ver);
 	ClassDB::bind_method(D_METHOD("is_steam_detected"), &ImportExporterReport::is_steam_detected);
 	ClassDB::bind_method(D_METHOD("is_mono_detected"), &ImportExporterReport::is_mono_detected);
+	ClassDB::bind_method(D_METHOD("is_custom_version_detected"), &ImportExporterReport::is_custom_version_detected);
 }
 
 #include "exporters/gdre_test_macros.h"

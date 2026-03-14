@@ -137,7 +137,7 @@ theme_override_styles/background = SubResource("StyleBoxEmpty_7fdsg")
 theme_override_styles/fill = SubResource("StyleBoxEmpty_76kox")
 bbcode_enabled = true
 text = "[b]Use Godot editor version <GODOT_VER> to edit the project.[/b]
-Note: Detection for custom Godot builds has not been implemented yet."
+<CUSTOM_VER_NOTE>"
 fit_content = true
 
 [node name="VSeparator2" type="VSeparator" parent="Control/parentVBOX/VBoxContainer/HBoxContainer/VBoxText"]

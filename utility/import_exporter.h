@@ -18,6 +18,7 @@ class ImportExporterReport : public RefCounted {
 	bool had_encryption_error = false;
 	bool mono_detected = false;
 	bool godotsteam_detected = false;
+	bool custom_version_detected = false;
 	bool exported_scenes = false;
 	bool show_headless_warning = false;
 	int session_files_total = 0;
@@ -81,6 +82,7 @@ public:
 
 	bool is_steam_detected() const;
 	bool is_mono_detected() const;
+	bool is_custom_version_detected() const;
 
 	void print_report();
 	String get_gdre_version() const;
