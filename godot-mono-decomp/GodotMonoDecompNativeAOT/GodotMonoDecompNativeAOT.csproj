@@ -12,7 +12,10 @@
     <PublishAot>true</PublishAot>
 	<PublishProfile>AOT</PublishProfile>
   </PropertyGroup>
-
+  <!-- force macos 11 compatibility -->
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('osx'))">
+	<AppleMinOSVersion>11.0</AppleMinOSVersion>
+  </PropertyGroup>
   <ItemGroup>
 	<CustomLinkerArg Include="-install_name @rpath/$(AssemblyName).dylib" Condition="'$(NativeLib.ToLower())' == 'shared' and $(RuntimeIdentifier.StartsWith('osx'))" />
 	<CustomLinkerArg Include="-Wl,-soname,$(AssemblyName).so" Condition="'$(NativeLib.ToLower())' == 'shared' and $(RuntimeIdentifier.StartsWith('linux-bionic'))" />
