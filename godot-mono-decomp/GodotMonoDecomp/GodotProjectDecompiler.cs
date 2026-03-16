@@ -310,6 +310,7 @@ namespace GodotMonoDecomp
 			decompiler.AstTransforms.Add(new GodotMonoDecomp.RemoveEmbeddedAttributes());
 			decompiler.AstTransforms.Add(new RestoreGeneratedRegexMethods());
 			decompiler.AstTransforms.Add(new RemoveGeneratedExceptionThrows());
+			decompiler.AstTransforms.Add(new RemoveBogusBaseConstructorCalls());
 			decompiler.AstTransforms.Add(new FixSwitchExpressionCasts());
 			if (Settings.RemoveGeneratedJsonContextBody)
 			{
