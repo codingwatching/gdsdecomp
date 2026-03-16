@@ -39,14 +39,21 @@ public class GodotMonoDecompSettings : DecompilerSettings
 	/// </summary>
 	public Version? GodotVersionOverride { get; set; } = null;
 
-	public GodotMonoDecompSettings() : base()
+	private void InitializeDefaultSettings()
 	{
 		UseNestedDirectoriesForNamespaces = true;
+		// This avoids certain race conditions during static initialization when attempting to run the decompiled project.
+		AlwaysMoveInitializer = true;
+	}
+
+	public GodotMonoDecompSettings() : base()
+	{
+		InitializeDefaultSettings();
 	}
 
 	public GodotMonoDecompSettings(LanguageVersion languageVersion) : base(languageVersion)
 	{
-		UseNestedDirectoriesForNamespaces = true;
+		InitializeDefaultSettings();
 	}
 
 
