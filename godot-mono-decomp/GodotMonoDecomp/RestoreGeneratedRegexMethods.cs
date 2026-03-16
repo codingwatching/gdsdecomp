@@ -28,7 +28,7 @@ public class RestoreGeneratedRegexMethods : DepthFirstAstVisitor, IAstTransform
 			return;
 		}
 
-		bool hasRegexGeneratorGeneratedCode = RemoveRegexGeneratorGeneratedCodeAttributes(methodDeclaration);
+		bool hasRegexGeneratorGeneratedCode = Common.RemoveGeneratedCodeAttributes(methodDeclaration.Attributes, RegexGeneratorName);
 		bool hasGeneratedBodyPattern = HasGeneratedRegexBodyPattern(methodDeclaration);
 		if (!hasGeneratedBodyPattern && !hasRegexGeneratorGeneratedCode)
 		{
@@ -50,7 +50,7 @@ public class RestoreGeneratedRegexMethods : DepthFirstAstVisitor, IAstTransform
 		{
 			foreach (var attribute in section.Attributes)
 			{
-				if (IsAttribute(attribute, GeneratedRegexAttributeFullName, "GeneratedRegex"))
+				if (Common.IsAttribute(attribute, GeneratedRegexAttributeFullName, "GeneratedRegex"))
 				{
 					return true;
 				}
@@ -62,40 +62,7 @@ public class RestoreGeneratedRegexMethods : DepthFirstAstVisitor, IAstTransform
 
 	private static bool RemoveRegexGeneratorGeneratedCodeAttributes(MethodDeclaration methodDeclaration)
 	{
-		bool removedAny = false;
-		foreach (var section in methodDeclaration.Attributes.ToArray())
-		{
-			foreach (var attribute in section.Attributes.ToArray())
-			{
-				if (IsRegexGeneratorGeneratedCodeAttribute(attribute))
-				{
-					attribute.Remove();
-					removedAny = true;
-				}
-			}
-
-			if (section.Attributes.Count == 0)
-			{
-				section.Remove();
-			}
-		}
-
-		return removedAny;
-	}
-
-	private static bool IsRegexGeneratorGeneratedCodeAttribute(ICSharpCode.Decompiler.CSharp.Syntax.Attribute attribute)
-	{
-		if (!IsAttribute(attribute, GeneratedCodeAttributeFullName, "GeneratedCode"))
-		{
-			return false;
-		}
-
-		if (attribute.Arguments.FirstOrDefault() is PrimitiveExpression { Value: string toolName })
-		{
-			return toolName == RegexGeneratorName;
-		}
-
-		return false;
+		return Common.RemoveGeneratedCodeAttributes(methodDeclaration.Attributes, RegexGeneratorName);
 	}
 
 	private static bool HasGeneratedRegexBodyPattern(MethodDeclaration methodDeclaration)
@@ -123,47 +90,5 @@ public class RestoreGeneratedRegexMethods : DepthFirstAstVisitor, IAstTransform
 		string targetText = memberReference.Target.ToString();
 		return targetText.Contains("RegexGenerator", StringComparison.Ordinal)
 			|| targetText.Contains("_003CRegexGenerator", StringComparison.Ordinal);
-	}
-
-	private static bool IsAttribute(ICSharpCode.Decompiler.CSharp.Syntax.Attribute attribute, string expectedFullName, string expectedShortName)
-	{
-		if (attribute.Type.Annotation<TypeResolveResult>() is { Type: { } typeResult })
-		{
-			if (string.Equals(typeResult.FullName, expectedFullName, StringComparison.Ordinal))
-			{
-				return true;
-			}
-		}
-
-		if (attribute.GetSymbol() is IMethod method && method.DeclaringType != null)
-		{
-			if (string.Equals(method.DeclaringType.FullName, expectedFullName, StringComparison.Ordinal))
-			{
-				return true;
-			}
-		}
-
-		return HasMatchingShortAttributeName(attribute.Type.ToString(), expectedShortName);
-	}
-
-	private static bool HasMatchingShortAttributeName(string typeName, string expectedShortName)
-	{
-		if (typeName.StartsWith("global::", StringComparison.Ordinal))
-		{
-			typeName = typeName.Substring("global::".Length);
-		}
-
-		int lastDot = typeName.LastIndexOf('.');
-		if (lastDot >= 0 && lastDot < typeName.Length - 1)
-		{
-			typeName = typeName.Substring(lastDot + 1);
-		}
-
-		if (typeName.EndsWith("Attribute", StringComparison.Ordinal))
-		{
-			typeName = typeName.Substring(0, typeName.Length - "Attribute".Length);
-		}
-
-		return string.Equals(typeName, expectedShortName, StringComparison.Ordinal);
 	}
 }
