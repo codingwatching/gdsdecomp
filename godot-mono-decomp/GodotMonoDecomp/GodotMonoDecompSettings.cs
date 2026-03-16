@@ -39,6 +39,11 @@ public class GodotMonoDecompSettings : DecompilerSettings
 	/// </summary>
 	public Version? GodotVersionOverride { get; set; } = null;
 
+	/// <summary>
+	/// Whether to remove the body of the generated JsonSourceGeneration context classes.
+	/// </summary>
+	public bool RemoveGeneratedJsonContextBody { get; set; } = false;
+
 	private void InitializeDefaultSettings()
 	{
 		UseNestedDirectoriesForNamespaces = true;
@@ -59,7 +64,7 @@ public class GodotMonoDecompSettings : DecompilerSettings
 
 	public new GodotMonoDecompSettings Clone()
 	{
-		var settings = (GodotMonoDecompSettings) base.Clone();
+		var settings = (GodotMonoDecompSettings)base.Clone();
 		settings.WriteNuGetPackageReferences = WriteNuGetPackageReferences;
 		settings.VerifyNuGetPackageIsFromNugetOrg = VerifyNuGetPackageIsFromNugetOrg;
 		settings.CopyOutOfTreeReferences = CopyOutOfTreeReferences;

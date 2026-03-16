@@ -309,8 +309,11 @@ namespace GodotMonoDecomp
 			decompiler.AstTransforms.Add(new RemoveAutoAccessor());
 			decompiler.AstTransforms.Add(new GodotMonoDecomp.RemoveEmbeddedAttributes());
 			decompiler.AstTransforms.Add(new RestoreGeneratedRegexMethods());
-			decompiler.AstTransforms.Add(new RemoveJsonSourceGenerationClassBody());
 			decompiler.AstTransforms.Add(new RemoveGeneratedExceptionThrows());
+			if (Settings.RemoveGeneratedJsonContextBody)
+			{
+				decompiler.AstTransforms.Add(new RemoveJsonSourceGenerationClassBody());
+			}
 			if (Settings.GodotVersionOverride?.Major == 3)
 			{
 				decompiler.AstTransforms.Add(new RemoveMathF3x());
