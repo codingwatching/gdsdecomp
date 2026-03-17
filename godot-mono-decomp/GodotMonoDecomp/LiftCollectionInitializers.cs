@@ -207,6 +207,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 		{
 			Statement? boundaryStatement = statements[boundaryIndex];
 			if (TryBuildConstructorInitializer(
+					constructorDeclaration,
 					statements,
 					boundaryIndex,
 					boundaryStatement,
@@ -1683,6 +1684,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 	}
 
 	private static bool TryBuildConstructorInitializer(
+		ConstructorDeclaration constructorDeclaration,
 		IReadOnlyList<Statement> statements,
 		int boundaryIndex,
 		Statement boundaryStatement,
@@ -1710,6 +1712,11 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 					newInitializer.Arguments.Add(recoveredExpression.Clone());
 					break;
 				case IdentifierExpression { Identifier: var localName }:
+					if (constructorDeclaration.Parameters.Any(parameter => parameter.Name == localName))
+					{
+						newInitializer.Arguments.Add(arg.Clone());
+						break;
+					}
 					if (!TryMatchCtorArgumentListPrelude(
 							statements,
 							boundaryIndex,
