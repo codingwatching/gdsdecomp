@@ -44,6 +44,12 @@ public class GodotMonoDecompSettings : DecompilerSettings
 	/// </summary>
 	public bool RemoveGeneratedJsonContextBody { get; set; } = false;
 
+	/// <summary>
+	/// Whether to run LiftCollectionInitializers.
+	/// If false, the legacy RemoveBogusBaseConstructorCalls transform is used instead.
+	/// </summary>
+	public bool EnableCollectionInitializerLifting { get; set; } = true;
+
 	private void InitializeDefaultSettings()
 	{
 		UseNestedDirectoriesForNamespaces = true;
@@ -71,6 +77,7 @@ public class GodotMonoDecompSettings : DecompilerSettings
 		settings.CreateAdditionalProjectsForProjectReferences = CreateAdditionalProjectsForProjectReferences;
 		settings.OverrideLanguageVersion = OverrideLanguageVersion;
 		settings.GodotVersionOverride = GodotVersionOverride;
+		settings.EnableCollectionInitializerLifting = EnableCollectionInitializerLifting;
 		return settings;
 	}
 

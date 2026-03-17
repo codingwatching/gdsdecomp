@@ -467,7 +467,10 @@ public class GodotModuleDecompiler
 		}
 
 		var decompiler = module.CreateCSharpDecompilerWithPartials([type]);
-		return decompiler.DecompileTypesAsString([type]);
+		var tree = decompiler.DecompileTypes([type]);
+		var stringWriter = new StringWriter();
+		tree.AcceptVisitor(new GodotCSharpOutputVisitor(stringWriter, Settings.CSharpFormattingOptions));
+		return stringWriter.ToString();
 	}
 
 	private string GetPathForType(ITypeDefinition? typeDef){
@@ -637,7 +640,7 @@ public class GodotModuleDecompiler
 			}
 		}
         StringWriter stringWriter = new StringWriter();
-        syntaxTree.AcceptVisitor(new CSharpOutputVisitor(stringWriter, Settings.CSharpFormattingOptions));
+        syntaxTree.AcceptVisitor(new GodotCSharpOutputVisitor(stringWriter, Settings.CSharpFormattingOptions));
 		var scriptText = stringWriter.ToString();
 
 		var scriptInfo = new GodotScriptInfo(
