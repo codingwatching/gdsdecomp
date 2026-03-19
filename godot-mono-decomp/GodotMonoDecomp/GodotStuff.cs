@@ -336,16 +336,24 @@ public static class GodotStuff
 	}
 
 
-	public static Dictionary<string, TypeDefinitionHandle> CreateFileMap(MetadataFile module,
+	public static Dictionary<string, List<TypeDefinitionHandle>> CreateFileMap(MetadataFile module,
 		IEnumerable<TypeDefinitionHandle> typesToDecompile,
 		List<string> filesInOriginal,
 		Dictionary<string, GodotScriptMetadata>? scriptMetadata,
 		IEnumerable<string>? excludedSubdirectories,
-		bool useNestedDirectoriesForNamespaces)
+		bool useNestedDirectoriesForNamespaces,
+		ISet<TypeDefinitionHandle>? godotClassHandles = null)
 	{
-		var fileMap = new Dictionary<string, TypeDefinitionHandle>();
+		var fileMap = new Dictionary<string, List<TypeDefinitionHandle>>(StringComparer.OrdinalIgnoreCase);
+		godotClassHandles ??= new HashSet<TypeDefinitionHandle>();
+		var canonicalPaths = new HashSet<string>();
+		var canonicalHandles = new HashSet<TypeDefinitionHandle>();
 		var metadata = module.Metadata;
 		Dictionary<string, string>? metadataFQNToFileMap = null;
+		// look at the files in the original project and find a common root for all the files
+		// var allFiles = filesInOriginal.Select(f => Path.GetDirectoryName(f) ?? "").Where(d => !string.IsNullOrEmpty(d) && !d.StartsWith("addons", StringComparison.OrdinalIgnoreCase)).ToHashSet<string>();
+		string? globalCommonRoot = null;//Common.FindCommonRoot(allFiles) ?? null;
+
 		if (scriptMetadata != null)
 		{
 			// create a map of metadata FQN to file path
@@ -402,6 +410,99 @@ public static class GodotStuff
 			return IsExcludedSubdir(Path.GetDirectoryName(file));
 		}
 
+		void AddHandleToPath(string path, TypeDefinitionHandle h)
+		{
+			path = _NormalizePath(path);
+			if (!fileMap.TryGetValue(path, out var handles))
+			{
+				handles = [];
+				fileMap[path] = handles;
+			}
+			if (!handles.Contains(h))
+			{
+				handles.Add(h);
+			}
+		}
+
+		string RelocateByPrefixingUnderscoreDirectory(string path)
+		{
+			path = _NormalizePath(path);
+			var fileName = Path.GetFileName(path);
+			var dir = Path.GetDirectoryName(path);
+			// dir = string.IsNullOrEmpty(dir) ? "_" : "_" + _NormalizePath(dir);
+			dir = string.IsNullOrEmpty(dir) ? "_collision" : _PathCombine(dir, "_collision");
+
+			return _PathCombine(dir, fileName);
+		}
+
+		void RelocateExistingGlobalHandle(string currentPath, TypeDefinitionHandle existingGlobalHandle)
+		{
+			currentPath = _NormalizePath(currentPath);
+			if (!fileMap.TryGetValue(currentPath, out var currentHandles))
+			{
+				return;
+			}
+			if (!currentHandles.Remove(existingGlobalHandle))
+			{
+				return;
+			}
+			if (currentHandles.Count == 0)
+			{
+				fileMap.Remove(currentPath);
+			}
+			var relocatedPath = RelocateByPrefixingUnderscoreDirectory(currentPath);
+			PlaceHandleAtPath(relocatedPath, existingGlobalHandle);
+		}
+
+		void PlaceHandleAtPath(string path, TypeDefinitionHandle h)
+		{
+			path = _NormalizePath(path);
+			if (!godotClassHandles.Contains(h))
+			{
+				AddHandleToPath(path, h);
+				return;
+			}
+
+			while (true)
+			{
+				var existingHandles = fileMap.TryGetValue(path, out var hs) ? hs : [];
+				var existingGlobals = existingHandles.Where(godotClassHandles.Contains).ToList();
+
+				if (existingGlobals.Count == 0)
+				{
+					AddHandleToPath(path, h);
+					return;
+				}
+
+				bool incomingIsCanonical = canonicalHandles.Contains(h);
+				bool anyExistingCanonical = existingGlobals.Any(canonicalHandles.Contains);
+				if (incomingIsCanonical && anyExistingCanonical)
+				{
+					Console.Error.WriteLine(
+						$"Multiple canonical Godot class types map to '{path}'. Canonical collisions are not allowed.");
+					// just add it anyway
+					AddHandleToPath(path, h);
+					return;
+				}
+				if (!incomingIsCanonical && anyExistingCanonical)
+				{
+					path = RelocateByPrefixingUnderscoreDirectory(path);
+					continue;
+				}
+				if (incomingIsCanonical)
+				{
+					foreach (var existingGlobal in existingGlobals.Where(g => !canonicalHandles.Contains(g)).ToList())
+					{
+						RelocateExistingGlobalHandle(path, existingGlobal);
+					}
+					AddHandleToPath(path, h);
+					return;
+				}
+
+				path = RelocateByPrefixingUnderscoreDirectory(path);
+			}
+		}
+
 		var processAgain = new HashSet<TypeDefinitionHandle>();
 		var namespaceToDirectory = new Dictionary<string, HashSet<string>>();
 		void addToNamespaceToFile(string ns, string file)
@@ -420,17 +521,13 @@ public static class GodotStuff
 				namespaceToDirectory[ns] = new HashSet<string> { dir };
 			}
 		}
-		Dictionary<string, List<TypeDefinitionHandle>> canonicalPaths = new Dictionary<string, List<TypeDefinitionHandle>>();
-
 		void addToCanonicalPaths(string path, TypeDefinitionHandle h, TypeDefinition type)
 		{
-			if (!canonicalPaths.ContainsKey(path))
-			{
-				canonicalPaths[path] = new List<TypeDefinitionHandle>();
-			}
-			canonicalPaths[path].Add(h);
+			path = _NormalizePath(path);
+			canonicalPaths.Add(path);
+			canonicalHandles.Add(h);
 			addToNamespaceToFile(metadata.GetString(type.Namespace), path);
-			fileMap[path] = h;
+			PlaceHandleAtPath(path, h);
 		}
 
 		foreach (var h in typesToDecompile)
@@ -461,9 +558,14 @@ public static class GodotStuff
 				processAgain.Add(h);
 			}
 		}
-		namespaceToDirectory = DeduceParentNamespaceDirectories(namespaceToDirectory);
 
-		string default_dir = "src";
+		// 3.x games have much less canonical file paths than 4.x games, so do it after `GetPathFromOriginalFiles` step
+		if (scriptMetadata == null)
+		{
+			namespaceToDirectory = DeduceParentNamespaceDirectories(namespaceToDirectory);
+		}
+
+		string default_dir = !string.IsNullOrEmpty(globalCommonRoot) ? globalCommonRoot : "src";
 		while (IsExcludedSubdir(default_dir)){
 			default_dir = "_" + default_dir;
 		}
@@ -482,6 +584,10 @@ public static class GodotStuff
 			else
 			{
 				string dir = useNestedDirectoriesForNamespaces ? GodotProjectDecompiler.CleanUpPath(ns) : GodotProjectDecompiler.CleanUpDirectoryName(ns);
+				if (!string.IsNullOrEmpty(globalCommonRoot) && !dir.StartsWith(globalCommonRoot, StringComparison.OrdinalIgnoreCase))
+				{
+					dir = _PathCombine(globalCommonRoot, dir);
+				}
 				// ensure dir separator is '/'
 				dir = dir.Replace(Path.DirectorySeparatorChar, '/');
 				// TODO: come back to this
@@ -499,7 +605,6 @@ public static class GodotStuff
 			string scriptPath = "";
 			// empty vector of strings
 			var possibles = filesInOriginal.Where(f =>
-					!fileMap.ContainsKey(f) &&
 					Path.GetFileName(f) == Path.GetFileName(file_path)
 					&& !IsInExcludedSubdir(f)
 				)
@@ -508,7 +613,6 @@ public static class GodotStuff
 			if (possibles.Count == 0)
 			{
 				possibles = filesInOriginal.Where(f =>
-					!fileMap.ContainsKey(f) &&
 					Path.GetFileName(f).ToLower() == Path.GetFileName(file_path).ToLower()
 					&& !IsInExcludedSubdir(f)
 				).ToList();
@@ -563,18 +667,20 @@ public static class GodotStuff
 
 		foreach (var pair in potentialMap)
 		{
-			if (pair.Value.Count == 1)
+			foreach (var h in pair.Value)
 			{
-				var type = metadata.GetTypeDefinition(pair.Value[0]);
+				var type = metadata.GetTypeDefinition(h);
 				addToNamespaceToFile(metadata.GetString(type.Namespace), pair.Key);
-				fileMap[pair.Key] = pair.Value[0];
-			} else {
-				foreach (var h in pair.Value)
-				{
-					processAgainAgain.Add(h);
-				}
+				PlaceHandleAtPath(pair.Key, h);
 			}
 		}
+
+		if (scriptMetadata != null)
+		{
+			namespaceToDirectory = DeduceParentNamespaceDirectories(namespaceToDirectory);
+		}
+
+
 
 
 		HashSet<string> GetNamespaceDirectories(string ns)
@@ -586,20 +692,6 @@ public static class GodotStuff
 			return namespaceToDirectory.TryGetValue(ns, out var v1)
 				? v1
 				: [];
-		}
-
-		string AppendNumberToFile(string path){
-			var fileName = Path.GetFileName(path);
-			var fileStem = Path.GetFileNameWithoutExtension(fileName);
-			var fileExtension = Path.GetExtension(fileName);
-			var parentDir = Path.GetDirectoryName(path) ?? "";
-			var number = 1;
-			while (fileMap.ContainsKey(path))
-			{
-				path = _PathCombine(Path.GetDirectoryName(path) ?? "", fileStem + number.ToString() + fileExtension);
-				number++;
-			}
-			return path;
 		}
 
 		foreach (var h in processAgainAgain)
@@ -662,12 +754,8 @@ public static class GodotStuff
 					p = _PathCombine(default_dir, p);
 				}
 			}
-			if (fileMap.ContainsKey(p))
-			{
-				p = AppendNumberToFile(p);
-			}
 			p = _NormalizePath(p);
-			fileMap[p] = h;
+			PlaceHandleAtPath(p, h);
 		}
 
 		foreach (var h in dupes)
@@ -675,7 +763,7 @@ public static class GodotStuff
 			var auto_path = GetAutoFileNameForHandle(h);
 			var scriptPath = GetPathFromOriginalFiles(auto_path);
 
-			if (scriptPath == "" || scriptPath == "<multiple>" || fileMap.ContainsKey(scriptPath))
+			if (scriptPath == "" || scriptPath == "<multiple>")
 			{
 				scriptPath = auto_path;
 			}
@@ -684,35 +772,38 @@ public static class GodotStuff
 			{
 				scriptPath = _PathCombine(default_dir, scriptPath);
 			}
-			if (fileMap.ContainsKey(scriptPath))
-			{
-				scriptPath = AppendNumberToFile(scriptPath);
-			}
-
-			fileMap[scriptPath] = h;
+			PlaceHandleAtPath(scriptPath, h);
 		}
-		var caselessDict = new Dictionary<string, TypeDefinitionHandle>(StringComparer.OrdinalIgnoreCase);
+		var caselessDict = new Dictionary<string, List<TypeDefinitionHandle>>(StringComparer.OrdinalIgnoreCase);
 		foreach (var pair in fileMap)
 		{
+			var isGodotClass = pair.Value.Any(h => godotClassHandles.Contains(h));
+
 			var key = pair.Key;
-			if (caselessDict.ContainsKey(pair.Key))
+			var existingHandles = caselessDict.TryGetValue(key, out var hs) ? hs : [];
+			if (existingHandles.Count > 0)
 			{
 				var caselessPair = caselessDict.First(p => p.Key.Equals(pair.Key, StringComparison.OrdinalIgnoreCase));
 
-				if (canonicalPaths.TryGetValue(caselessPair.Key, out var _))
+				if (canonicalPaths.Contains(caselessPair.Key))
 				{
 					key = caselessPair.Key;
 				}
-				else if (!canonicalPaths.TryGetValue(pair.Key, out var _)) // else if the current key is NOT in the canonical paths...
+				else if (!canonicalPaths.Contains(pair.Key)) // else if the current key is NOT in the canonical paths...
 				{
-					if (caselessPair.Key.Count(char.IsUpper) < pair.Key.Count(char.IsUpper))
+					if (caselessPair.Key.Count(char.IsUpper) > pair.Key.Count(char.IsUpper))
 					{
 						key = caselessPair.Key;
 					}
 				}
+				if (key != caselessPair.Key)
+				{
+					// remove the current key and then add it back below, so that we replace any key collisions
+					caselessDict.Remove(caselessPair.Key);
+				}
 			}
-			// TODO: Need to turn the filemap into a dict of string to list of TypeDefinitionHandle
-			caselessDict[key] = pair.Value;
+			var newHandles = existingHandles.Concat(pair.Value).Distinct().ToList();
+			caselessDict[key] = newHandles;
 		}
 		return caselessDict;
 	}
