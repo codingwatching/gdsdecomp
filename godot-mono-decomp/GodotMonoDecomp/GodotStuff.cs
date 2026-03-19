@@ -420,6 +420,19 @@ public static class GodotStuff
 				namespaceToDirectory[ns] = new HashSet<string> { dir };
 			}
 		}
+		Dictionary<string, List<TypeDefinitionHandle>> canonicalPaths = new Dictionary<string, List<TypeDefinitionHandle>>();
+
+		void addToCanonicalPaths(string path, TypeDefinitionHandle h, TypeDefinition type)
+		{
+			if (!canonicalPaths.ContainsKey(path))
+			{
+				canonicalPaths[path] = new List<TypeDefinitionHandle>();
+			}
+			canonicalPaths[path].Add(h);
+			addToNamespaceToFile(metadata.GetString(type.Namespace), path);
+			fileMap[path] = h;
+		}
+
 		foreach (var h in typesToDecompile)
 		{
 			var type = metadata.GetTypeDefinition(h);
@@ -429,8 +442,7 @@ public static class GodotStuff
 			// that the file is referenced by other files in the project, so the path MUST match.
 			if (!string.IsNullOrEmpty(scriptPath))
 			{
-				addToNamespaceToFile(metadata.GetString(type.Namespace),scriptPath);
-				fileMap[scriptPath] = h;
+				addToCanonicalPaths(scriptPath, h, type);
 			}
 			else
 			{
@@ -442,8 +454,7 @@ public static class GodotStuff
 					if (metadataFQNToFileMap.TryGetValue(fqn, out var filePath))
 					{
 						filePath = Common.TrimPrefix(filePath, "res://");
-						addToNamespaceToFile(metadata.GetString(type.Namespace), filePath);
-						fileMap[filePath] = h;
+						addToCanonicalPaths(filePath, h, type);
 						continue;
 					}
 				}
@@ -680,10 +691,30 @@ public static class GodotStuff
 
 			fileMap[scriptPath] = h;
 		}
-		return fileMap.ToDictionary(
-			pair => pair.Key,
-			pair => pair.Value,
-			StringComparer.OrdinalIgnoreCase);
+		var caselessDict = new Dictionary<string, TypeDefinitionHandle>(StringComparer.OrdinalIgnoreCase);
+		foreach (var pair in fileMap)
+		{
+			var key = pair.Key;
+			if (caselessDict.ContainsKey(pair.Key))
+			{
+				var caselessPair = caselessDict.First(p => p.Key.Equals(pair.Key, StringComparison.OrdinalIgnoreCase));
+
+				if (canonicalPaths.TryGetValue(caselessPair.Key, out var _))
+				{
+					key = caselessPair.Key;
+				}
+				else if (!canonicalPaths.TryGetValue(pair.Key, out var _)) // else if the current key is NOT in the canonical paths...
+				{
+					if (caselessPair.Key.Count(char.IsUpper) < pair.Key.Count(char.IsUpper))
+					{
+						key = caselessPair.Key;
+					}
+				}
+			}
+			// TODO: Need to turn the filemap into a dict of string to list of TypeDefinitionHandle
+			caselessDict[key] = pair.Value;
+		}
+		return caselessDict;
 	}
 
 
