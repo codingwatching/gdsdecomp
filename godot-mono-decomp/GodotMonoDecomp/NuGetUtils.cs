@@ -26,7 +26,7 @@ public static class HttpClientExtensions
 
 public static class NugetDetails
 {
-    public static async Task<string?> ResolvePackageAndGetContentHash(string name, string version, CancellationToken cancellationToken)
+    public static async Task<string?> ResolvePackageAndGetContentHash(string name, string version, bool checkOnline, CancellationToken cancellationToken)
     {
         // download the package to the local cache
         string? p = null;
@@ -59,10 +59,13 @@ public static class NugetDetails
 				// either we didn't have a metadata file or it wasn't from nuget.org, so we need to download it again
 				// save it to a temporary directory so as not to clobber the local cache
 				var tempDir = Path.Combine(NuGetEnvironment.GetFolderPath(NuGetFolderPath.Temp), name.ToLower(), version.ToLower());
-				p = await DownloadPackageFromNugetAsync(name, version, tempDir, cancellationToken);
+				if (checkOnline)
+				{
+					p = await DownloadPackageFromNugetAsync(name, version, tempDir, cancellationToken);
+				}
 
 			}
-			else
+			else if (checkOnline)
 			{
 				p = await DownloadPackageToLocalCache(name, version, cancellationToken);
 			}

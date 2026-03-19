@@ -246,19 +246,16 @@ public class GodotModuleDecompiler
 
 		}
 
-		if (Settings.VerifyNuGetPackageIsFromNugetOrg)
+		foreach (var module in new List<GodotModule> { MainModule }.Concat(AdditionalModules))
 		{
-			foreach (var module in new List<GodotModule> { MainModule }.Concat(AdditionalModules))
+			foreach (var dep in module.depInfo?.deps.Where(d =>
+							d is { Type: "package" } &&
+							(!ProjectFileWriterGodotStyle.ImplicitGodotReferences.Contains(d.Name) ||
+							string.Equals(d.Name, "GodotSharp", StringComparison.OrdinalIgnoreCase))) ?? [])
 			{
-				foreach (var dep in module.depInfo?.deps.Where(d =>
-					         d is { Type: "package" } &&
-					         (!ProjectFileWriterGodotStyle.ImplicitGodotReferences.Contains(d.Name) ||
-					          string.Equals(d.Name, "GodotSharp", StringComparison.OrdinalIgnoreCase))) ?? [])
-				{
-					packageHashTasks.Add(
-						Task.Run(async () => await dep.StartResolvePackageAndCheckHash(packageHashTaskCancelSrc.Token), packageHashTaskCancelSrc.Token)
-						);
-				}
+				packageHashTasks.Add(
+					Task.Run(async () => await dep.StartResolvePackageAndCheckHash(Settings.VerifyNuGetPackageIsFromNugetOrg, packageHashTaskCancelSrc.Token), packageHashTaskCancelSrc.Token)
+					);
 			}
 		}
 

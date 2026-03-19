@@ -233,7 +233,7 @@ public class DotNetCoreDepInfo
 		return null;
 	}
 
-	public async Task StartResolvePackageAndCheckHash(CancellationToken cancellationToken)
+	public async Task StartResolvePackageAndCheckHash(bool checkOnline, CancellationToken cancellationToken)
 	{
 		if (!Serviceable || Type != "package" || string.IsNullOrEmpty(Sha512) || !Sha512.StartsWith("sha512-"))
 		{
@@ -245,7 +245,7 @@ public class DotNetCoreDepInfo
 		string? hash;
 		try
 		{
-			hash = await NugetDetails.ResolvePackageAndGetContentHash(Name, Version, cancellationToken);
+			hash = await NugetDetails.ResolvePackageAndGetContentHash(Name, Version, checkOnline, cancellationToken);
 		}
 		catch (HttpRequestException e) when (e.StatusCode == HttpStatusCode.NotFound)
 		{
