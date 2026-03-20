@@ -194,7 +194,7 @@ void GDREPackedData::add_path(const String &p_pkg_path, const String &p_path, ui
 	Ref<PackedFileInfo> pf_info;
 	pf_info.instantiate();
 	String abs_path = p_path.is_relative_path() ? "res://" + p_path : p_path;
-	pf_info->init(abs_path, &pf);
+	pf_info->init(abs_path, &pf, p_src == &dummy_source);
 
 	// Get the fixed path if this is from a PCK source
 	String path = p_pck_src ? pf_info->get_path() : abs_path.simplify_path();

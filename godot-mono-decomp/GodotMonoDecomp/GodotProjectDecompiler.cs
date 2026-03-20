@@ -308,7 +308,21 @@ namespace GodotMonoDecomp
 			decompiler.AstTransforms.Add(new RemoveGodotScriptPathAttribute());
 			decompiler.AstTransforms.Add(new RemoveAutoAccessor());
 			decompiler.AstTransforms.Add(new GodotMonoDecomp.RemoveEmbeddedAttributes());
+			decompiler.AstTransforms.Add(new RestoreGeneratedRegexMethods());
 			decompiler.AstTransforms.Add(new RemoveGeneratedExceptionThrows());
+			if (Settings.EnableCollectionInitializerLifting)
+			{
+				decompiler.AstTransforms.Add(new LiftCollectionInitializers());
+			}
+			else
+			{
+				decompiler.AstTransforms.Add(new RemoveBogusBaseConstructorCalls());
+			}
+			decompiler.AstTransforms.Add(new FixSwitchExpressionCasts());
+			if (Settings.RemoveGeneratedJsonContextBody)
+			{
+				decompiler.AstTransforms.Add(new RemoveJsonSourceGenerationClassBody());
+			}
 			if (Settings.GodotVersionOverride?.Major == 3)
 			{
 				decompiler.AstTransforms.Add(new RemoveMathF3x());
@@ -329,7 +343,7 @@ namespace GodotMonoDecomp
 			string assemblyInfo = Path.Combine(prop, "AssemblyInfo.cs");
 			using (var w = CreateFile(Path.Combine(TargetDirectory, assemblyInfo)))
 			{
-				syntaxTree.AcceptVisitor(new CSharpOutputVisitor(w, Settings.CSharpFormattingOptions));
+				syntaxTree.AcceptVisitor(new GodotCSharpOutputVisitor(w, Settings.CSharpFormattingOptions));
 			}
 			return new[] { new ProjectItemInfo("Compile", assemblyInfo) };
 		}
@@ -455,7 +469,7 @@ namespace GodotMonoDecomp
 
 							var path = Path.Combine(TargetDirectory, file.Key);
 							using StreamWriter w = new StreamWriter(path);
-							syntaxTree.AcceptVisitor(new CSharpOutputVisitor(w, Settings.CSharpFormattingOptions));
+							syntaxTree.AcceptVisitor(new GodotCSharpOutputVisitor(w, Settings.CSharpFormattingOptions));
 						}
 						catch (Exception innerException) when (!(innerException is OperationCanceledException || innerException is DecompilerException))
 						{

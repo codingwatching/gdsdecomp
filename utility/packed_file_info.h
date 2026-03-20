@@ -19,14 +19,16 @@ class PackedFileInfo : public RefCounted {
 	bool malformed_path;
 	bool md5_passed = false;
 	uint32_t flags;
+	bool dummy_path = false;
 
 	void set_md5_match(bool pass) { md5_passed = pass; }
 
 public:
-	void init(const String &p_path, const PackedData::PackedFile *pfstruct) {
+	void init(const String &p_path, const PackedData::PackedFile *pfstruct, bool p_is_dummy = false) {
 		pf = *pfstruct;
 		raw_path = p_path;
 		malformed_path = false;
+		dummy_path = p_is_dummy;
 		fix_path();
 	}
 	void init(const String &pck_path, const String &p_path, const uint64_t ofs, const uint64_t sz, const uint8_t md5arr[16], PackSource *p_src, const bool encrypted = false) {
@@ -64,6 +66,9 @@ public:
 	}
 	bool is_checksum_validated() const {
 		return md5_passed;
+	}
+	bool is_dummy() const {
+		return dummy_path;
 	}
 
 protected:

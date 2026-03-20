@@ -277,4 +277,86 @@ public static class Common
 			return new Guid(hashBytes);
 		}
 	}
+
+	private const string GeneratedCodeAttributeFullName = "System.CodeDom.Compiler.GeneratedCodeAttribute";
+	public static bool RemoveGeneratedCodeAttributes(ICSharpCode.Decompiler.CSharp.Syntax.AstNodeCollection<ICSharpCode.Decompiler.CSharp.Syntax.AttributeSection> attributeSections, string generatorName)
+	{
+		bool removedAny = false;
+		foreach (var section in attributeSections.ToArray())
+		{
+			foreach (var attribute in section.Attributes.ToArray())
+			{
+				if (IsGeneratedCodeAttributeForTool(attribute, generatorName))
+				{
+					attribute.Remove();
+					removedAny = true;
+				}
+			}
+
+			if (section.Attributes.Count == 0)
+			{
+				section.Remove();
+			}
+		}
+
+		return removedAny;
+	}
+
+	public static bool HasMatchingShortAttributeName(string typeName, string expectedShortName)
+	{
+		if (typeName.StartsWith("global::", StringComparison.Ordinal))
+		{
+			typeName = typeName.Substring("global::".Length);
+		}
+
+		int lastDot = typeName.LastIndexOf('.');
+		if (lastDot >= 0 && lastDot < typeName.Length - 1)
+		{
+			typeName = typeName.Substring(lastDot + 1);
+		}
+
+		if (typeName.EndsWith("Attribute", StringComparison.Ordinal))
+		{
+			typeName = typeName.Substring(0, typeName.Length - "Attribute".Length);
+		}
+
+		return string.Equals(typeName, expectedShortName, StringComparison.Ordinal);
+	}
+
+	public static bool IsAttribute(ICSharpCode.Decompiler.CSharp.Syntax.Attribute attribute, string expectedFullName, string expectedShortName)
+	{
+		if (attribute.Type.Annotation<ICSharpCode.Decompiler.Semantics.TypeResolveResult>() is { Type: { } typeResult })
+		{
+			if (string.Equals(typeResult.FullName, expectedFullName, StringComparison.Ordinal))
+			{
+				return true;
+			}
+		}
+
+		if (attribute.GetSymbol() is IMethod method && method.DeclaringType != null)
+		{
+			if (string.Equals(method.DeclaringType.FullName, expectedFullName, StringComparison.Ordinal))
+			{
+				return true;
+			}
+		}
+
+		return HasMatchingShortAttributeName(attribute.Type.ToString(), expectedShortName);
+	}
+
+
+	public static bool IsGeneratedCodeAttributeForTool(ICSharpCode.Decompiler.CSharp.Syntax.Attribute attribute, string generatorName)
+	{
+		if (!IsAttribute(attribute, GeneratedCodeAttributeFullName, "GeneratedCode"))
+		{
+			return false;
+		}
+
+		if (attribute.Arguments.FirstOrDefault() is ICSharpCode.Decompiler.CSharp.Syntax.PrimitiveExpression { Value: string toolName })
+		{
+			return string.Equals(toolName, generatorName, StringComparison.Ordinal);
+		}
+
+		return false;
+	}
 }

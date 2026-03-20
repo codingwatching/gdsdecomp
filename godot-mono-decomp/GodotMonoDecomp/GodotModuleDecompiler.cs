@@ -26,7 +26,7 @@ public class GodotModule
 	public readonly Guid moduleGuid;
 	public readonly IDebugInfoProvider? debugInfoProvider;
 	public readonly string? SubDirectory;
-	public Dictionary<string, TypeDefinitionHandle> fileMap;
+	public Dictionary<string, List<TypeDefinitionHandle>> fileMap;
 
 	private GodotProjectDecompiler ProjectDecompiler;
 
@@ -246,39 +246,50 @@ public class GodotModuleDecompiler
 
 		}
 
-		if (Settings.VerifyNuGetPackageIsFromNugetOrg)
+		foreach (var module in new List<GodotModule> { MainModule }.Concat(AdditionalModules))
 		{
-			foreach (var module in new List<GodotModule> { MainModule }.Concat(AdditionalModules))
+			foreach (var dep in module.depInfo?.deps.Where(d =>
+							d is { Type: "package" } &&
+							(!ProjectFileWriterGodotStyle.ImplicitGodotReferences.Contains(d.Name) ||
+							string.Equals(d.Name, "GodotSharp", StringComparison.OrdinalIgnoreCase))) ?? [])
 			{
-				foreach (var dep in module.depInfo?.deps.Where(d =>
-					         d is { Type: "package" } &&
-					         (!ProjectFileWriterGodotStyle.ImplicitGodotReferences.Contains(d.Name) ||
-					          string.Equals(d.Name, "GodotSharp", StringComparison.OrdinalIgnoreCase))) ?? [])
-				{
-					packageHashTasks.Add(
-						Task.Run(async () => await dep.StartResolvePackageAndCheckHash(packageHashTaskCancelSrc.Token), packageHashTaskCancelSrc.Token)
-						);
-				}
+				packageHashTasks.Add(
+					Task.Run(async () => await dep.StartResolvePackageAndCheckHash(Settings.VerifyNuGetPackageIsFromNugetOrg, packageHashTaskCancelSrc.Token), packageHashTaskCancelSrc.Token)
+					);
 			}
 		}
 
 
 		HashSet<string> excludeSubdirs = AdditionalModules.Select(module => module.SubDirectory ?? "").Where(subdir => !string.IsNullOrEmpty(subdir)).ToHashSet();
 
+		HashSet<TypeDefinitionHandle> GetGodotClassHandles(GodotModule module, IEnumerable<TypeDefinitionHandle> handles)
+		{
+			var handleSet = handles.ToHashSet();
+			var decompiler = module.CreateCSharpDecompilerWithPartials(handleSet);
+			var godotHandles = new HashSet<TypeDefinitionHandle>();
+			foreach (var h in handleSet)
+			{
+				var typeDef = decompiler.TypeSystem.MainModule.GetDefinition(h);
+				if (typeDef != null && GodotStuff.IsGodotClass(typeDef))
+				{
+					godotHandles.Add(h);
+				}
+			}
+			return godotHandles;
+		}
+
 		var typesToDecompile = MainModule.GetProjectDecompiler().GetTypesToDecompile(MainModule.Module).ToHashSet();
-		MainModule.fileMap = GodotStuff.CreateFileMap(MainModule.Module, typesToDecompile, this.originalProjectFiles, godot3xMetadata, excludeSubdirs, true);
+		var mainGodotClassHandles = GetGodotClassHandles(MainModule, typesToDecompile);
+		MainModule.fileMap = GodotStuff.CreateFileMap(MainModule.Module, typesToDecompile, this.originalProjectFiles, godot3xMetadata, excludeSubdirs, true, mainGodotClassHandles);
 		var additionalModuleCount = 0;
-		var fileToModuleMap = MainModule.fileMap.ToDictionary(
-			pair => pair.Key,
-			pair => MainModule,//.Module.FileName,
-			StringComparer.OrdinalIgnoreCase);
 		// var moduleFileNameToMouduleMap = new Dictionary<string, GodotModule>(StringComparer.OrdinalIgnoreCase);
 		foreach (var module in AdditionalModules)
 		{
 			// TODO: make CreateFileMap() work with multiple modules
 			typesToDecompile = module.GetProjectDecompiler().GetTypesToDecompile(module.Module).ToHashSet();
+			var moduleGodotClassHandles = GetGodotClassHandles(module, typesToDecompile);
 
-			var nfileMap = GodotStuff.CreateFileMap(module.Module, typesToDecompile, this.originalProjectFiles, godot3xMetadata, null, true);
+			var nfileMap = GodotStuff.CreateFileMap(module.Module, typesToDecompile, this.originalProjectFiles, godot3xMetadata, null, true, moduleGodotClassHandles);
 			additionalModuleCount += nfileMap.Count;
 
 			string moduleName = module.Module.FileName;
@@ -292,7 +303,14 @@ public class GodotModuleDecompiler
 				{
 					fixedPath = module.SubDirectory + "/" + pair.Key;
 				}
-				module.fileMap.Add(fixedPath, pair.Value);
+				if (!module.fileMap.TryGetValue(fixedPath, out var existingHandles))
+				{
+					module.fileMap.Add(fixedPath, pair.Value);
+				}
+				else
+				{
+					existingHandles.AddRange(pair.Value.Where(h => !existingHandles.Contains(h)));
+				}
 			}
 
 			if (module.fileMap.Count == 0)
@@ -377,12 +395,19 @@ public class GodotModuleDecompiler
 				removeIfExists(csprojPath);
 
 				ProjectId projectId;
-				var typesToExclude = excludeFiles?.Select(file => Common.TrimPrefix(file, "res://")).Where(module.fileMap.ContainsKey).Select(file => module.fileMap[file]).ToHashSet() ?? [];
+				var typesToExclude = excludeFiles?.Select(file => Common.TrimPrefix(file, "res://"))
+					.Where(module.fileMap.ContainsKey)
+					.SelectMany(file => module.fileMap[file])
+					.ToHashSet() ?? [];
+				var handleToFileMap = module.fileMap
+					.SelectMany(pair => pair.Value.Select(h => new KeyValuePair<TypeDefinitionHandle, string>(h, pair.Key)))
+					.GroupBy(p => p.Key)
+					.ToDictionary(group => group.Key, group => group.First().Value);
 
 				using (var projectFileWriter = new StreamWriter(File.OpenWrite(csprojPath)))
 				{
 					projectId = godotProjectDecompiler.DecompileGodotProject(
-						module.Module, targetDirectory, projectFileWriter, typesToExclude, module.fileMap.ToDictionary(pair => pair.Value, pair => pair.Key), moduleToCsProjPath, module.depInfo, CustomVersionDetected, token);
+						module.Module, targetDirectory, projectFileWriter, typesToExclude, handleToFileMap, moduleToCsProjPath, module.depInfo, CustomVersionDetected, token);
 				}
 
 				ProjectItem item = new ProjectItem(csprojPath, projectId.PlatformName, projectId.Guid, projectId.TypeGuid);
@@ -427,19 +452,19 @@ public class GodotModuleDecompiler
 	}
 	public const string error_message = "// ERROR: Could not find file '{0}' in assembly '{1}.dll'.";
 
-	private (GodotModule?, TypeDefinitionHandle) GetScriptModuleAndType(string file)
+	private (GodotModule?, List<TypeDefinitionHandle>) GetScriptModuleAndTypes(string file)
 	{
 		var path = Common.TrimPrefix(file, "res://");
 		if (!string.IsNullOrEmpty(path))
 		{
-			TypeDefinitionHandle foundType;
+			List<TypeDefinitionHandle>? foundTypes;
 			GodotModule? module = MainModule;
-			if (!module.fileMap.TryGetValue(path, out foundType))
+			if (!module.fileMap.TryGetValue(path, out foundTypes))
 			{
 				module = null;
 				foreach (var m in AdditionalModules)
 				{
-					if (m.fileMap.TryGetValue(path, out foundType))
+					if (m.fileMap.TryGetValue(path, out foundTypes))
 					{
 						module = m;
 						break;
@@ -447,17 +472,17 @@ public class GodotModuleDecompiler
 				}
 			}
 
-			return (module, foundType);
+			return (module, foundTypes ?? []);
 		}
 
-		return (null, default(TypeDefinitionHandle));
+		return (null, []);
 	}
 
 	public string DecompileIndividualFile(string file)
 	{
 		var path = Common.TrimPrefix(file, "res://");
-		var (module, type) = GetScriptModuleAndType(file);
-		if (module == null || type == default)
+		var (module, types) = GetScriptModuleAndTypes(file);
+		if (module == null || types.Count == 0)
 		{
 			return string.Format(error_message, file, MainModule.Name) + (
 				originalProjectFiles.Contains(path)
@@ -466,8 +491,11 @@ public class GodotModuleDecompiler
 			);
 		}
 
-		var decompiler = module.CreateCSharpDecompilerWithPartials([type]);
-		return decompiler.DecompileTypesAsString([type]);
+		var decompiler = module.CreateCSharpDecompilerWithPartials(types);
+		var tree = decompiler.DecompileTypes(types);
+		var stringWriter = new StringWriter();
+		tree.AcceptVisitor(new GodotCSharpOutputVisitor(stringWriter, Settings.CSharpFormattingOptions));
+		return stringWriter.ToString();
 	}
 
 	private string GetPathForType(ITypeDefinition? typeDef){
@@ -475,11 +503,11 @@ public class GodotModuleDecompiler
 			return "";
 		}
 		if (typeDef.ParentModule.AssemblyName == MainModule.Name){
-			return MainModule.fileMap.FirstOrDefault(pair => pair.Value == (TypeDefinitionHandle)typeDef.MetadataToken).Key;
+			return MainModule.fileMap.FirstOrDefault(pair => pair.Value.Contains((TypeDefinitionHandle)typeDef.MetadataToken)).Key;
 		}
 		foreach (var module in AdditionalModules){
 			if (module.Name == typeDef.ParentModule.AssemblyName){
-				return module.fileMap.FirstOrDefault(pair => pair.Value == (TypeDefinitionHandle)typeDef.MetadataToken).Key;
+				return module.fileMap.FirstOrDefault(pair => pair.Value.Contains((TypeDefinitionHandle)typeDef.MetadataToken)).Key;
 			}
 		}
 		return "";
@@ -487,14 +515,23 @@ public class GodotModuleDecompiler
 
 	public GodotScriptInfo? GetScriptInfo(string file)
 	{
-		var (module, type) = GetScriptModuleAndType(file);
-		if (module == null || type == default)
+		var (module, types) = GetScriptModuleAndTypes(file);
+		if (module == null || types.Count == 0)
 		{
 			return null;
 		}
 
 		var projectDecompiler = module.GetProjectDecompiler();
-		var decompiler = module.CreateCSharpDecompilerWithPartials([type]);
+		var decompiler = module.CreateCSharpDecompilerWithPartials(types);
+		var type = types.FirstOrDefault(h =>
+		{
+			var maybeTypeDef = decompiler.TypeSystem.MainModule.GetDefinition(h);
+			return maybeTypeDef != null && GodotStuff.IsGodotClass(maybeTypeDef);
+		});
+		if (type == default)
+		{
+			return null;
+		}
 		var typeDef = decompiler.TypeSystem.MainModule.GetDefinition(type);
 
 		if (typeDef == null)
@@ -636,8 +673,13 @@ public class GodotModuleDecompiler
 				iconPath = attr.FixedArguments[0].Value as string ?? "";
 			}
 		}
+		// if we had more than one top-level-type in the file, we need to re-deccompile for all types
+		if (types.Count > 1)
+		{
+			syntaxTree = decompiler.DecompileTypes(types);
+		}
         StringWriter stringWriter = new StringWriter();
-        syntaxTree.AcceptVisitor(new CSharpOutputVisitor(stringWriter, Settings.CSharpFormattingOptions));
+        syntaxTree.AcceptVisitor(new GodotCSharpOutputVisitor(stringWriter, Settings.CSharpFormattingOptions));
 		var scriptText = stringWriter.ToString();
 
 		var scriptInfo = new GodotScriptInfo(

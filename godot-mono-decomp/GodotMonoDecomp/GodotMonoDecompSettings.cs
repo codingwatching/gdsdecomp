@@ -39,26 +39,45 @@ public class GodotMonoDecompSettings : DecompilerSettings
 	/// </summary>
 	public Version? GodotVersionOverride { get; set; } = null;
 
-	public GodotMonoDecompSettings() : base()
+	/// <summary>
+	/// Whether to remove the body of the generated JsonSourceGeneration context classes.
+	/// </summary>
+	public bool RemoveGeneratedJsonContextBody { get; set; } = false;
+
+	/// <summary>
+	/// Whether to run LiftCollectionInitializers.
+	/// If false, the legacy RemoveBogusBaseConstructorCalls transform is used instead.
+	/// </summary>
+	public bool EnableCollectionInitializerLifting { get; set; } = true;
+
+	private void InitializeDefaultSettings()
 	{
 		UseNestedDirectoriesForNamespaces = true;
+		// This avoids certain race conditions during static initialization when attempting to run the decompiled project.
+		AlwaysMoveInitializer = true;
+	}
+
+	public GodotMonoDecompSettings() : base()
+	{
+		InitializeDefaultSettings();
 	}
 
 	public GodotMonoDecompSettings(LanguageVersion languageVersion) : base(languageVersion)
 	{
-		UseNestedDirectoriesForNamespaces = true;
+		InitializeDefaultSettings();
 	}
 
 
 	public new GodotMonoDecompSettings Clone()
 	{
-		var settings = (GodotMonoDecompSettings) base.Clone();
+		var settings = (GodotMonoDecompSettings)base.Clone();
 		settings.WriteNuGetPackageReferences = WriteNuGetPackageReferences;
 		settings.VerifyNuGetPackageIsFromNugetOrg = VerifyNuGetPackageIsFromNugetOrg;
 		settings.CopyOutOfTreeReferences = CopyOutOfTreeReferences;
 		settings.CreateAdditionalProjectsForProjectReferences = CreateAdditionalProjectsForProjectReferences;
 		settings.OverrideLanguageVersion = OverrideLanguageVersion;
 		settings.GodotVersionOverride = GodotVersionOverride;
+		settings.EnableCollectionInitializerLifting = EnableCollectionInitializerLifting;
 		return settings;
 	}
 

@@ -13,6 +13,7 @@ void PackedFileInfo::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_malformed"), &PackedFileInfo::is_malformed);
 	ClassDB::bind_method(D_METHOD("is_encrypted"), &PackedFileInfo::is_encrypted);
 	ClassDB::bind_method(D_METHOD("is_checksum_validated"), &PackedFileInfo::is_checksum_validated);
+	ClassDB::bind_method(D_METHOD("is_dummy"), &PackedFileInfo::is_dummy);
 }
 
 #define PATH_REPLACER "_"

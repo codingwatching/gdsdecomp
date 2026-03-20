@@ -1,4 +1,4 @@
-﻿// See https://aka.ms/new-console-template for more information
+// See https://aka.ms/new-console-template for more information
 
 using System.Text;
 using GodotMonoDecomp;
@@ -43,6 +43,7 @@ int Main(string[] args)
 	settings.CreateAdditionalProjectsForProjectReferences = !result.Value.NoCreateAdditionalProjectsForProjectReferences;
 	settings.VerifyNuGetPackageIsFromNugetOrg = result.Value.VerifyNuGetPackages;
 	settings.GodotVersionOverride = result.Value.GodotVersion == null ? null : GodotStuff.ParseGodotVersionFromString(result.Value.GodotVersion);
+	settings.EnableCollectionInitializerLifting = !result.Value.DisableCollectionInitializerLifting || result.Value.EnableCollectionInitializerLifting;
 	// get the current time
 	var startTime = DateTime.Now;
 	// call the DecompileProject function
@@ -105,6 +106,12 @@ public class Options
 
 	[Option("no-multi-project", Required = false, HelpText = "Whether to create additional projects for project references in main module.")]
 	public bool NoCreateAdditionalProjectsForProjectReferences { get; set; }
+
+	[Option("enable-collection-initializer-lifting", Required = false, HelpText = "Enable LiftCollectionInitializers and disable RemoveBogusBaseConstructorCalls.")]
+	public bool EnableCollectionInitializerLifting { get; set; }
+
+	[Option("disable-collection-initializer-lifting", Required = false, HelpText = "Disable LiftCollectionInitializers and run RemoveBogusBaseConstructorCalls instead.")]
+	public bool DisableCollectionInitializerLifting { get; set; }
 
 	[Option("write-script-info", Required = false, HelpText = "Write script info to a JSON file in the output directory.")]
 	public bool WriteScriptInfo { get; set; }
