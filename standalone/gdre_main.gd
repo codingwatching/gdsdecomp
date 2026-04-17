@@ -1246,6 +1246,7 @@ func decompile(files: PackedStringArray, bytecode_version: String, output_dir: S
 
 func get_sanitized_args():
 	var args = OS.get_cmdline_args()
+	args.append_array(OS.get_cmdline_user_args())
 	#var scene_path = get_tree().root.scene_file_path
 	var scene_path = "res://gdre_main.tscn"
 
