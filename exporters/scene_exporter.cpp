@@ -2772,7 +2772,6 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 						Ref<Mesh> instance_mesh = mesh_path_to_instance_map[path]->get_mesh();
 						Ref<ArrayMesh> arr_mesh = instance_mesh;
 						mesh_info.has_shadow_meshes = arr_mesh.is_valid() ? arr_mesh->get_shadow_mesh().is_valid() : mesh_info.has_shadow_meshes;
-						mesh_info.has_lightmap_uv2 = instance_mesh->get_lightmap_size_hint() != default_light_map_size;
 
 						auto gi_mode = mesh_path_to_instance_map[path]->get_gi_mode();
 						if (gi_mode == GeometryInstance3D::GI_MODE_DISABLED) {
@@ -3264,7 +3263,18 @@ Error GLBExporterInstance::_get_return_error() {
 	// if we've set all the external resources (including custom animations),
 	// then this isn't an error.
 	bool removed_all_errors = true;
-	if (gltf_serialization_error_messages.size() > 0 && animation_deps_needed.size() > 0 && (!updating_import_info || animation_deps_updated.size() == animation_deps_needed.size())) {
+	static constexpr const char *const ANIMATION_ERROR_PATTERN = R"((?:glTF: Cannot export empty property\. No property was specified in the NodePath: |glTF: Cannot get node(?: index)? for animated track using path: )(.*))";
+	Ref<RegEx> animation_error_re = RegEx::create_from_string(ANIMATION_ERROR_PATTERN);
+
+	static const Vector<String> errors_to_ignore = {
+		"A node was animated, but it wasn't found in the GLTFState", // animation track not found because it's not exported
+		"Parameter \"p_target_object\" is null.", // object property animated by track not found because it's not exportable by the exporter
+		"Image width specified (0 pixels) must be greater than 0 pixels", // texture export failure caused by zero-sized source images
+		"Image width must be greater than 0", // texture export failure caused by zero-sized source images
+		"Cannot generate mipmaps with width or height equal to 0", // texture export failure caused by zero-sized source images
+		"Condition \"p_texture->get_image().is_null()\" is true. Returning: -1", // texture export failure caused by zero-sized source images
+	};
+	if (gltf_serialization_error_messages.size() > 0) {
 		Vector<int64_t> error_messages_to_remove;
 		bool removed_last_error = false;
 		for (int64_t i = 0; i < gltf_serialization_error_messages.size(); i++) {
@@ -3281,11 +3291,10 @@ Error GLBExporterInstance::_get_return_error() {
 				// don't count it, but don't remove it either
 				continue;
 			}
-			if (message.contains("glTF:")) {
-				if (message.contains("Cannot export empty property. No property was specified in the NodePath:") || message.contains("animated track using path")) {
-					NodePath path = message.substr(message.find("ath:") + 4).strip_edges();
+			if (message.contains("glTF:") && (!updating_import_info || animation_deps_updated.size() == animation_deps_needed.size())) {
+				if (auto match = animation_error_re->search(message); match.is_valid()) {
+					NodePath path = match->get_string(1).strip_edges();
 					if (!updating_import_info || (!path.is_empty() && external_animation_nodepaths.has(path))) {
-						// pop off the error message and the stack traces
 						error_messages_to_remove.push_back(i);
 						removed_last_error = true;
 						continue;
@@ -3298,6 +3307,15 @@ Error GLBExporterInstance::_get_return_error() {
 					continue;
 				}
 			}
+
+			for (auto &e : errors_to_ignore) {
+				if (message.contains(e)) {
+					error_messages_to_remove.push_back(i);
+					removed_last_error = true;
+					continue;
+				}
+			}
+
 			// Otherwise, we haven't removed all the errors
 			removed_all_errors = false;
 		}
