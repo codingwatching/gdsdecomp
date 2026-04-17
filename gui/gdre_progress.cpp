@@ -228,7 +228,7 @@ bool GDREProgressDialog::Task::update() {
 	constexpr uint64_t REDRAW_THRESHOLD = 1000000 / 60;
 	auto curr_time_us = OS::get_singleton()->get_ticks_usec();
 	if (!should_redraw(curr_time_us)) {
-		if (!is_headless && !(curr_time_us - last_progress_tick >= REDRAW_THRESHOLD && (progress->get_value() != current_step.step || state->get_text() != current_step.state || indeterminate != progress->is_indeterminate() || steps != progress->get_max()))) {
+		if (!is_headless && !(curr_time_us - last_progress_tick >= REDRAW_THRESHOLD && (indeterminate || (progress->get_value() != current_step.step || state->get_text() != current_step.state || indeterminate != progress->is_indeterminate() || steps != progress->get_max())))) {
 			return false;
 		}
 	}
@@ -245,6 +245,9 @@ bool GDREProgressDialog::Task::update() {
 			if (progress->get_value() != current_step.step) {
 				progress->set_value(current_step.step);
 			}
+		} else {
+			// this forces the indeterminate progress bar to redraw
+			progress->notification(NOTIFICATION_INTERNAL_PROCESS);
 		}
 		if (state->get_text() != current_step.state) {
 			state->set_text(current_step.state);
