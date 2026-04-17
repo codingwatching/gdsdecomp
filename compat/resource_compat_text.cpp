@@ -2159,6 +2159,8 @@ Error ResourceFormatSaverCompatTextInstance::save_to_file(const Ref<FileAccess> 
 	}
 #endif
 
+	ERR_FAIL_COND_V_MSG(p_resource.is_null(), ERR_INVALID_PARAMETER, "Resource is null");
+
 	if (p_path.ends_with(".tscn") || p_path.ends_with(".escn")) {
 		// If this is a MissingResource holder for a PackedScene, we need to instance it for reals
 		packed_scene = ensure_packed_scenes(p_resource);
@@ -3120,9 +3122,9 @@ bool is_packed_scene(const Ref<Resource> &p_resource) {
 	return p_resource.is_valid() && _resource_get_class(p_resource) == "PackedScene";
 }
 
-Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resource, HashMap<String, Ref<Resource>> &p_seen_resources, HashSet<Object *> &seen_objects, int recursion_depth);
+Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resource, HashMap<String, Ref<Resource>> &p_seen_resources, HashSet<Object *> &seen_objects, int recursion_depth, bool *changed_something);
 
-Variant scan_variant(const Variant &v, HashMap<String, Ref<Resource>> &p_seen_resources, HashSet<Object *> &seen_objects, int recursion_depth) {
+Variant scan_variant(const Variant &v, HashMap<String, Ref<Resource>> &p_seen_resources, HashSet<Object *> &seen_objects, int recursion_depth, bool *p_changed_something) {
 	ERR_FAIL_COND_V_MSG(recursion_depth > 1024, Variant(), "Recursion depth exceeded");
 	recursion_depth++;
 	Variant result = v;
@@ -3133,7 +3135,10 @@ Variant scan_variant(const Variant &v, HashMap<String, Ref<Resource>> &p_seen_re
 				Ref<PackedScene> sub_scene;
 				if (!p_seen_resources.has(res->get_path())) {
 					if (_resource_get_class(res) == "PackedScene") {
-						sub_scene = _ensure_resource_is_packed_scene(res, p_seen_resources, seen_objects, recursion_depth);
+						sub_scene = _ensure_resource_is_packed_scene(res, p_seen_resources, seen_objects, recursion_depth, p_changed_something);
+						if (res->get_class() == "MissingResource") {
+							*p_changed_something = true;
+						}
 					}
 				} else {
 					sub_scene = p_seen_resources.get(res->get_path());
@@ -3150,8 +3155,11 @@ Variant scan_variant(const Variant &v, HashMap<String, Ref<Resource>> &p_seen_re
 					List<PropertyInfo> property_list;
 					res->get_property_list(&property_list);
 					for (const PropertyInfo &pi : property_list) {
-						Variant v = scan_variant(res->get(pi.name), p_seen_resources, seen_objects, recursion_depth);
-						res->set(pi.name, v);
+						bool changed_something = false;
+						Variant v = scan_variant(res->get(pi.name), p_seen_resources, seen_objects, recursion_depth, &changed_something);
+						if (changed_something) {
+							res->set(pi.name, v);
+						}
 					}
 					p_seen_resources[res->get_path()] = res;
 				}
@@ -3161,8 +3169,11 @@ Variant scan_variant(const Variant &v, HashMap<String, Ref<Resource>> &p_seen_re
 				obj->get_property_list(&property_list);
 				for (const PropertyInfo &pi : property_list) {
 					if (pi.usage & PROPERTY_USAGE_STORAGE) {
-						Variant v = scan_variant(obj->get(pi.name), p_seen_resources, seen_objects, recursion_depth);
-						obj->set(pi.name, v);
+						bool changed_something = false;
+						Variant v = scan_variant(obj->get(pi.name), p_seen_resources, seen_objects, recursion_depth, &changed_something);
+						if (changed_something) {
+							obj->set(pi.name, v);
+						}
 					}
 				}
 			}
@@ -3170,15 +3181,15 @@ Variant scan_variant(const Variant &v, HashMap<String, Ref<Resource>> &p_seen_re
 		case Variant::ARRAY: {
 			Array a = v;
 			for (int j = 0; j < a.size(); j++) {
-				a[j] = scan_variant(a[j], p_seen_resources, seen_objects, recursion_depth);
+				a[j] = scan_variant(a[j], p_seen_resources, seen_objects, recursion_depth, p_changed_something);
 			}
 			result = a;
 		} break;
 		case Variant::DICTIONARY: {
 			Dictionary d;
 			for (const KeyValue<Variant, Variant> &kv : v.operator Dictionary()) {
-				Variant key = scan_variant(kv.key, p_seen_resources, seen_objects, recursion_depth);
-				Variant value = scan_variant(kv.value, p_seen_resources, seen_objects, recursion_depth);
+				Variant key = scan_variant(kv.key, p_seen_resources, seen_objects, recursion_depth, p_changed_something);
+				Variant value = scan_variant(kv.value, p_seen_resources, seen_objects, recursion_depth, p_changed_something);
 				d[key] = value;
 			}
 			v.operator Dictionary().clear();
@@ -3191,10 +3202,10 @@ Variant scan_variant(const Variant &v, HashMap<String, Ref<Resource>> &p_seen_re
 	return result;
 }
 
-Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resource, HashMap<String, Ref<Resource>> &p_seen_resources, HashSet<Object *> &seen_objects, int recursion_depth) {
+Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resource, HashMap<String, Ref<Resource>> &p_seen_resources, HashSet<Object *> &seen_objects, int recursion_depth, bool *changed_something) {
 	Ref<PackedScene> r_packed_scene = p_resource;
 	if (_resource_get_class(p_resource) == "PackedScene") {
-		Dictionary bundle = scan_variant(p_resource->get("_bundled"), p_seen_resources, seen_objects, recursion_depth);
+		Dictionary bundle = scan_variant(p_resource->get("_bundled"), p_seen_resources, seen_objects, recursion_depth, changed_something);
 		// we need to go through the variants in the bundle and ensure that any MissingResources that are PackedScenes are also replaced with instantiated packed scenes
 		// this is because of PackedScene::SceneState::get_node_instance, which returns a Ref<PackedScene>, which will be null if it's not an instance of a PackedScene
 		if (r_packed_scene.is_null()) { // MissingResource
@@ -3210,7 +3221,14 @@ Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resourc
 }
 
 Ref<PackedScene> ResourceFormatSaverCompatTextInstance::ensure_packed_scenes(const Ref<Resource> &p_resource) {
+	auto info = ResourceInfo::get_info_from_resource(p_resource);
+	if (info.is_valid()) {
+		if (info->load_type == ResourceInfo::REAL_LOAD && info->load_type == ResourceInfo::GLTF_LOAD && p_resource->get_class() == "PackedScene") {
+			return p_resource;
+		}
+	}
 	HashMap<String, Ref<Resource>> seen_resources;
 	HashSet<Object *> seen_objects;
-	return _ensure_resource_is_packed_scene(p_resource, seen_resources, seen_objects, 0);
+	bool changed_something = false;
+	return _ensure_resource_is_packed_scene(p_resource, seen_resources, seen_objects, 0, &changed_something);
 }
