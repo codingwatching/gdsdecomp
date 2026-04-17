@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="ResourceCompatLoader" inherits="Object" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+<class name="ResourceCompatLoader" inherits="Object" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
 	</brief_description>
 	<description>
@@ -94,7 +94,7 @@
 			<return type="Resource" />
 			<param index="0" name="path" type="String" />
 			<param index="1" name="type_hint" type="String" default="&quot;&quot;" />
-			<param index="2" name="cache_mode" type="int" enum="ResourceFormatLoader.CacheMode" default="1" />
+			<param index="2" name="cache_mode" type="int" enum="ResourceCompatLoader.CacheMode" default="1" />
 			<description>
 			</description>
 		</method>
@@ -156,6 +156,16 @@
 		</method>
 	</methods>
 	<constants>
+		<constant name="CACHE_MODE_IGNORE" value="0" enum="CacheMode">
+		</constant>
+		<constant name="CACHE_MODE_REUSE" value="1" enum="CacheMode">
+		</constant>
+		<constant name="CACHE_MODE_REPLACE" value="2" enum="CacheMode">
+		</constant>
+		<constant name="CACHE_MODE_IGNORE_DEEP" value="3" enum="CacheMode">
+		</constant>
+		<constant name="CACHE_MODE_REPLACE_DEEP" value="4" enum="CacheMode">
+		</constant>
 		<constant name="FAKE_LOAD" value="0" enum="LoadType">
 		</constant>
 		<constant name="NON_GLOBAL_LOAD" value="1" enum="LoadType">
