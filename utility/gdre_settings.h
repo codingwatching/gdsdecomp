@@ -122,6 +122,7 @@ public:
 		bool suspect_version = false;
 		bool has_cs_files = false;
 		bool detected_csharp = false;
+		bool detected_godotsteam_usage = false;
 		String non_standard_header;
 		String assembly_path;
 		Ref<GodotMonoDecompWrapper> decompiler;
@@ -475,6 +476,9 @@ public:
 	// This can either be a CSV file (e.g. the output of the translation exporter),
 	// or a "stringdump" file (i.e. a dump of all the strings that were found in the project during `load_all_resource_strings()`)
 	Error load_translation_key_hint_file(const String &p_path);
+
+	// Returns whether we detected GodotSteam usage in the project
+	bool detected_godotsteam_usage() const;
 
 	static bool main_iteration();
 #ifdef TESTS_ENABLED

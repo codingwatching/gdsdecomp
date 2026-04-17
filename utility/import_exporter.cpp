@@ -951,6 +951,19 @@ struct ProcessRunnerStruct : public TaskRunnerStruct {
 	}
 };
 
+bool detect_uses_prebuilt_steam_template() {
+	String glob = DirAccess::dir_exists_absolute("res://addons") ? "res://addons/*" : "res://Addons/*";
+	auto globs = Glob::glob(glob, true);
+	for (int i = 0; i < globs.size(); i++) {
+		// If it uses the plugin, it doesn't use the prebuilt steam template
+		if (globs[i].to_lower().contains("godotsteam")) {
+			return false;
+		}
+	}
+
+	return GDRESettings::get_singleton()->detected_godotsteam_usage();
+}
+
 // export all the imported resources
 Error ImportExporter::export_imports(const String &p_out_dir, const Vector<String> &_files_to_export) {
 	ERR_FAIL_COND_V_MSG(p_out_dir.is_empty(), ERR_INVALID_PARAMETER, "Output directory is empty!");
@@ -977,21 +990,7 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 	const HashSet<String> files_to_export_set = vector_to_hashset(partial_export ? _files_to_export : get_settings()->get_file_list());
 
 	// *** Detect steam
-	if (get_settings()->is_project_config_loaded()) {
-		String custom_settings = get_settings()->get_project_setting("_custom_features");
-		if (custom_settings.to_lower().contains("steam")) {
-			report->godotsteam_detected = true;
-			// now check if the godotsteam plugin is in the addons directory
-			// If it is, we won't report it as detected, because you don't need the godotsteam editor to edit the project
-			auto globs = Glob::glob("res://addons/*", true);
-			for (int i = 0; i < globs.size(); i++) {
-				if (globs[i].to_lower().contains("godotsteam")) {
-					report->godotsteam_detected = false;
-					break;
-				}
-			}
-		}
-	}
+	report->godotsteam_detected = detect_uses_prebuilt_steam_template();
 	std::shared_ptr<ProcessRunnerStruct> process_runner;
 	TaskManager::TaskManagerID process_runner_task_id = -1;
 	auto check_process_done = [&](bool p_cancelled = false) {
@@ -2372,7 +2371,7 @@ String ImportExporterReport::get_editor_message_string() {
 	}
 	report += "Use Godot editor version " + version_text + " to edit the project." + String("\n");
 	if (godotsteam_detected) {
-		report += "GodotSteam can be found here: https://github.com/CoaguCo-Industries/GodotSteam/releases \n";
+		report += "GodotSteam can be found here: https://codeberg.org/GodotSteam/GodotSteam/releases \n";
 	}
 	if (custom_version_detected) {
 		report += "Custom Godot engine version detected!" + String("\n");

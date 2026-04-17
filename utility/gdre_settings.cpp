@@ -2095,11 +2095,13 @@ Error GDRESettings::load_pack_gdscript_cache(bool p_reset) {
 }
 namespace {
 struct ScriptCacheTask {
+	Ref<RegEx> steam_plugin_regex;
 	struct ScriptCacheTaskToken {
 		String orig_path;
 		bool is_gdscript;
 		Dictionary d;
 		Ref<Script> script;
+		bool uses_steam = false;
 	};
 
 	String get_description(int i, ScriptCacheTaskToken *tokens) const {
@@ -2110,6 +2112,13 @@ struct ScriptCacheTask {
 		Ref<Script> script = ResourceCompatLoader::custom_load(tokens[i].orig_path, "", ResourceInfo::LoadType::REAL_LOAD, nullptr, false, ResourceFormatLoader::CACHE_MODE_REPLACE);
 		if (script.is_valid()) {
 			tokens[i].script = script;
+
+			if (tokens[i].is_gdscript) {
+				String source = script->get_source_code();
+				if (steam_plugin_regex->search(source).is_valid()) {
+					tokens[i].uses_steam = true;
+				}
+			}
 			// {
 			// 	"base": &"Node",
 			// 	"class": &"AudioManager",
@@ -2178,6 +2187,7 @@ void GDRESettings::_ensure_script_cache_complete() {
 
 	GDRELogger::set_silent_errors(true);
 	ScriptCacheTask task;
+	task.steam_plugin_regex = RegEx::create_from_string("\\bSteam(?:(?:\\.(?:get_steam_init_result|STEAM_API_INIT_RESULT_OK|steamInit))|AppId)");
 	// any less than this and it's faster to just do it in one thread
 	if (tokens.size() > 50) {
 		TaskManager::get_singleton()->run_multithreaded_group_task(
@@ -2198,6 +2208,9 @@ void GDRESettings::_ensure_script_cache_complete() {
 	cached_scripts.reserve(tokens.size());
 	GDRELogger::set_silent_errors(false);
 	for (int i = 0; i < tokens.size(); i++) {
+		if (tokens[i].uses_steam) {
+			current_project->detected_godotsteam_usage = true;
+		}
 		if (tokens[i].script.is_valid()) {
 			cached_scripts.push_back(tokens[i].script);
 		}
@@ -2455,6 +2468,10 @@ Error GDRESettings::load_translation_key_hint_file(const String &p_path) {
 		gdre::hashset_insert_iterable(current_project->resource_strings, translation_key_hints);
 	}
 	return OK;
+}
+
+bool GDRESettings::detected_godotsteam_usage() const {
+	return is_pack_loaded() && current_project->detected_godotsteam_usage;
 }
 
 void GDRESettings::_do_string_load(uint32_t i, StringLoadToken *tokens) {
