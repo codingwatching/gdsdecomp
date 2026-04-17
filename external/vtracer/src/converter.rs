@@ -5,7 +5,7 @@ use std::{fs::File, io::Write};
 use super::config::{ColorMode, Config, ConverterConfig, Hierarchical};
 use super::svg::SvgFile;
 // use fastrand::Rng;
-use visioncortex::color_clusters::{Cluster, ClusterIndex, Clusters, KeyingAction, HIERARCHICAL_MAX};
+use visioncortex::color_clusters::{Cluster, ClusterIndex, Clusters, ClustersView, HIERARCHICAL_MAX, KeyingAction};
 use visioncortex::{Color, ColorImage, ColorName, PathSimplifyMode};
 
 use crate::runner::{Runner, RunnerConfig};
@@ -113,6 +113,67 @@ fn should_key_image(img: &ColorImage, config: &ConverterConfig) -> bool {
     false
 }
 
+fn to_image_with_holes(cluster: &Cluster, view: &ClustersView<'_>, hole: bool) -> visioncortex::BinaryImage {
+	let width = view.width as usize;
+	let height = view.height as usize;
+	let mut image = visioncortex::BinaryImage::new_w_h(width, height);
+
+	for &i in cluster.iter() {
+		let x = (i as i32 % width as i32) ;
+		let y = (i as i32 / width as i32) ;
+		image.set_pixel(x as usize, y as usize, true);
+	}
+
+	if hole {
+		for &i in cluster.holes.iter() {
+			let x = (i as i32 % width as i32) ;
+			let y = (i as i32 / width as i32) ;
+			image.set_pixel(x as usize, y as usize, false);
+		}
+	}
+	image
+}
+
+fn new_cluster_from_indices(cluster: &Cluster, indices: &Vec<u32>, color: Color) -> Cluster {
+	let mut new_cluster = cluster.clone();
+	new_cluster.indices = indices.clone();
+	new_cluster.residue_sum.r = color.r as u32 * new_cluster.indices.len() as u32;
+	new_cluster.residue_sum.g = color.g as u32 * new_cluster.indices.len() as u32;
+	new_cluster.residue_sum.b = color.b as u32 * new_cluster.indices.len() as u32;
+	new_cluster.residue_sum.a = color.a as u32 * new_cluster.indices.len() as u32;
+	new_cluster.residue_sum.counter = new_cluster.indices.len() as u32;
+	new_cluster
+}
+
+fn split_disconnected_pixels(cluster: &Cluster, view: &ClustersView<'_>) -> Vec<Cluster>{
+	if cluster.indices.len() <= 1 {
+		return vec![cluster.clone()];
+	}
+	// for all the indices in the cluster, check if a pixel is not connected to the cluster
+	let mut cluster = cluster.clone();
+	let mut new_clusters = vec![];
+    let himage = to_image_with_holes(&cluster, &view, true);
+	let indices = cluster.indices.clone();
+    for (i, index) in indices.iter().enumerate().rev() {
+		let x = *index as usize % himage.width;
+		let y = *index as usize / himage.width;
+		if himage.get_pixel(x, y) == true {
+			// check all the ones adjacent to it; if they are not connected, create a new cluster
+			if (x + 1 >= himage.width as usize || himage.get_pixel(x + 1, y) == false) &&
+			(x as i32 - 1 < 0 || himage.get_pixel(x - 1, y) == false) &&
+			(y + 1 >= himage.height as usize || himage.get_pixel(x, y + 1) == false) &&
+			(y as i32 - 1 < 0 || himage.get_pixel(x, y - 1) == false) {
+				cluster.indices.remove(i);
+				new_clusters.insert(0, new_cluster_from_indices(&cluster, &vec![*index], cluster.residue_color()));
+			}
+		}
+	}
+	if cluster.indices.len() > 0 {
+		new_clusters.insert(0, cluster);
+	}
+    new_clusters
+}
+
 
 fn remove_pixels_from_lower_layers(p_clusters: &Clusters) -> Vec<Cluster>{
     let view = p_clusters.view();
@@ -169,11 +230,11 @@ fn remove_pixels_from_lower_layers(p_clusters: &Clusters) -> Vec<Cluster>{
                 new_cluster.residue_sum.b = color.b as u32 * new_cluster.indices.len() as u32;
                 new_cluster.residue_sum.a = color.a as u32 * new_cluster.indices.len() as u32;
                 new_cluster.residue_sum.counter = new_cluster.indices.len() as u32;
-                clusters.push(new_cluster);
+                clusters.extend(split_disconnected_pixels(&new_cluster, &view));
             }
             continue;
         }
-        clusters.push(cluster);
+        clusters.extend(split_disconnected_pixels(&cluster, &view));
     }
     clusters
 }
