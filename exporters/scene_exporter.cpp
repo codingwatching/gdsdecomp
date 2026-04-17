@@ -356,7 +356,7 @@ void get_deps_recursive(const String &p_path, HashMap<String, dep_info> &r_deps,
 
 bool GLBExporterInstance::using_threaded_load() const {
 	// If the scenes are being exported using the worker task pool, we can't use threaded load
-	return !supports_multithread();
+	return true;
 }
 
 Error load_model(const String &p_filename, tinygltf::Model &model, String &r_error) {
@@ -3227,7 +3227,7 @@ Error GLBExporterInstance::_load_scene(Ref<PackedScene> &r_scene) {
 #endif
 	std::optional<Ref<PackedScene>> result;
 	// For some reason, scenes with meshes fail to load without the load done by ResourceLoader::load, possibly due to notification shenanigans.
-	if (ResourceCompatLoader::is_globally_available() && using_threaded_load()) {
+	if (ResourceCompatLoader::is_globally_available()) {
 		result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<PackedScene>()>)[&]() -> Ref<PackedScene> {
 			return ResourceLoader::load(source_path, "PackedScene", ResourceFormatLoader::CACHE_MODE_REUSE, &err);
 		});
@@ -3360,20 +3360,19 @@ Error SceneExporter::export_file(const String &p_dest_path, const String &p_src_
 Error SceneExporter::export_file_to_obj(const String &p_dest_path, const String &p_src_path, Ref<ImportInfo> iinfo) {
 	Error err;
 	Ref<PackedScene> scene;
-	bool using_threaded_load = !SceneExporter::can_multithread;
 	int ver_major = iinfo.is_valid() ? iinfo->get_ver_major() : get_ver_major(p_src_path);
 	if (ver_major < MINIMUM_GODOT_VER_SUPPORTED) {
 		return ERR_UNAVAILABLE;
 	}
 	// For some reason, scenes with meshes fail to load without the load done by ResourceLoader::load, possibly due to notification shenanigans.
 	std::optional<Ref<PackedScene>> result;
-	if (ResourceCompatLoader::is_globally_available() && using_threaded_load) {
+	if (ResourceCompatLoader::is_globally_available()) {
 		result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<PackedScene>()>)[&]() -> Ref<PackedScene> {
 			return ResourceLoader::load(p_src_path, "PackedScene", ResourceFormatLoader::CACHE_MODE_REUSE, &err);
 		});
 	} else {
 		result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<PackedScene>()>)[&]() -> Ref<PackedScene> {
-			return ResourceCompatLoader::custom_load(p_src_path, "PackedScene", ResourceCompatLoader::get_default_load_type(), &err, !using_threaded_load, ResourceFormatLoader::CACHE_MODE_REUSE);
+			return ResourceCompatLoader::custom_load(p_src_path, "PackedScene", ResourceCompatLoader::get_default_load_type(), &err, true, ResourceFormatLoader::CACHE_MODE_REUSE);
 		});
 	}
 	if (!result.has_value()) {
@@ -3868,6 +3867,20 @@ Ref<ExportReport> SceneExporter::export_file_with_options(const String &out_path
 		register_physics_extension();
 	}
 	return token->report;
+}
+
+void SceneExporter::prebatch_export() {
+	bool remove_physics_bodies = GDREConfig::get_singleton()->get_setting("Exporter/Scene/GLTF/remove_physics_bodies", false);
+	if (remove_physics_bodies) {
+		unregister_physics_extension();
+	}
+}
+
+void SceneExporter::postbatch_export() {
+	bool remove_physics_bodies = GDREConfig::get_singleton()->get_setting("Exporter/Scene/GLTF/remove_physics_bodies", false);
+	if (remove_physics_bodies) {
+		register_physics_extension();
+	}
 }
 
 Ref<ExportReport> SceneExporter::export_resource(const String &output_dir, Ref<ImportInfo> iinfo) {

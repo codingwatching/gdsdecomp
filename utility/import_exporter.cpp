@@ -1008,7 +1008,15 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 		return false;
 	};
 
+	bool ran_prebatch_export = false;
+
 	auto reset_before_return = [&](bool cancelled = false) {
+		if (ran_prebatch_export) {
+			for (int i = 0; i < Exporter::exporter_count; i++) {
+				Exporter::exporters[i]->postbatch_export();
+			}
+			ran_prebatch_export = false;
+		}
 		if (cancelled) {
 			print_line("Export cancelled!");
 		}
@@ -1151,11 +1159,12 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 		bool is_high_priority = importer == "gdextension" || importer == "gdnative";
 		if (exporter_map.has(importer)) {
 			auto &exporter = exporter_map.get(importer);
-			if (exporter->get_name() == "PackedScene") {
-				scene_tokens.push_back(iinfo);
-				export_dest_to_iinfo.insert(iinfo->get_export_dest(), Vector<Ref<ImportInfo>>({ iinfo }));
-				continue;
-			} else if (!exporter->supports_multithread()) {
+			// if (exporter->get_name() == "PackedScene") {
+			// 	scene_tokens.push_back(iinfo);
+			// 	export_dest_to_iinfo.insert(iinfo->get_export_dest(), Vector<Ref<ImportInfo>>({ iinfo }));
+			// 	continue;
+			// } else
+			if (!exporter->supports_multithread()) {
 				supports_multithreading = false;
 			}
 		} else {
@@ -1300,6 +1309,11 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 
 	int64_t num_multithreaded_tokens = tokens.size();
 	// ***** Export resources *****
+
+	for (int i = 0; i < Exporter::exporter_count; i++) {
+		Exporter::exporters[i]->prebatch_export();
+	}
+	ran_prebatch_export = true;
 	GDRELogger::clear_error_queues();
 	if (tokens.size() > 0) {
 		err = TaskManager::get_singleton()->run_multithreaded_group_task(

@@ -92,6 +92,12 @@ Error ResourceExporter::test_export(const Ref<ExportReport> &export_report, cons
 	return ERR_UNAVAILABLE;
 }
 
+void ResourceExporter::prebatch_export() {
+}
+
+void ResourceExporter::postbatch_export() {
+}
+
 void ResourceExporter::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_name"), &ResourceExporter::get_name);
 	ClassDB::bind_method(D_METHOD("supports_nonpack_export"), &ResourceExporter::supports_nonpack_export);

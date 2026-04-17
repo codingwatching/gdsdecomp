@@ -51,7 +51,7 @@ public:
 	};
 
 	static Error export_file_to_non_glb(const String &p_src_path, const String &p_dest_path, Ref<ImportInfo> iinfo);
-	static constexpr bool can_multithread = false;
+	static constexpr bool can_multithread = true;
 
 	static SceneExporter *get_singleton();
 	SceneExporter();
@@ -66,6 +66,8 @@ public:
 	virtual bool supports_nonpack_export() const override { return false; }
 	virtual String get_default_export_extension(const String &res_path) const override;
 	virtual Vector<String> get_export_extensions(const String &res_path) const override;
+	virtual void prebatch_export() override;
+	virtual void postbatch_export() override;
 
 	static Ref<ExportReport> export_file_with_options(const String &out_path, const String &res_path, const Dictionary &options);
 	static size_t get_vram_usage();
