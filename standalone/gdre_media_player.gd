@@ -248,7 +248,7 @@ func load_media(path):
 func load_video(path):
 	if not is_supported_video_format(path):
 		return false
-	var video_stream: VideoStream = ResourceCompatLoader.real_load(path, "", ResourceFormatLoader.CACHE_MODE_IGNORE_DEEP)
+	var video_stream: VideoStream = ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP)
 	if (video_stream == null):
 		return false
 	reset()
@@ -269,7 +269,7 @@ func load_sample(path):
 	var audio_stream: AudioStream = null
 	var ext = path.get_extension().to_lower()
 	if not is_non_resource_smp(ext):
-		audio_stream = ResourceCompatLoader.real_load(path, "", ResourceFormatLoader.CACHE_MODE_IGNORE_DEEP)
+		audio_stream = ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP)
 	else:
 		if ext == "wav":
 			audio_stream = AudioStreamWAV.load_from_file(path)

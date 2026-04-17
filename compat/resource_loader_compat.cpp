@@ -207,7 +207,7 @@ Ref<Resource> ResourceCompatLoader::gltf_load(const String &p_path, const String
 	return ResourceCompatLoader::custom_load(p_path, p_type_hint, ResourceInfo::LoadType::GLTF_LOAD, r_error);
 }
 
-Ref<Resource> ResourceCompatLoader::real_load(const String &p_path, const String &p_type_hint, Error *r_error, ResourceFormatLoader::CacheMode p_cache_mode) {
+Ref<Resource> ResourceCompatLoader::real_load(const String &p_path, const String &p_type_hint, Error *r_error, ResourceCompatLoader::CacheMode p_cache_mode) {
 	return ResourceCompatLoader::custom_load(p_path, p_type_hint, ResourceInfo::LoadType::REAL_LOAD, r_error, true, p_cache_mode);
 }
 namespace {
@@ -225,7 +225,7 @@ String _validate_local_path(const String &p_path) {
 } //namespace
 
 thread_local HashSet<String> currently_loading_paths;
-Ref<Resource> ResourceCompatLoader::custom_load(const String &p_path, const String &p_type_hint, ResourceInfo::LoadType p_type, Error *r_error, bool use_threads, ResourceFormatLoader::CacheMode p_cache_mode) {
+Ref<Resource> ResourceCompatLoader::custom_load(const String &p_path, const String &p_type_hint, ResourceInfo::LoadType p_type, Error *r_error, bool use_threads, ResourceCompatLoader::CacheMode p_cache_mode) {
 	String local_path = _validate_local_path(p_path);
 	String res_path = GDRESettings::get_singleton()->get_mapped_path(p_path);
 	bool is_real_load = p_type == ResourceInfo::LoadType::REAL_LOAD || p_type == ResourceInfo::LoadType::GLTF_LOAD;
@@ -271,7 +271,7 @@ Ref<Resource> ResourceCompatLoader::custom_load(const String &p_path, const Stri
 	return res;
 }
 
-Ref<Resource> ResourceCompatLoader::load_with_real_resource_loader(const String &p_path, const String &p_type_hint, Error *r_error, bool use_threads, ResourceFormatLoader::CacheMode p_cache_mode) {
+Ref<Resource> ResourceCompatLoader::load_with_real_resource_loader(const String &p_path, const String &p_type_hint, Error *r_error, bool use_threads, ResourceCompatLoader::CacheMode p_cache_mode) {
 	String local_path = _validate_local_path(p_path);
 	if (use_threads) {
 		return ResourceLoader::load(local_path, p_type_hint, p_cache_mode, r_error);
@@ -569,18 +569,6 @@ String ResourceCompatLoader::get_resource_type(const String &p_path) {
 	return loader->get_resource_type(p_path);
 }
 
-Vector<String> ResourceCompatLoader::_get_dependencies(const String &p_path, bool p_add_types) {
-	auto loader = get_loader_for_path(p_path, "");
-	ERR_FAIL_COND_V_MSG(loader.is_null(), Vector<String>(), "Failed to load resource '" + p_path + "'. ResourceFormatLoader::load was not implemented for this resource type.");
-	List<String> dependencies;
-	loader->get_dependencies(p_path, &dependencies, p_add_types);
-	Vector<String> deps;
-	for (List<String>::Element *E = dependencies.front(); E; E = E->next()) {
-		deps.push_back(E->get());
-	}
-	return deps;
-}
-
 bool ResourceCompatLoader::is_default_gltf_load() {
 	return doing_gltf_load;
 }
@@ -645,25 +633,38 @@ String ResourceCompatConverter::get_resource_name(const Ref<MissingResource> &re
 	}
 	return name;
 }
+namespace CoreBind {
+
+Vector<String> ResourceCompatLoader::_get_dependencies(const String &p_path, bool p_add_types) {
+	auto loader = ::ResourceCompatLoader::get_loader_for_path(p_path, "");
+	ERR_FAIL_COND_V_MSG(loader.is_null(), Vector<String>(), "Failed to load resource '" + p_path + "'. ResourceFormatLoader::load was not implemented for this resource type.");
+	List<String> dependencies;
+	loader->get_dependencies(p_path, &dependencies, p_add_types);
+	Vector<String> deps;
+	for (List<String>::Element *E = dependencies.front(); E; E = E->next()) {
+		deps.push_back(E->get());
+	}
+	return deps;
+}
 
 Ref<Resource> ResourceCompatLoader::_fake_load(const String &p_path, const String &p_type_hint) {
-	return fake_load(p_path, p_type_hint, nullptr);
+	return ::ResourceCompatLoader::fake_load(p_path, p_type_hint, nullptr);
 }
 
 Ref<Resource> ResourceCompatLoader::_non_global_load(const String &p_path, const String &p_type_hint) {
-	return non_global_load(p_path, p_type_hint, nullptr);
+	return ::ResourceCompatLoader::non_global_load(p_path, p_type_hint, nullptr);
 }
 
 Ref<Resource> ResourceCompatLoader::_gltf_load(const String &p_path, const String &p_type_hint) {
-	return gltf_load(p_path, p_type_hint, nullptr);
+	return ::ResourceCompatLoader::gltf_load(p_path, p_type_hint, nullptr);
 }
 
-Ref<Resource> ResourceCompatLoader::_real_load(const String &p_path, const String &p_type_hint, ResourceFormatLoader::CacheMode p_cache_mode) {
-	return real_load(p_path, p_type_hint, nullptr, p_cache_mode);
+Ref<Resource> ResourceCompatLoader::_real_load(const String &p_path, const String &p_type_hint, CacheMode p_cache_mode) {
+	return ::ResourceCompatLoader::real_load(p_path, p_type_hint, nullptr, (::ResourceCompatLoader::CacheMode)p_cache_mode);
 }
 
 Dictionary ResourceCompatLoader::_get_resource_info(const String &p_path, const String &p_type_hint) {
-	Ref<ResourceInfo> info = get_resource_info(p_path, p_type_hint, nullptr);
+	Ref<ResourceInfo> info = ::ResourceCompatLoader::get_resource_info(p_path, p_type_hint, nullptr);
 	if (info.is_valid()) {
 		return info->to_dict();
 	}
@@ -671,35 +672,40 @@ Dictionary ResourceCompatLoader::_get_resource_info(const String &p_path, const 
 }
 
 void ResourceCompatLoader::_bind_methods() {
+	BIND_ENUM_CONSTANT(CACHE_MODE_IGNORE);
+	BIND_ENUM_CONSTANT(CACHE_MODE_REUSE);
+	BIND_ENUM_CONSTANT(CACHE_MODE_REPLACE);
+	BIND_ENUM_CONSTANT(CACHE_MODE_IGNORE_DEEP);
+	BIND_ENUM_CONSTANT(CACHE_MODE_REPLACE_DEEP);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("fake_load", "path", "type_hint"), &ResourceCompatLoader::_fake_load, DEFVAL(""));
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("non_global_load", "path", "type_hint"), &ResourceCompatLoader::_non_global_load, DEFVAL(""));
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("gltf_load", "path", "type_hint"), &ResourceCompatLoader::_gltf_load, DEFVAL(""));
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("real_load", "path", "type_hint", "cache_mode"), &ResourceCompatLoader::_real_load, DEFVAL(""), DEFVAL(ResourceFormatLoader::CACHE_MODE_REUSE));
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("add_resource_format_loader", "loader", "at_front"), &ResourceCompatLoader::add_resource_format_loader, DEFVAL(false));
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("remove_resource_format_loader", "loader"), &ResourceCompatLoader::remove_resource_format_loader);
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("add_resource_object_converter", "converter", "at_front"), &ResourceCompatLoader::add_resource_object_converter, DEFVAL(false));
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("remove_resource_object_converter", "converter"), &ResourceCompatLoader::remove_resource_object_converter);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("real_load", "path", "type_hint", "cache_mode"), &ResourceCompatLoader::_real_load, DEFVAL(""), DEFVAL(CACHE_MODE_REUSE));
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("add_resource_format_loader", "loader", "at_front"), &::ResourceCompatLoader::add_resource_format_loader, DEFVAL(false));
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("remove_resource_format_loader", "loader"), &::ResourceCompatLoader::remove_resource_format_loader);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("add_resource_object_converter", "converter", "at_front"), &::ResourceCompatLoader::add_resource_object_converter, DEFVAL(false));
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("remove_resource_object_converter", "converter"), &::ResourceCompatLoader::remove_resource_object_converter);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_resource_info", "path", "type_hint"), &ResourceCompatLoader::_get_resource_info, DEFVAL(""));
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_dependencies", "path", "add_types"), &ResourceCompatLoader::_get_dependencies, DEFVAL(false));
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("to_text", "path", "dst", "flags", "original_path"), &ResourceCompatLoader::to_text, DEFVAL(0), DEFVAL(""));
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("to_binary", "path", "dst", "flags"), &ResourceCompatLoader::to_binary, DEFVAL(0));
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("make_globally_available"), &ResourceCompatLoader::make_globally_available);
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("unmake_globally_available"), &ResourceCompatLoader::unmake_globally_available);
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("is_globally_available"), &ResourceCompatLoader::is_globally_available);
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("set_default_gltf_load", "enable"), &ResourceCompatLoader::set_default_gltf_load);
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("is_default_gltf_load"), &ResourceCompatLoader::is_default_gltf_load);
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("handles_resource", "path", "type_hint"), &ResourceCompatLoader::handles_resource, DEFVAL(""));
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_resource_script_class", "path"), &ResourceCompatLoader::get_resource_script_class);
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_resource_type", "path"), &ResourceCompatLoader::get_resource_type);
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("save_custom", "resource", "path", "ver_major", "ver_minor"), &ResourceCompatLoader::save_custom);
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("resource_to_string", "path", "skip_cr"), &ResourceCompatLoader::resource_to_string, DEFVAL(true));
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("to_text", "path", "dst", "flags", "original_path"), &::ResourceCompatLoader::to_text, DEFVAL(0), DEFVAL(""));
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("to_binary", "path", "dst", "flags"), &::ResourceCompatLoader::to_binary, DEFVAL(0));
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("make_globally_available"), &::ResourceCompatLoader::make_globally_available);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("unmake_globally_available"), &::ResourceCompatLoader::unmake_globally_available);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("is_globally_available"), &::ResourceCompatLoader::is_globally_available);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("set_default_gltf_load", "enable"), &::ResourceCompatLoader::set_default_gltf_load);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("is_default_gltf_load"), &::ResourceCompatLoader::is_default_gltf_load);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("handles_resource", "path", "type_hint"), &::ResourceCompatLoader::handles_resource, DEFVAL(""));
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_resource_script_class", "path"), &::ResourceCompatLoader::get_resource_script_class);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_resource_type", "path"), &::ResourceCompatLoader::get_resource_type);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("save_custom", "resource", "path", "ver_major", "ver_minor"), &::ResourceCompatLoader::save_custom);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("resource_to_string", "path", "skip_cr"), &::ResourceCompatLoader::resource_to_string, DEFVAL(true));
 	ClassDB::bind_integer_constant(get_class_static(), "LoadType", "FAKE_LOAD", ResourceInfo::FAKE_LOAD);
 	ClassDB::bind_integer_constant(get_class_static(), "LoadType", "NON_GLOBAL_LOAD", ResourceInfo::NON_GLOBAL_LOAD);
 	ClassDB::bind_integer_constant(get_class_static(), "LoadType", "GLTF_LOAD", ResourceInfo::GLTF_LOAD);
 	ClassDB::bind_integer_constant(get_class_static(), "LoadType", "REAL_LOAD", ResourceInfo::REAL_LOAD);
 }
-
-Ref<Resource> CompatFormatLoader::custom_load(const String &p_path, const String &p_original_path, ResourceInfo::LoadType p_type, Error *r_error, bool use_threads, ResourceFormatLoader::CacheMode p_cache_mode) {
+} //namespace CoreBind
+Ref<Resource> CompatFormatLoader::custom_load(const String &p_path, const String &p_original_path, ResourceInfo::LoadType p_type, Error *r_error, bool use_threads, ResourceCompatLoader::CacheMode p_cache_mode) {
 	if (r_error) {
 		*r_error = ERR_UNAVAILABLE;
 	}

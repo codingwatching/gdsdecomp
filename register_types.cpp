@@ -443,7 +443,7 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<GDScriptExporter>();
 	ClassDB::register_class<GDExtensionExporter>();
 	ClassDB::register_class<ObjExporter>();
-	ClassDB::register_class<ResourceCompatLoader>();
+	ClassDB::register_class<CoreBind::ResourceCompatLoader>();
 	ClassDB::register_class<CompatFormatLoader>();
 	ClassDB::register_class<ResourceFormatLoaderCompatText>();
 	ClassDB::register_class<ResourceFormatLoaderCompatBinary>();

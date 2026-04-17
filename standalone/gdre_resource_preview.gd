@@ -89,11 +89,11 @@ var previous_res_info_size = Vector2(0, 0)
 func load_texture(path):
 	var ext = path.get_extension().to_lower()
 	if (ext == "image"):
-		%TextureRect.texture = ImageTexture.create_from_image(ResourceCompatLoader.real_load(path, "", ResourceFormatLoader.CACHE_MODE_IGNORE_DEEP))
+		%TextureRect.texture = ImageTexture.create_from_image(ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP))
 	elif (is_image(ext)):
 		%TextureRect.texture = ImageTexture.create_from_image(Image.load_from_file(path))
 	else:
-		%TextureRect.texture = ResourceCompatLoader.real_load(path, "", ResourceFormatLoader.CACHE_MODE_IGNORE_DEEP) # TODO: handle other texture types
+		%TextureRect.texture = ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP) # TODO: handle other texture types
 	if (%TextureRect.texture == null):
 		return false
 	%TextureRect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -153,7 +153,7 @@ func is_scene(ext, type: String):
 	return ext == "tscn" || ext == "scn" || type == "PackedScene"
 
 func load_mesh(path):
-	var res = ResourceCompatLoader.real_load(path, "", ResourceFormatLoader.CACHE_MODE_IGNORE_DEEP)
+	var res = ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP)
 	%SwitchViewButton.text = SWITCH_TO_TEXT_TEXT
 	%SwitchViewButton.visible = true
 	if not res:
@@ -175,7 +175,7 @@ func load_scene(path):
 			break
 	var start_time = Time.get_ticks_msec()
 	if not res:
-		res = ResourceCompatLoader.real_load(path, "", ResourceFormatLoader.CACHE_MODE_REUSE)
+		res = ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_REUSE)
 	%SwitchViewButton.text = SWITCH_TO_TEXT_TEXT
 	%SwitchViewButton.visible = true
 	if not res:

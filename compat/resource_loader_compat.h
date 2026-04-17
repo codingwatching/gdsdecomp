@@ -9,9 +9,7 @@
 class CompatFormatLoader;
 class CompatFormatSaver;
 class ResourceCompatConverter;
-class ResourceCompatLoader : public Object {
-	GDCLASS(ResourceCompatLoader, Object);
-
+class ResourceCompatLoader {
 	enum {
 		MAX_LOADERS = 64,
 		MAX_CONVERTERS = 8192,
@@ -25,26 +23,18 @@ class ResourceCompatLoader : public Object {
 	static bool globally_available;
 
 protected:
-	static Ref<Resource> _fake_load(const String &p_path, const String &p_type_hint = "");
-	static Ref<Resource> _non_global_load(const String &p_path, const String &p_type_hint = "");
-	static Ref<Resource> _gltf_load(const String &p_path, const String &p_type_hint = "");
-	static Ref<Resource> _real_load(const String &p_path, const String &p_type_hint = "", ResourceFormatLoader::CacheMode p_cache_mode = ResourceFormatLoader::CACHE_MODE_REUSE);
-	static Dictionary _get_resource_info(const String &p_path, const String &p_type_hint = "");
-	static Vector<String> _get_dependencies(const String &p_path, bool p_add_types);
-
-	static void _bind_methods();
-
 	static Ref<Resource> _load_for_text_conversion(const String &p_path, const String &original_path = "", Error *r_error = nullptr);
 
 public:
+	using CacheMode = ResourceLoaderConstants::CacheMode;
 	static ResourceInfo::LoadType get_default_load_type();
 
 	static Ref<Resource> fake_load(const String &p_path, const String &p_type_hint = "", Error *r_error = nullptr);
 	static Ref<Resource> non_global_load(const String &p_path, const String &p_type_hint = "", Error *r_error = nullptr);
 	static Ref<Resource> gltf_load(const String &p_path, const String &p_type_hint = "", Error *r_error = nullptr);
-	static Ref<Resource> real_load(const String &p_path, const String &p_type_hint = "", Error *r_error = nullptr, ResourceFormatLoader::CacheMode p_cache_mode = ResourceFormatLoader::CACHE_MODE_REUSE);
-	static Ref<Resource> custom_load(const String &p_path, const String &p_type_hint = "", ResourceInfo::LoadType p_type = ResourceInfo::LoadType::REAL_LOAD, Error *r_error = nullptr, bool use_threads = true, ResourceFormatLoader::CacheMode p_cache_mode = ResourceFormatLoader::CACHE_MODE_REUSE);
-	static Ref<Resource> load_with_real_resource_loader(const String &p_path, const String &p_type_hint = "", Error *r_error = nullptr, bool use_threads = true, ResourceFormatLoader::CacheMode p_cache_mode = ResourceFormatLoader::CACHE_MODE_REUSE);
+	static Ref<Resource> real_load(const String &p_path, const String &p_type_hint = "", Error *r_error = nullptr, CacheMode p_cache_mode = ResourceFormatLoader::CACHE_MODE_REUSE);
+	static Ref<Resource> custom_load(const String &p_path, const String &p_type_hint = "", ResourceInfo::LoadType p_type = ResourceInfo::LoadType::REAL_LOAD, Error *r_error = nullptr, bool use_threads = true, CacheMode p_cache_mode = ResourceFormatLoader::CACHE_MODE_REUSE);
+	static Ref<Resource> load_with_real_resource_loader(const String &p_path, const String &p_type_hint = "", Error *r_error = nullptr, bool use_threads = true, CacheMode p_cache_mode = ResourceFormatLoader::CACHE_MODE_REUSE);
 	static void add_resource_format_loader(Ref<CompatFormatLoader> p_format_loader, bool p_at_front = false);
 	static void remove_resource_format_loader(Ref<CompatFormatLoader> p_format_loader);
 	static void add_resource_object_converter(Ref<ResourceCompatConverter> p_converter, bool p_at_front = false);
@@ -78,7 +68,7 @@ class CompatFormatLoader : public ResourceFormatLoader {
 	GDCLASS(CompatFormatLoader, ResourceFormatLoader);
 
 public:
-	virtual Ref<Resource> custom_load(const String &p_path, const String &p_original_path, ResourceInfo::LoadType p_type, Error *r_error = nullptr, bool use_threads = true, ResourceFormatLoader::CacheMode p_cache_mode = CACHE_MODE_REUSE);
+	virtual Ref<Resource> custom_load(const String &p_path, const String &p_original_path, ResourceInfo::LoadType p_type, Error *r_error = nullptr, bool use_threads = true, ResourceCompatLoader::CacheMode p_cache_mode = CACHE_MODE_REUSE);
 	virtual Ref<ResourceInfo> get_resource_info(const String &p_path, Error *r_error) const;
 	virtual bool handles_fake_load() const;
 
@@ -215,3 +205,28 @@ public:
 	static Ref<Resource> set_real_from_missing_resource(Ref<MissingResource> mr, Ref<Resource> res, ResourceInfo::LoadType load_type, const HashMap<String, String> &prop_map = {});
 	static bool is_external_resource(Ref<MissingResource> mr);
 };
+
+namespace CoreBind {
+class ResourceCompatLoader : public Object {
+	GDCLASS(ResourceCompatLoader, Object);
+	enum CacheMode {
+		CACHE_MODE_IGNORE,
+		CACHE_MODE_REUSE,
+		CACHE_MODE_REPLACE,
+		CACHE_MODE_IGNORE_DEEP,
+		CACHE_MODE_REPLACE_DEEP,
+	};
+
+protected:
+	static void _bind_methods();
+
+public:
+	static Ref<Resource> _fake_load(const String &p_path, const String &p_type_hint = "");
+	static Ref<Resource> _non_global_load(const String &p_path, const String &p_type_hint = "");
+	static Ref<Resource> _gltf_load(const String &p_path, const String &p_type_hint = "");
+	static Dictionary _get_resource_info(const String &p_path, const String &p_type_hint = "");
+	static Vector<String> _get_dependencies(const String &p_path, bool p_add_types);
+	static Ref<Resource> _real_load(const String &p_path, const String &p_type_hint = "", CacheMode p_cache_mode = CACHE_MODE_REUSE);
+};
+} //namespace CoreBind
+VARIANT_ENUM_CAST(CoreBind::ResourceCompatLoader::CacheMode);
