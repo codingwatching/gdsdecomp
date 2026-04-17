@@ -29,7 +29,7 @@ env:
   GODOT_REPOSITORY: nikitalita/godot
   # Change the README too
   GODOT_MAIN_SYNC_REF: gdre-wb-90113707f2f
-  SCONSFLAGS: verbose=yes warnings=all werror=no module_text_server_fb_enabled=yes minizip=yes deprecated=yes
+  SCONSFLAGS: verbose=yes warnings=all werror=no module_text_server_fb_enabled=yes minizip=yes deprecated=yes angle=yes accesskit=no
   SCONSFLAGS_TEMPLATE: disable_path_overrides=no no_editor_splash=yes module_camera_enabled=no module_mobile_vr_enabled=no module_upnp_enabled=no module_websocket_enabled=no module_csg_enabled=yes module_gridmap_enabled=yes use_static_cpp=yes builtin_freetype=yes builtin_libpng=yes builtin_zlib=yes builtin_libwebp=yes builtin_libvorbis=yes builtin_libogg=yes disable_3d=no
   SCONS_CACHE_MSVC_CONFIG: true
 
@@ -189,10 +189,36 @@ jobs:
       - name: Setup python and scons
         uses: ./.github/actions/godot-deps
 
+      - name: Download pre-built ANGLE
+        if: matrix.platform == 'macos' || matrix.platform == 'windows'
+        shell: sh
+        id: angle-sdk
+        run: |
+          if python ./misc/scripts/install_angle.py; then
+            echo "ANGLE_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::ANGLE SDK installation failed, building without ANGLE support."
+            echo "ANGLE_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      # TODO: Enable this when we figure out how to resolve linking issues with AccessKit; getting duplicate symbols for `_rust_eh_personality`.
+      # - name: Download pre-built AccessKit
+      #   shell: sh
+      #   id: accesskit-sdk
+      #   if: matrix.platform == 'macos' || matrix.platform == 'windows' || matrix.platform == 'linux'
+      #   run: |
+      #     if python ./misc/scripts/install_accesskit.py; then
+      #       echo "ACCESSKIT_ENABLED=yes" >> "$GITHUB_OUTPUT"
+      #     else
+      #       echo "::warning::AccessKit SDK installation failed, building without AccessKit support."
+      #       echo "ACCESSKIT_ENABLED=no" >> "$GITHUB_OUTPUT"
+      #     fi
+
       - name: Setup Vulkan SDK
         if: matrix.platform == 'macos'
         run: |
           sh misc/scripts/install_vulkan_sdk_macos.sh
+
       - name: Download Direct3D 12 SDK components
         if: matrix.platform == 'windows'
         shell: sh
