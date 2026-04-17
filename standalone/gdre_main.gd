@@ -1483,6 +1483,11 @@ func handle_cli(args: PackedStringArray) -> bool:
 	var test_recovery: bool = false
 	var test_output_dir: String = ""
 	if (args.size() == 0):
+		if GDRESettings.is_headless():
+			print_usage()
+			print("ERROR: no command specified")
+			ret_code = 1
+			return true
 		return false
 	var any_commands = false
 	for i in range(args.size()):
@@ -1690,6 +1695,11 @@ func handle_cli(args: PackedStringArray) -> bool:
 		return true
 
 	if set_setting and main_cmds.size() == 0:
+		if GDRESettings.is_headless():
+			print_usage()
+			print("ERROR: no command specified")
+			ret_code = 1
+			return true
 		return false
 
 	had_main = true
