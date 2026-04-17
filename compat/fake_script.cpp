@@ -103,10 +103,6 @@ PlaceHolderScriptInstance *FakeScript::placeholder_instance_create(Object *p_thi
 	return si;
 }
 
-bool FakeScript::instance_has(const Object *p_this) const {
-	return true;
-}
-
 bool FakeScript::has_source_code() const {
 	return !source.is_empty();
 }

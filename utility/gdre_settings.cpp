@@ -15,7 +15,7 @@
 #include "crypto/custom_decryptor.h"
 #include "exporters/translation_exporter.h"
 #include "main/main.h"
-#include "modules/gdscript/gdscript.h"
+#include "modules/gdscript/gdscript_resource_format.h"
 #include "modules/zip/zip_reader.h"
 #include "plugin_manager/plugin_manager.h"
 #include "utility/common.h"

@@ -31,10 +31,8 @@ BRANCHES_TO_MERGE=(
 	material-fix-deprecated-param
 	fix-pack-error
 	convert-3.x-escn
-	fix-svg
 	fix-compat-array-shapes
 	fix-diraccess-windows
-	gltf-fix-value-track-interpolation
 )
 
 # set fail on error

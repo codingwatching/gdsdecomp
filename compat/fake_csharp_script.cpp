@@ -100,11 +100,6 @@ PlaceHolderScriptInstance *FakeCSharpScript::placeholder_instance_create(Object 
 	return si;
 }
 
-bool FakeCSharpScript::instance_has(const Object *p_this) const {
-	// For now, return false as we don't track instances
-	return false;
-}
-
 PropertyHint string_to_property_hint(const String &p_string) {
 	String name = p_string.to_upper();
 	if (name == "NONE") {

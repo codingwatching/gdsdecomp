@@ -11,7 +11,7 @@
 #include "core/error/error_list.h"
 #include "core/error/error_macros.h"
 #include "core/io/file_access.h"
-#include "core/io/image_loader.h"
+#include "core/io/image_resource_format.h"
 #include "core/io/missing_resource.h"
 #include "core/variant/dictionary.h"
 #include "scene/resources/compressed_texture.h"

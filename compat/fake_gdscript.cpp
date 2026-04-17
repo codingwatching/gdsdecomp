@@ -121,11 +121,6 @@ PlaceHolderScriptInstance *FakeGDScript::placeholder_instance_create(Object *p_t
 	return si;
 }
 
-bool FakeGDScript::instance_has(const Object *p_this) const {
-	// TODO?
-	return true;
-}
-
 void FakeGDScript::set_source_code(const String &p_code) {
 	is_binary = false;
 	source = p_code;

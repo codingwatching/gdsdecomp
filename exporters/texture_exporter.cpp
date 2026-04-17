@@ -9,7 +9,7 @@
 
 #include "core/error/error_list.h"
 #include "core/io/file_access.h"
-#include "core/io/image_loader.h"
+#include "core/io/image_resource_format.h"
 #include "core/io/resource_loader.h"
 #include "exporters/export_report.h"
 #include "scene/resources/atlas_texture.h"
