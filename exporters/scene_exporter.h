@@ -27,11 +27,6 @@ class SceneExporter : public ResourceExporter {
 
 	static SceneExporter *singleton;
 
-	void do_batch_export_instanced_scene(int i, std::shared_ptr<BatchExportToken> *tokens);
-	void do_single_threaded_batch_export_instanced_scene(int i, std::shared_ptr<BatchExportToken> *tokens);
-
-	String get_batch_export_description(int i, std::shared_ptr<BatchExportToken> *tokens) const;
-
 protected:
 	static void _bind_methods();
 
@@ -70,8 +65,6 @@ public:
 	virtual void postbatch_export() override;
 
 	static Ref<ExportReport> export_file_with_options(const String &out_path, const String &res_path, const Dictionary &options);
-	static size_t get_vram_usage();
-	Vector<Ref<ExportReport>> batch_export_files(const String &output_dir, const Vector<Ref<ImportInfo>> &scenes);
 
 	static constexpr int get_minimum_godot_ver_supported() {
 		return MINIMUM_GODOT_VER_SUPPORTED;

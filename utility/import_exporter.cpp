@@ -1097,9 +1097,10 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 	Vector<ExportToken> non_high_priority_tokens;
 	Vector<ExportToken> tokens;
 	Vector<ExportToken> non_multithreaded_tokens;
-	Vector<Ref<ImportInfo>> scene_tokens;
+	Vector<ExportToken> scene_tokens;
 	HashMap<String, Vector<Ref<ImportInfo>>> export_dest_to_iinfo;
 	HashSet<String> dupes;
+	bool force_single_threaded = GDREConfig::get_singleton()->get_setting("force_single_threaded", false);
 	for (int i = 0; i < _files.size(); i++) {
 		Ref<ImportInfo> iinfo = _files[i];
 		if (partial_export && !hashset_intersects_vector(files_to_export_set, iinfo->get_dest_files())) {
@@ -1155,18 +1156,15 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 				continue;
 			}
 		}
-		bool supports_multithreading = !GDREConfig::get_singleton()->get_setting("force_single_threaded", false);
+		bool supports_multithreading = !force_single_threaded;
 		bool is_high_priority = importer == "gdextension" || importer == "gdnative";
+		bool is_scene = false;
 		if (exporter_map.has(importer)) {
 			auto &exporter = exporter_map.get(importer);
-			// if (exporter->get_name() == "PackedScene") {
-			// 	scene_tokens.push_back(iinfo);
-			// 	export_dest_to_iinfo.insert(iinfo->get_export_dest(), Vector<Ref<ImportInfo>>({ iinfo }));
-			// 	continue;
-			// } else
 			if (!exporter->supports_multithread()) {
 				supports_multithreading = false;
 			}
+			is_scene = exporter->get_name() == "PackedScene";
 		} else {
 			// Non-exportable resource that wasn't imported or auto-converted, don't report it
 			if (iinfo->get_ver_major() <= 2 && !iinfo->is_import() && !iinfo->is_auto_converted()) {
@@ -1174,15 +1172,17 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 			}
 			supports_multithreading = false;
 		}
-		if (is_high_priority) {
-			if (supports_multithreading) {
+		if (supports_multithreading) {
+			if (is_scene) {
+				scene_tokens.push_back({ iinfo, nullptr, supports_multithreading });
+			} else if (is_high_priority) {
 				tokens.insert(0, { iinfo, nullptr, supports_multithreading });
 			} else {
-				non_multithreaded_tokens.insert(0, { iinfo, nullptr, supports_multithreading });
+				non_high_priority_tokens.push_back({ iinfo, nullptr, supports_multithreading });
 			}
 		} else {
-			if (supports_multithreading) {
-				non_high_priority_tokens.push_back({ iinfo, nullptr, supports_multithreading });
+			if (is_high_priority) {
+				non_multithreaded_tokens.insert(0, { iinfo, nullptr, supports_multithreading });
 			} else {
 				non_multithreaded_tokens.push_back({ iinfo, nullptr, supports_multithreading });
 			}
@@ -1196,7 +1196,28 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 	}
 	// Shuffle the vector to prevent situations where a bunch of large resources are exported at once and exhausts the memory
 	gdre::shuffle_vector(non_high_priority_tokens);
-	tokens.append_array(non_high_priority_tokens);
+
+	if (scene_tokens.is_empty()) {
+		tokens.append_array(non_high_priority_tokens);
+	} else if (non_high_priority_tokens.is_empty()) {
+		tokens.append_array(scene_tokens);
+	} else {
+		// Evenly distribute scene exports among non-high-priority exports.
+		int scene_idx = 0;
+		const int non_scene_count = non_high_priority_tokens.size();
+		const int scene_count = scene_tokens.size();
+		for (int i = 0; i < non_scene_count; i++) {
+			tokens.push_back(non_high_priority_tokens[i]);
+			while (scene_idx < scene_count && int64_t(i + 1) * int64_t(scene_count) >= int64_t(scene_idx + 1) * int64_t(non_scene_count)) {
+				tokens.push_back(scene_tokens[scene_idx]);
+				scene_idx++;
+			}
+		}
+		while (scene_idx < scene_count) {
+			tokens.push_back(scene_tokens[scene_idx]);
+			scene_idx++;
+		}
+	}
 
 	pr->set_progress_length(false, tokens.size() + non_multithreaded_tokens.size());
 
@@ -1347,24 +1368,6 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 		return err;
 	}
 
-	if (scene_tokens.size() > 0) {
-		if (GDRESettings::get_singleton()->is_headless()) {
-			print_line("WARNING: Some scenes can fail to export in headless mode. This is due to a limitation of the Godot engine.\n"
-					   "If some scenes fail to export, try running in GUI mode.");
-		}
-		// intentionally not checking for cancellation here; scene export can sometimes hang on certain scenes, and we don't want to cancel the entire export
-		auto reports = SceneExporter::get_singleton()->batch_export_files(output_dir, scene_tokens);
-		for (int i = 0; i < reports.size(); i++) {
-			ExportToken token = { reports[i]->get_import_info(), reports[i], false };
-			rewrite_metadata(token);
-			non_multithreaded_tokens.push_back(token);
-		}
-	}
-
-	if (err != OK) {
-		reset_before_return(true);
-		return err;
-	}
 	tokens.append_array(non_multithreaded_tokens);
 	pr->step("Finalizing...", tokens.size() - 1, false);
 	pr->set_progress_length(true);
