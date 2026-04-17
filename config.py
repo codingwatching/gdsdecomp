@@ -59,6 +59,8 @@ def monkey_patch_macos_generate_bundle():
         else:
             templ = env.Dir("#misc/dist/macos_template.app").abspath
             frameworks_dir = os.path.join(templ, "Contents/Frameworks")
+        if not os.path.isdir(templ):
+            raise Exception(f"gdsdecomp: failed to generate bundle: {templ} does not exist")
         remove_fw_dir = False
         if not os.path.isdir(frameworks_dir):
             remove_fw_dir = True
