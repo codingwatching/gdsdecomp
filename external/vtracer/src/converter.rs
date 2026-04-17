@@ -113,6 +113,7 @@ fn should_key_image(img: &ColorImage, config: &ConverterConfig) -> bool {
     false
 }
 
+#[allow(dead_code)]
 fn to_image_with_holes(cluster: &Cluster, view: &ClustersView<'_>, hole: bool) -> visioncortex::BinaryImage {
 	let width = view.width as usize;
 	let height = view.height as usize;
@@ -134,6 +135,7 @@ fn to_image_with_holes(cluster: &Cluster, view: &ClustersView<'_>, hole: bool) -
 	image
 }
 
+#[allow(dead_code)]
 fn new_cluster_from_indices(cluster: &Cluster, indices: &Vec<u32>, color: Color) -> Cluster {
 	let mut new_cluster = cluster.clone();
 	new_cluster.indices = indices.clone();
@@ -145,6 +147,7 @@ fn new_cluster_from_indices(cluster: &Cluster, indices: &Vec<u32>, color: Color)
 	new_cluster
 }
 
+#[allow(dead_code)]
 fn split_disconnected_pixels(cluster: &Cluster, view: &ClustersView<'_>) -> Vec<Cluster>{
 	if cluster.indices.len() <= 1 {
 		return vec![cluster.clone()];
@@ -230,11 +233,15 @@ fn remove_pixels_from_lower_layers(p_clusters: &Clusters) -> Vec<Cluster>{
                 new_cluster.residue_sum.b = color.b as u32 * new_cluster.indices.len() as u32;
                 new_cluster.residue_sum.a = color.a as u32 * new_cluster.indices.len() as u32;
                 new_cluster.residue_sum.counter = new_cluster.indices.len() as u32;
-                clusters.extend(split_disconnected_pixels(&new_cluster, &view));
+				clusters.push(new_cluster);
+				// TODO: This is causing svgs to be way, way larger than they need to be and it doesn't
+				// seem to help with re-rasterizing the image upon import, so disabling for noe.
+                // clusters.extend(split_disconnected_pixels(&new_cluster, &view));
             }
             continue;
         }
-        clusters.extend(split_disconnected_pixels(&cluster, &view));
+		clusters.push(cluster);
+        // clusters.extend(split_disconnected_pixels(&cluster, &view));
     }
     clusters
 }
