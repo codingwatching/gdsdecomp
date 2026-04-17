@@ -10,6 +10,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -67,12 +68,45 @@ public:
 		}
 	};
 
+	template <typename R, bool IsVoid = std::is_void_v<R>>
+	class MainThreadDispatchResultStorage;
+
+	template <typename R>
+	class MainThreadDispatchResultStorage<R, false> {
+		std::optional<std::decay_t<R>> result;
+
+	public:
+		template <typename F>
+		void execute(F &&p_callback) {
+			result = std::forward<F>(p_callback)();
+		}
+
+		std::optional<std::decay_t<R>> take_result() {
+			return std::move(result);
+		}
+	};
+
+	template <typename R>
+	class MainThreadDispatchResultStorage<R, true> {
+	public:
+		template <typename F>
+		void execute(F &&p_callback) {
+			std::forward<F>(p_callback)();
+		}
+	};
+
+	template <typename R>
+	using MainThreadDispatchReturn = std::optional<std::conditional_t<std::is_void_v<R>, bool, std::decay_t<R>>>;
+
 	// This is a helper class to dispatch a callback to the main thread.
 	template <typename C, typename M, typename U>
 	class TemplateMainThreadDispatchData : public BaseMainThreadDispatchData {
+		using ReturnType = std::invoke_result_t<M, C *, U>;
+
 		C *instance;
 		M method;
 		U userdata;
+		MainThreadDispatchResultStorage<ReturnType> result_storage;
 
 	public:
 		TemplateMainThreadDispatchData(TaskManager::TaskManagerID p_calling_task_id, C *p_instance, M p_method, U p_userdata) :
@@ -81,23 +115,38 @@ public:
 				method(p_method),
 				userdata(p_userdata) {}
 		void callback_internal() override {
-			(instance->*method)(userdata);
+			result_storage.execute([this]() -> ReturnType {
+				return std::invoke(method, instance, userdata);
+			});
+		}
+
+		template <typename T = ReturnType, typename = std::enable_if_t<!std::is_void_v<T>>>
+		std::optional<std::decay_t<T>> take_result() {
+			return result_storage.take_result();
 		}
 	};
 
 	// This is a helper class to dispatch a callback to the main thread.
-	template <typename... Args>
+	template <typename R, typename... Args>
 	class FunctionMainThreadDispatchData : public BaseMainThreadDispatchData {
-		std::function<void(Args...)> function;
+		std::function<R(Args...)> function;
 		std::tuple<std::decay_t<Args>...> userdata;
+		MainThreadDispatchResultStorage<R> result_storage;
 
 	public:
-		FunctionMainThreadDispatchData(TaskManager::TaskManagerID p_calling_task_id, std::function<void(Args...)> p_function, std::decay_t<Args>... p_userdata) :
+		FunctionMainThreadDispatchData(TaskManager::TaskManagerID p_calling_task_id, std::function<R(Args...)> p_function, std::decay_t<Args>... p_userdata) :
 				BaseMainThreadDispatchData(p_calling_task_id),
 				function(std::move(p_function)),
 				userdata(std::move(p_userdata)...) {}
 		void callback_internal() override {
-			std::apply(function, userdata);
+			result_storage.execute([this]() -> R {
+				return std::apply(function, userdata);
+			});
+		}
+
+		template <typename T = R, typename = std::enable_if_t<!std::is_void_v<T>>>
+		std::optional<std::decay_t<T>> take_result() {
+			return result_storage.take_result();
 		}
 	};
 
@@ -600,15 +649,32 @@ public:
 	}
 
 	template <typename C, typename M, typename U>
-	bool dispatch_to_main_thread(C *p_instance, M p_method, U p_userdata) {
-		std::shared_ptr<BaseMainThreadDispatchData> data = std::make_shared<TemplateMainThreadDispatchData<C, M, U>>(get_thread_task_id(), p_instance, p_method, p_userdata);
-		return _dispatch_to_main_thread(data);
+	MainThreadDispatchReturn<std::invoke_result_t<M, C *, U>> dispatch_to_main_thread(C *p_instance, M p_method, U p_userdata) {
+		using ReturnType = std::invoke_result_t<M, C *, U>;
+		auto data = std::make_shared<TemplateMainThreadDispatchData<C, M, U>>(get_thread_task_id(), p_instance, p_method, p_userdata);
+		bool canceled = _dispatch_to_main_thread(data);
+		if (canceled) {
+			return std::nullopt;
+		}
+		if constexpr (std::is_void_v<ReturnType>) {
+			return true;
+		} else {
+			return data->take_result();
+		}
 	}
 
-	template <typename... Args>
-	bool dispatch_to_main_thread(std::function<void(Args...)> func, std::decay_t<Args>... userdata) {
-		std::shared_ptr<BaseMainThreadDispatchData> data = std::make_shared<FunctionMainThreadDispatchData<Args...>>(get_thread_task_id(), std::move(func), std::move(userdata)...);
-		return _dispatch_to_main_thread(data);
+	template <typename R, typename... Args>
+	MainThreadDispatchReturn<R> dispatch_to_main_thread(std::function<R(Args...)> func, std::decay_t<Args>... userdata) {
+		auto data = std::make_shared<FunctionMainThreadDispatchData<R, Args...>>(get_thread_task_id(), std::move(func), std::move(userdata)...);
+		bool canceled = _dispatch_to_main_thread(data);
+		if (canceled) {
+			return std::nullopt;
+		}
+		if constexpr (std::is_void_v<R>) {
+			return true;
+		} else {
+			return data->take_result();
+		}
 	}
 
 	DownloadTaskID add_download_task(const String &p_download_url, const String &p_save_path, bool silent = false);
