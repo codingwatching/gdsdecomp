@@ -996,12 +996,18 @@ Error GLBExporterInstance::_load_deps() {
 			if (our_path != info.remap) {
 				WARN_PRINT(vformat("Dependency %s:%s is not mapped to the same path: %s", info.dep, info.remap, our_path));
 				if (!ResourceCache::has(info.dep)) {
-					auto texture = ResourceCompatLoader::custom_load(
-							info.remap, "",
-							ResourceCompatLoader::get_default_load_type(),
-							&err,
-							using_threaded_load(),
-							ResourceFormatLoader::CACHE_MODE_IGNORE); // not ignore deep, we want to reuse dependencies if they exist
+					auto result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<Resource>()>)[&]() -> Ref<Resource> {
+						return ResourceCompatLoader::custom_load(
+								info.remap, "",
+								ResourceCompatLoader::get_default_load_type(),
+								&err,
+								using_threaded_load(),
+								ResourceFormatLoader::CACHE_MODE_IGNORE); // not ignore deep, we want to reuse dependencies if they exist
+					});
+					if (!result.has_value()) {
+						return ERR_SKIP; // cancelled
+					}
+					auto texture = result.value();
 					if (err || texture.is_null()) {
 						if (ignore_missing_dependencies) {
 							missing_dependencies.push_back(info.dep);
@@ -1644,7 +1650,7 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 		meshes_in_mesh_instances.insert(mesh);
 		return mesh_instance;
 	};
-	std::function<void(Node *)> process_node = [&](Node *node) {
+	std::function<bool(Node *)> process_node = [&](Node *node) -> bool {
 		ScriptInstance *si = node->get_script_instance();
 		List<PropertyInfo> properties;
 		HashSet<MeshInstance3D *> mis_generated_from_scripts;
@@ -1708,7 +1714,9 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 						}
 					}
 				};
-				add_mesh_instances();
+				if (TaskManager::get_singleton()->dispatch_to_main_thread(add_mesh_instances).has_value()) {
+					return false; // cancelled
+				}
 			}
 		}
 		Node *original_node = nullptr;
@@ -1754,18 +1762,17 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 		// replace NavMesh/Occluder/Area3D-only nodes with mesh instances
 		// e.g. the original mesh will have been replaced by a NavMesh/Occluder/Area3D node by the importer, so we have to put it back.
 		if (!is_auto_generated_node(node) && node != root) {
+			Ref<ArrayMesh> replacement_mesh;
 			if (auto navigation_region = Object::cast_to<NavigationRegion3D>(node); navigation_region) {
 				if (Ref<NavigationMesh> navmesh = navigation_region->get_navigation_mesh(); navmesh.is_valid()) {
-					auto debug_mesh = get_nav_array_debug_mesh(navmesh);
-					replace_with_mi(debug_mesh);
+					replacement_mesh = get_nav_array_debug_mesh(navmesh);
 				}
 			} else if (auto occluder_instance = Object::cast_to<OccluderInstance3D>(node); occluder_instance) {
 				if (Ref<Occluder3D> occluder = occluder_instance->get_occluder(); occluder.is_valid()) {
-					replace_with_mi(occluder->get_debug_mesh());
+					replacement_mesh = occluder->get_debug_mesh();
 				}
 			} else if (auto area_3d = Object::cast_to<Area3D>(node); area_3d) {
 				Vector<Ref<ArrayMesh>> meshes;
-				Ref<ArrayMesh> mesh;
 				for (auto &E : area_3d->get_children()) {
 					if (auto collision_shape = Object::cast_to<CollisionShape3D>(E.operator Object *()); collision_shape && collision_shape->get_shape().is_valid()) {
 						meshes.push_back(collision_shape->get_shape()->get_debug_mesh());
@@ -1782,12 +1789,14 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 							}
 						}
 					}
-					mesh = surface_tool.commit();
+					replacement_mesh = surface_tool.commit();
 				} else if (meshes.size() == 1) {
-					mesh = meshes[0];
+					replacement_mesh = meshes[0];
 				}
-				if (mesh.is_valid()) {
-					replace_with_mi(mesh);
+			}
+			if (replacement_mesh.is_valid()) {
+				if (!TaskManager::get_singleton()->dispatch_to_main_thread(replace_with_mi, replacement_mesh).has_value()) {
+					return false; // cancelled
 				}
 			}
 		}
@@ -1806,11 +1815,16 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 		for (auto &E : node->get_children()) {
 			auto child = Object::cast_to<Node>(E.operator Object *());
 			if (!mis_generated_from_scripts.has(Object::cast_to<MeshInstance3D>(child))) {
-				process_node(child);
+				if (!process_node(child)) {
+					return false; // cancelled
+				}
 			}
 		}
+		return true;
 	};
-	process_node(root);
+	if (!process_node(root)) {
+		return nullptr; // cancelled
+	}
 	if (replaced_node_names.size() > 0) {
 		auto thingy = String(", ").join(replaced_node_names);
 		print_line(vformat("%s: replaced nodes with mesh instances: %s", scene_name, thingy));
@@ -3172,7 +3186,13 @@ Node *GLBExporterInstance::_instantiate_scene(Ref<PackedScene> scene) {
 		_silence_errors(true);
 	}
 #endif
-	Node *root = scene->instantiate();
+	auto result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Node *()>)[&scene]() -> Node * {
+		return scene->instantiate();
+	});
+	if (!result.has_value()) {
+		return nullptr; // cancelled
+	}
+	Node *root = result.value();
 #ifndef DEBUG_ENABLED
 	if (ver_major <= 3) {
 		_silence_errors(false);
@@ -3205,12 +3225,21 @@ Error GLBExporterInstance::_load_scene(Ref<PackedScene> &r_scene) {
 		_silence_errors(true);
 	}
 #endif
+	std::optional<Ref<PackedScene>> result;
 	// For some reason, scenes with meshes fail to load without the load done by ResourceLoader::load, possibly due to notification shenanigans.
 	if (ResourceCompatLoader::is_globally_available() && using_threaded_load()) {
-		r_scene = ResourceLoader::load(source_path, "PackedScene", ResourceFormatLoader::CACHE_MODE_REUSE, &err);
+		result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<PackedScene>()>)[&]() -> Ref<PackedScene> {
+			return ResourceLoader::load(source_path, "PackedScene", ResourceFormatLoader::CACHE_MODE_REUSE, &err);
+		});
 	} else {
-		r_scene = ResourceCompatLoader::custom_load(source_path, "PackedScene", mode_type, &err, using_threaded_load(), ResourceFormatLoader::CACHE_MODE_REUSE);
+		result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<PackedScene>()>)[&]() -> Ref<PackedScene> {
+			return ResourceCompatLoader::custom_load(source_path, "PackedScene", mode_type, &err, using_threaded_load(), ResourceFormatLoader::CACHE_MODE_REUSE);
+		});
 	}
+	if (!result.has_value()) {
+		return ERR_SKIP;
+	}
+	r_scene = result.value();
 #ifndef DEBUG_ENABLED
 	if (ver_major <= 3) {
 		_silence_errors(false);
@@ -3337,10 +3366,18 @@ Error SceneExporter::export_file_to_obj(const String &p_dest_path, const String 
 		return ERR_UNAVAILABLE;
 	}
 	// For some reason, scenes with meshes fail to load without the load done by ResourceLoader::load, possibly due to notification shenanigans.
+	std::optional<Ref<PackedScene>> result;
 	if (ResourceCompatLoader::is_globally_available() && using_threaded_load) {
-		scene = ResourceLoader::load(p_src_path, "PackedScene", ResourceFormatLoader::CACHE_MODE_REUSE, &err);
+		result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<PackedScene>()>)[&]() -> Ref<PackedScene> {
+			return ResourceLoader::load(p_src_path, "PackedScene", ResourceFormatLoader::CACHE_MODE_REUSE, &err);
+		});
 	} else {
-		scene = ResourceCompatLoader::custom_load(p_src_path, "PackedScene", ResourceCompatLoader::get_default_load_type(), &err, !using_threaded_load, ResourceFormatLoader::CACHE_MODE_REUSE);
+		result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<PackedScene>()>)[&]() -> Ref<PackedScene> {
+			return ResourceCompatLoader::custom_load(p_src_path, "PackedScene", ResourceCompatLoader::get_default_load_type(), &err, !using_threaded_load, ResourceFormatLoader::CACHE_MODE_REUSE);
+		});
+	}
+	if (!result.has_value()) {
+		return ERR_SKIP; // cancelled
 	}
 	ERR_FAIL_COND_V_MSG(err, ERR_FILE_CANT_READ, "Failed to load scene " + p_src_path);
 	return export_scene_to_obj(scene, p_dest_path, iinfo, ver_major);
@@ -3610,14 +3647,19 @@ struct BatchExportToken : public TaskRunnerStruct {
 			_scene = scene;
 			if (!is_obj_output()) {
 				root = instance._instantiate_scene(scene);
+				if (root) {
+					root = instance._set_stuff_from_instanced_scene(root);
+				}
 				if (!root) {
 					_scene = nullptr;
-					err = ERR_CANT_ACQUIRE_RESOURCE;
+					err = _check_cancelled();
+					if (err == OK) {
+						err = ERR_CANT_ACQUIRE_RESOURCE;
+					}
 					report->set_error(err);
 					after_preload();
 					return false;
 				}
-				root = instance._set_stuff_from_instanced_scene(root);
 			}
 		}
 
