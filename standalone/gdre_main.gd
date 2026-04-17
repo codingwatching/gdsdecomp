@@ -732,8 +732,10 @@ var MAIN_CMD_NOTES = """Main commands:
 --patch-translations=<CSV_FILE>=<SRC_PATH>    Patch translations with the specified CSV file and source path
                                                 (e.g. "/path/to/translation.csv=res://translations/translation.csv") (can be repeated)
 --setting=<SETTING_NAME>=<VALUE>   Set a configuration value for this session (can be repeated)
---gdre-help                        Print the help message and exit
---gdre-version                     Print the version of GDRE tools and exit
+--godot-version                    Print the version of Godot engine and exit
+--godot-help                       Print the help message of Godot engine and exit
+--help, --gdre-help                Print this help message and exit
+--version, --gdre-version          Print this version of GDRE tools and exit
 """
 
 var GLOB_NOTES = """Notes on Include/Exclude globs:
