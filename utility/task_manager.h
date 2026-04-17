@@ -8,7 +8,11 @@
 #include "utility/gd_parallel_queue.h"
 #include "utility/gdre_config.h"
 
+#include <functional>
 #include <memory>
+#include <tuple>
+#include <type_traits>
+#include <utility>
 
 struct TaskRunnerStruct {
 	virtual bool pre_run() { return true; }
@@ -82,18 +86,18 @@ public:
 	};
 
 	// This is a helper class to dispatch a callback to the main thread.
-	template <typename U>
+	template <typename... Args>
 	class FunctionMainThreadDispatchData : public BaseMainThreadDispatchData {
-		std::function<void(U)> function;
-		U userdata;
+		std::function<void(Args...)> function;
+		std::tuple<std::decay_t<Args>...> userdata;
 
 	public:
-		FunctionMainThreadDispatchData(TaskManager::TaskManagerID p_calling_task_id, std::function<void(U)> p_function, U p_userdata) :
+		FunctionMainThreadDispatchData(TaskManager::TaskManagerID p_calling_task_id, std::function<void(Args...)> p_function, std::decay_t<Args>... p_userdata) :
 				BaseMainThreadDispatchData(p_calling_task_id),
-				function(p_function),
-				userdata(p_userdata) {}
+				function(std::move(p_function)),
+				userdata(std::move(p_userdata)...) {}
 		void callback_internal() override {
-			function(userdata);
+			std::apply(function, userdata);
 		}
 	};
 
@@ -601,9 +605,9 @@ public:
 		return _dispatch_to_main_thread(data);
 	}
 
-	template <typename U>
-	bool dispatch_to_main_thread(std::function<void(U)> func, U userdata) {
-		std::shared_ptr<BaseMainThreadDispatchData> data = std::make_shared<FunctionMainThreadDispatchData<U>>(get_thread_task_id(), func, userdata);
+	template <typename... Args>
+	bool dispatch_to_main_thread(std::function<void(Args...)> func, std::decay_t<Args>... userdata) {
+		std::shared_ptr<BaseMainThreadDispatchData> data = std::make_shared<FunctionMainThreadDispatchData<Args...>>(get_thread_task_id(), std::move(func), std::move(userdata)...);
 		return _dispatch_to_main_thread(data);
 	}
 
