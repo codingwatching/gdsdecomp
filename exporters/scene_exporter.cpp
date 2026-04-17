@@ -1470,6 +1470,68 @@ Ref<ArrayMesh> get_nav_array_debug_mesh(const Ref<NavigationMesh> navmesh) {
 	return debug_mesh;
 }
 
+void GLBExporterInstance::recompute_animation_tracks_for_library(AnimationPlayer *p_player, const Ref<AnimationLibrary> &p_anim_lib, const LocalVector<StringName> &p_anim_names) {
+	if (ver_major > 3 || p_anim_names.is_empty()) {
+		return;
+	}
+	auto current_animation = p_player->get_current_animation();
+	auto current_pos = current_animation.is_empty() ? 0 : p_player->get_current_animation_position();
+
+	Ref<RegEx> mesh_surface_re = RegEx::create_from_string(":mesh:surface_(\\d+)");
+	// Force re-compute animation tracks.
+	for (auto &anim_name : p_anim_names) {
+		Ref<Animation> anim = p_anim_lib->get_animation(anim_name);
+		auto info = ResourceInfo::get_info_from_resource(anim);
+		ERR_CONTINUE(!info.is_valid());
+		constexpr const char *converted_paths_from_3_x = "converted_paths_from_3.x";
+		if (info->extra.get(converted_paths_from_3_x, false)) {
+			continue;
+		}
+
+		size_t num_tracks = anim->get_track_count();
+		for (size_t i = 0; i < num_tracks; i++) {
+			String str_path = String(anim->track_get_path(i));
+			if (str_path.contains(":mesh:surface_")) {
+				// Surface properties are 1-indexed in 3.x, but 0-indexed in 4.x.
+				Ref<RegExMatch> match = mesh_surface_re->search(str_path);
+				if (match.is_valid()) {
+					int surface_index = match->get_string(1).to_int();
+					surface_index--;
+					str_path = mesh_surface_re->sub(str_path, ":mesh:surface_" + String::num_int64(surface_index));
+				}
+			}
+			if (str_path.contains(":material/")) {
+				str_path = str_path.replace(":material/", ":surface_material_override/");
+			}
+			if (str_path.contains(":shader_param/")) {
+				str_path = str_path.replace(":shader_param/", ":shader_parameter/");
+			}
+			anim->track_set_path(i, str_path);
+		}
+		info->extra.set(converted_paths_from_3_x, true);
+	}
+
+	p_player->set_current_animation(*p_anim_names.begin());
+	p_player->advance(0);
+	p_player->set_current_animation(current_animation);
+	if (!current_animation.is_empty()) {
+		p_player->seek(current_pos);
+	}
+}
+
+void GLBExporterInstance::convert_animation_tracks_to_v4_for_player(AnimationPlayer *p_player) {
+	LocalVector<StringName> anim_lib_names;
+	p_player->get_animation_library_list(&anim_lib_names);
+	for (auto &anim_lib_name : anim_lib_names) {
+		Ref<AnimationLibrary> anim_lib = p_player->get_animation_library(anim_lib_name);
+		if (anim_lib.is_valid()) {
+			LocalVector<StringName> anim_names;
+			anim_lib->get_animation_list(&anim_names);
+			recompute_animation_tracks_for_library(p_player, anim_lib, anim_names);
+		}
+	}
+}
+
 Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 	root_type = root->get_class();
 	root_name = root->get_name();
@@ -1756,11 +1818,24 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 	}
 
 	Vector<int64_t> fps_values;
+
+	if (ver_major <= 3) {
+		std::function<void()> convert_all_players_to_v4 = [&]() {
+			for (int32_t node_i = 0; node_i < animation_player_nodes.size(); node_i++) {
+				AnimationPlayer *player = Object::cast_to<AnimationPlayer>(animation_player_nodes[node_i]);
+				ERR_CONTINUE(!player);
+				convert_animation_tracks_to_v4_for_player(player);
+			}
+		};
+		convert_all_players_to_v4();
+	}
+
 	for (int32_t node_i = 0; node_i < animation_player_nodes.size(); node_i++) {
+		AnimationPlayer *player = Object::cast_to<AnimationPlayer>(animation_player_nodes[node_i]);
+		ERR_CONTINUE(!player);
 		bool any_compressed = false;
 		// Force re-compute animation tracks.
 		Vector<Ref<AnimationLibrary>> anim_libs;
-		AnimationPlayer *player = Object::cast_to<AnimationPlayer>(animation_player_nodes[node_i]);
 		LocalVector<StringName> anim_lib_names;
 		player->get_animation_library_list(&anim_lib_names);
 		for (auto &lib_name : anim_lib_names) {
@@ -1769,54 +1844,10 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 				anim_libs.push_back(lib);
 			}
 		}
-		ERR_CONTINUE(!player);
-		auto current_anmation = player->get_current_animation();
-		auto current_pos = current_anmation.is_empty() ? 0 : player->get_current_animation_position();
 		int64_t max_fps = -1;
 		for (auto &anim_lib : anim_libs) {
 			LocalVector<StringName> anim_names;
 			anim_lib->get_animation_list(&anim_names);
-			if (ver_major <= 3 && anim_names.size() > 0) {
-				Ref<RegEx> mesh_surface_re = RegEx::create_from_string(":mesh:surface_(\\d+)");
-				// force re-compute animation tracks.
-				for (auto &anim_name : anim_names) {
-					Ref<Animation> anim = anim_lib->get_animation(anim_name);
-					auto info = ResourceInfo::get_info_from_resource(anim);
-					ERR_CONTINUE(!info.is_valid());
-					constexpr const char *converted_paths_from_3_x = "converted_paths_from_3.x";
-					if (info->extra.get(converted_paths_from_3_x, false)) {
-						continue;
-					}
-					size_t num_tracks = anim->get_track_count();
-					for (size_t i = 0; i < num_tracks; i++) {
-						String str_path = String(anim->track_get_path(i));
-						if (str_path.contains(":mesh:surface_")) {
-							// replace the number after surface_ with one lower (surface properties are 1-indexed in 3.x, but 0-indexed in 4.0)
-							Ref<RegExMatch> match = mesh_surface_re->search(str_path);
-							if (match.is_valid()) {
-								int surface_index = match->get_string(1).to_int();
-								surface_index--;
-								str_path = mesh_surface_re->sub(str_path, ":mesh:surface_" + String::num_int64(surface_index));
-							}
-						}
-						if (str_path.contains(":material/")) {
-							str_path = str_path.replace(":material/", ":surface_material_override/");
-						}
-						if (str_path.contains(":shader_param/")) {
-							str_path = str_path.replace(":shader_param/", ":shader_parameter/");
-						}
-						anim->track_set_path(i, str_path);
-					}
-					info->extra.set(converted_paths_from_3_x, true);
-				}
-
-				player->set_current_animation(*anim_names.begin());
-				player->advance(0);
-				player->set_current_animation(current_anmation);
-				if (!current_anmation.is_empty()) {
-					player->seek(current_pos);
-				}
-			}
 			for (auto &anim_name : anim_names) {
 				double shortest_frame_duration = 1000.0;
 
