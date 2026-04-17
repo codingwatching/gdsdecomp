@@ -85,7 +85,7 @@ public:
 		return (p_flags >> 20) & 0xF;
 	}
 
-	static constexpr int set_version_info_in_flags(uint32_t p_flags, int p_format_version, int p_ver_major, int p_ver_minor) {
+	static constexpr uint32_t set_version_info_in_flags(uint32_t p_flags, int p_format_version, int p_ver_major, int p_ver_minor) {
 		p_flags &= ~0xFFF00000;
 		p_flags |= p_format_version << 28;
 		p_flags |= p_ver_major << 24;
