@@ -1642,7 +1642,7 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 			}
 		}
 		Node *original_node = nullptr;
-		auto replace_with_mi = [&](Ref<ArrayMesh> mesh) {
+		std::function<void(Ref<ArrayMesh>)> replace_with_mi = [&](Ref<ArrayMesh> mesh) {
 			auto mesh_instance = generate_mesh_instance(node, mesh, node);
 			mesh_instance->set_name(node->get_name());
 			process_mesh_instance(mesh_instance);
@@ -3581,15 +3581,6 @@ struct BatchExportToken : public TaskRunnerStruct {
 			}
 		}
 
-		constexpr uint64_t MAX_MESHES_ON_WORKER_THREAD = 15;
-		if (instance.is_batch_export) {
-			auto meshes = get_meshes(_scene, ver_major, true);
-			if (meshes.size() > MAX_MESHES_ON_WORKER_THREAD) {
-				// disabling for now; can't figure out what the x factor is for why certain scenes take forever
-				// do_on_main_thread = true;
-			}
-			surface_count = get_total_surface_count(meshes);
-		}
 		// print_line("Preloaded scene " + p_src_path);
 		after_preload();
 		return do_on_main_thread;
