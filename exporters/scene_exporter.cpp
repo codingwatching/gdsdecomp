@@ -3,6 +3,7 @@
 #include "compat/resource_loader_compat.h"
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
+#include "core/os/thread_safe.h"
 #include "core/variant/variant.h"
 #include "core/version_generated.gen.h"
 #include "exporters/export_report.h"
@@ -1533,6 +1534,8 @@ void GLBExporterInstance::convert_animation_tracks_to_v4_for_player(AnimationPla
 }
 
 Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
+	bool current_thread_safe_for_nodes = is_current_thread_safe_for_nodes();
+	set_current_thread_safe_for_nodes(true);
 	root_type = root->get_class();
 	root_name = root->get_name();
 
@@ -1660,47 +1663,52 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 						// create a new mesh instance
 						auto mesh_instance = generate_mesh_instance(node, mesh);
 						mis_generated_from_scripts.insert(mesh_instance);
-						node->add_child(mesh_instance);
 					}
 				}
 			}
-			for (auto &mesh_instance : mis_generated_from_scripts) {
-				bool set_skin = false;
-				bool set_skeleton = false;
-				for (auto &prop : properties) {
-					Variant value;
-					if (si->get(prop.name, value) && !skins.has(value) && !skeleton_paths.has(value)) {
-						Ref<Skin> skin = value;
-						if (skin.is_valid() && !set_skin) {
-							mesh_instance->set_skin(skin);
-							set_skin = true;
-							skins.insert(skin);
-						} else if (!set_skeleton) {
-							NodePath skeleton_path = value;
-							if (!skeleton_path.is_empty()) {
-								// we need to check to see if this is actually a skeleton
-								Node *skeleton = node->get_node(skeleton_path);
-								Skeleton3D *skeleton3d = skeleton ? Object::cast_to<Skeleton3D>(skeleton) : nullptr;
-								if (skeleton3d) {
-									NodePath actual_path = skeleton_path;
-									if (!skeleton_path.is_absolute()) {
-										actual_path = mesh_instance->get_path_to(skeleton3d);
+			if (!mis_generated_from_scripts.is_empty()) {
+				std::function<void()> add_mesh_instances = [&]() {
+					for (auto &mesh_instance : mis_generated_from_scripts) {
+						node->add_child(mesh_instance);
+						bool set_skin = false;
+						bool set_skeleton = false;
+						for (auto &prop : properties) {
+							Variant value;
+							if (si->get(prop.name, value) && !skins.has(value) && !skeleton_paths.has(value)) {
+								Ref<Skin> skin = value;
+								if (skin.is_valid() && !set_skin) {
+									mesh_instance->set_skin(skin);
+									set_skin = true;
+									skins.insert(skin);
+								} else if (!set_skeleton) {
+									NodePath skeleton_path = value;
+									if (!skeleton_path.is_empty()) {
+										// we need to check to see if this is actually a skeleton
+										Node *skeleton = node->get_node(skeleton_path);
+										Skeleton3D *skeleton3d = skeleton ? Object::cast_to<Skeleton3D>(skeleton) : nullptr;
+										if (skeleton3d) {
+											NodePath actual_path = skeleton_path;
+											if (!skeleton_path.is_absolute()) {
+												actual_path = mesh_instance->get_path_to(skeleton3d);
+											}
+											mesh_instance->set_skeleton_path(actual_path);
+											set_skeleton = true;
+											skeleton_paths.insert(skeleton_path);
+										}
 									}
-									mesh_instance->set_skeleton_path(actual_path);
-									set_skeleton = true;
-									skeleton_paths.insert(skeleton_path);
 								}
 							}
+							if (set_skin && set_skeleton) {
+								break;
+							}
+						}
+						process_mesh_instance(mesh_instance);
+						if (updating_import_info) {
+							node_options[get_node_path(mesh_instance).operator String()] = { { "import/skip_import", true } };
 						}
 					}
-					if (set_skin && set_skeleton) {
-						break;
-					}
-				}
-				process_mesh_instance(mesh_instance);
-				if (updating_import_info) {
-					node_options[get_node_path(mesh_instance).operator String()] = { { "import/skip_import", true } };
-				}
+				};
+				add_mesh_instances();
 			}
 		}
 		Node *original_node = nullptr;
@@ -1929,6 +1937,7 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 			baked_fps = MIN(max_fps, 120);
 		}
 	}
+	set_current_thread_safe_for_nodes(current_thread_safe_for_nodes);
 	return root;
 }
 
