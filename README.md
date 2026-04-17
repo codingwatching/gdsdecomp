@@ -145,7 +145,11 @@ You will also need [rustup](https://rustup.rs) and [dotnet 10 sdk](https://dotne
 
 For ease of bootstrapping development, we have included launch, build, and settings templates for vscode in the .vscode directory. Once you have read the instructions for compiling Godot above and set up your build environment: put these in the .vscode folder in the Godot directory (not gdsdecomp), remove the ".template" from each, and launch vscode from the Godot directory.
 
-Note: Make sure to build the editor build first, and to launch the editor to edit the project in the `standalone` directory at least once so that resources are imported before running.
+Make sure to build the editor build first, and to launch the editor to edit the project in the `standalone` directory at least once so that resources are imported before running.
+
+### Note:
+
+During SCons configure, the module auto-applies the patches under `modules/gdsdecomp/patches/` to Godot core files (currently just `main/main.cpp`, to hook `gdre::modify_cli_args` into CLI parsing). The application is idempotent: re-running `scons` is a no-op once patched. If you remove the module or want to restore the originals, revert the affected files manually with `git checkout -- main/main.cpp`.
 
 ### Requirements
 
