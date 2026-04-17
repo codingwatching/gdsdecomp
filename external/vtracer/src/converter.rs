@@ -119,15 +119,15 @@ fn to_image_with_holes(cluster: &Cluster, view: &ClustersView<'_>, hole: bool) -
 	let mut image = visioncortex::BinaryImage::new_w_h(width, height);
 
 	for &i in cluster.iter() {
-		let x = (i as i32 % width as i32) ;
-		let y = (i as i32 / width as i32) ;
+		let x = i as i32 % width as i32 ;
+		let y = i as i32 / width as i32 ;
 		image.set_pixel(x as usize, y as usize, true);
 	}
 
 	if hole {
 		for &i in cluster.holes.iter() {
-			let x = (i as i32 % width as i32) ;
-			let y = (i as i32 / width as i32) ;
+			let x = i as i32 % width as i32 ;
+			let y = i as i32 / width as i32 ;
 			image.set_pixel(x as usize, y as usize, false);
 		}
 	}
