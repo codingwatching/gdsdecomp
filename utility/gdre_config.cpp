@@ -358,6 +358,12 @@ Vector<Ref<GDREConfigSetting>> GDREConfig::_init_default_settings() {
 				"Replaces shader materials with generated standard materials when exporting the scene.\nSolves issues with exported scenes not having any textures.\nWARNING: This is experimental and may result in inaccurate exports.",
 				false)),
 		memnew(GDREConfigSetting(
+				"Exporter/Scene/GLTF/debug_copies",
+				"Create debug copies",
+				"For development.",
+				false,
+				true)),
+		memnew(GDREConfigSetting(
 				"Exporter/Texture/create_lossless_copy",
 				"Create lossless copy",
 				"Create a lossless .png copy of exported textures in '<OUTPUT_DIR>/.assets' if the texture is stored in a lossy format (e.g. jpeg)",

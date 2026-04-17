@@ -42,13 +42,6 @@
 #include "scene/resources/packed_scene.h"
 #include "utility/task_manager.h"
 
-#ifndef MAKE_GLTF_COPY
-#ifdef DEBUG_ENABLED
-#define MAKE_GLTF_COPY 1
-#else
-#define MAKE_GLTF_COPY 0
-#endif
-#endif
 #ifndef PRINT_PERF_CSV
 #define PRINT_PERF_CSV 0
 #endif
@@ -1828,15 +1821,13 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 	if (replaced_node_names.size() > 0) {
 		auto thingy = String(", ").join(replaced_node_names);
 		print_line(vformat("%s: replaced nodes with mesh instances: %s", scene_name, thingy));
-#ifdef DEBUG_ENABLED
-		if (true) {
+		if (GDREConfig::get_singleton()->get_setting("Exporter/Scene/GLTF/debug_copies", false)) {
 			auto new_dest = "res://.tscn_manip/" + report->get_import_info()->get_export_dest().trim_prefix("res://.assets/").trim_prefix("res://").get_basename() + ".tscn";
 			auto new_dest_path = output_dir.path_join(new_dest.replace_first("res://", ""));
 			Ref<PackedScene> scene = memnew(PackedScene);
 			scene->pack(root);
 			ResourceCompatLoader::save_custom(scene, new_dest_path, GODOT_VERSION_MAJOR, GODOT_VERSION_MINOR);
 		}
-#endif
 	}
 
 	Vector<int64_t> fps_values;
@@ -2607,8 +2598,7 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 			GDRE_SCN_EXP_FAIL_V_MSG(ERR_FILE_CANT_WRITE, "Failed to serialize glTF document");
 		}
 
-#if MAKE_GLTF_COPY
-		{
+		if (GDREConfig::get_singleton()->get_setting("Exporter/Scene/GLTF/debug_copies", false)) {
 			// save a gltf copy for debugging
 			Dictionary gltf_asset = state->get_json().get("asset", Dictionary());
 			gltf_asset["generator"] = "GDRE Tools";
@@ -2620,7 +2610,6 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 			_serialize_file(state, gltf_path, buffer_paths, !use_double_precision);
 		}
 		GDRE_SCN_EXP_CHECK_CANCEL();
-#endif
 		auto check_unique = [&](String &name, HashSet<String> &image_map) {
 			if (name.is_empty()) {
 				return;
@@ -2846,9 +2835,8 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 
 			json["asset"] = gltf_asset;
 		}
-#if MAKE_GLTF_COPY
 		GDRE_SCN_EXP_CHECK_CANCEL();
-		if (p_dest_path.get_extension() == "glb") {
+		if (p_dest_path.get_extension() == "glb" && GDREConfig::get_singleton()->get_setting("Exporter/Scene/GLTF/debug_copies", false)) {
 			// save a gltf copy for debugging
 			auto rel_path = p_dest_path.begins_with(output_dir) ? p_dest_path.trim_prefix(output_dir).simplify_path().trim_prefix("/") : p_dest_path.get_file();
 			if (iinfo.is_valid()) {
@@ -2863,7 +2851,6 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 			Vector<String> buffer_paths;
 			_serialize_file(state, gltf_path, buffer_paths, !use_double_precision);
 		}
-#endif
 		GDRE_SCN_EXP_CHECK_CANCEL();
 		Vector<String> buffer_paths;
 		err = _serialize_file(state, p_dest_path, buffer_paths, !use_double_precision);
@@ -3721,13 +3708,11 @@ struct BatchExportToken : public TaskRunnerStruct {
 			if (err == OK) {
 				report->set_saved_path(p_dest_path);
 			}
-#ifdef DEBUG_ENABLED // export a text copy so we can see what went wrong
-			if (true) {
+			if (GDREConfig::get_singleton()->get_setting("Exporter/Scene/GLTF/debug_copies", false)) {
 				auto new_dest = "res://.tscn_copy/" + report->get_import_info()->get_export_dest().trim_prefix("res://.assets/").trim_prefix("res://").get_basename() + ".tscn";
 				auto new_dest_path = output_dir.path_join(new_dest.replace_first("res://", ""));
 				ResourceCompatLoader::to_text(p_src_path, new_dest_path);
 			}
-#endif
 		}
 		_scene = nullptr;
 		// print_line("Finished exporting scene " + p_src_path);
