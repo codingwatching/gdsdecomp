@@ -26,9 +26,6 @@ void test_svg_saving(const String &file, const String &test_files_dir, const Str
 			for (int j = 0; j < img->get_height(); j++) {
 				Color img_color = img->get_pixel(i, j);
 				Color resaved_color = resaved_image->get_pixel(i, j);
-				if (img_color != resaved_color) {
-					bool foo = false;
-				}
 				if (abs(img_color.get_r8() - resaved_color.get_r8()) > 1 ||
 						abs(img_color.get_g8() - resaved_color.get_g8()) > 1 ||
 						abs(img_color.get_b8() - resaved_color.get_b8()) > 1 ||
