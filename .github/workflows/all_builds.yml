@@ -231,6 +231,7 @@ jobs:
             echo "D3D12_ENABLED=no" >> "$GITHUB_OUTPUT"
           fi
         continue-on-error: true
+
       - name: Show targets
         shell: sh
         run: |
@@ -479,8 +480,9 @@ jobs:
         if: matrix.platform == 'android' && github.event_name != 'pull_request'
         run: |
           set -Eeuo pipefail
-          if [ -z "${{ secrets.ANDROID_RELEASE_KEYSTORE }}" ]; then
-            echo "ANDROID_RELEASE_KEYSTORE is not set"
+          if [ -z "${{ secrets.ANDROID_RELEASE_KEYSTORE }}" ] || [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ] || [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+            echo "One or more Android signing secrets are missing (ANDROID_RELEASE_KEYSTORE, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD)"
+            echo "Android release build will be signed with a generated keystore"
             exit 1
           fi
           echo "${{ secrets.ANDROID_RELEASE_KEYSTORE }}" > release.keystore.b64
@@ -488,6 +490,7 @@ jobs:
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$HOME/release.keystore" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=${{ secrets.ANDROID_KEY_ALIAS }}" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+        continue-on-error: true
 
       - name: Export standalone GDRE Tools
         shell: pwsh
