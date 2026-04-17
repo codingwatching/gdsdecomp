@@ -2114,7 +2114,7 @@ String ImportExporterReport::get_totals_string() {
 	auto failed_rewrite_md = _get_failed_rewrite_md();
 	report += vformat("%-40s", "Totals: ") + String("\n");
 	report += vformat("%-40s", "Decompiled scripts: ") + itos(decompiled_scripts.size()) + String("\n");
-	report += vformat("%-40s", "Failed scripts: ") + itos(failed_scripts.size()) + String("\n");
+	report += vformat("%-40s", "Scripts not decompiled: ") + itos(failed_scripts.size()) + String("\n");
 	report += vformat("%-40s", "Imported resources for export session: ") + itos(session_files_total) + String("\n");
 	report += vformat("%-40s", "Successfully converted: ") + itos(success.size()) + String("\n");
 	if (opt_lossy) {
@@ -2140,7 +2140,7 @@ Dictionary ImportExporterReport::get_section_labels() {
 	labels["success"] = "Successfully converted";
 	labels["decompiled_scripts"] = "Decompiled scripts";
 	labels["not_converted"] = "Not converted";
-	labels["failed_scripts"] = "Failed scripts";
+	labels["failed_scripts"] = "Scripts not decompiled";
 	labels["failed"] = "Failed conversions";
 	labels["lossy_imports"] = "Lossy imports";
 	labels["rewrote_metadata"] = "Rewrote metadata";
