@@ -1479,6 +1479,8 @@ int GDScriptDecomp::get_func_arg_count_and_params(int curr_pos, const Vector<uin
 			case G_TK_COMMA:
 				if (bracket_open == 0) {
 					r_arguments.push_back(curr_arg);
+					curr_arg.clear();
+					continue;
 				}
 				break;
 			default:
@@ -1487,6 +1489,7 @@ int GDScriptDecomp::get_func_arg_count_and_params(int curr_pos, const Vector<uin
 		if (bracket_open == -1) {
 			if (curr_arg.size() > 0) {
 				r_arguments.push_back(curr_arg);
+				curr_arg.clear();
 			}
 			break;
 		}
