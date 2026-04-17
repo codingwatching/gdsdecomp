@@ -3122,92 +3122,23 @@ bool is_packed_scene(const Ref<Resource> &p_resource) {
 	return p_resource.is_valid() && _resource_get_class(p_resource) == "PackedScene";
 }
 
-Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resource, HashMap<String, Ref<Resource>> &p_seen_resources, HashSet<Object *> &seen_objects, int recursion_depth, bool *changed_something);
-
-Variant scan_variant(const Variant &v, HashMap<String, Ref<Resource>> &p_seen_resources, HashSet<Object *> &seen_objects, int recursion_depth, bool *p_changed_something) {
-	ERR_FAIL_COND_V_MSG(recursion_depth > 1024, Variant(), "Recursion depth exceeded");
-	recursion_depth++;
-	Variant result = v;
-	switch (v.get_type()) {
-		case Variant::OBJECT: {
-			Ref<Resource> res = v;
-			if (is_packed_scene(res)) {
-				Ref<PackedScene> sub_scene;
-				if (!p_seen_resources.has(res->get_path())) {
-					if (_resource_get_class(res) == "PackedScene") {
-						sub_scene = _ensure_resource_is_packed_scene(res, p_seen_resources, seen_objects, recursion_depth, p_changed_something);
-						if (res->get_class() == "MissingResource") {
-							*p_changed_something = true;
-						}
-					}
-				} else {
-					sub_scene = p_seen_resources.get(res->get_path());
-				}
-				if (sub_scene.is_valid()) {
-					p_seen_resources[res->get_path()] = sub_scene;
-					result = sub_scene;
-				} else {
-					p_seen_resources[res->get_path()] = res;
-					result = res;
-				}
-			} else if (res.is_valid()) {
-				if (!p_seen_resources.has(res->get_path())) {
-					List<PropertyInfo> property_list;
-					res->get_property_list(&property_list);
-					for (const PropertyInfo &pi : property_list) {
-						bool changed_something = false;
-						Variant v = scan_variant(res->get(pi.name), p_seen_resources, seen_objects, recursion_depth, &changed_something);
-						if (changed_something) {
-							res->set(pi.name, v);
-						}
-					}
-					p_seen_resources[res->get_path()] = res;
-				}
-			} else if (Object *obj = v.operator Object *(); obj != nullptr && !seen_objects.has(obj)) {
-				seen_objects.insert(obj);
-				List<PropertyInfo> property_list;
-				obj->get_property_list(&property_list);
-				for (const PropertyInfo &pi : property_list) {
-					if (pi.usage & PROPERTY_USAGE_STORAGE) {
-						bool changed_something = false;
-						Variant v = scan_variant(obj->get(pi.name), p_seen_resources, seen_objects, recursion_depth, &changed_something);
-						if (changed_something) {
-							obj->set(pi.name, v);
-						}
-					}
-				}
-			}
-		} break;
-		case Variant::ARRAY: {
-			Array a = v;
-			for (int j = 0; j < a.size(); j++) {
-				a[j] = scan_variant(a[j], p_seen_resources, seen_objects, recursion_depth, p_changed_something);
-			}
-			result = a;
-		} break;
-		case Variant::DICTIONARY: {
-			Dictionary d;
-			for (const KeyValue<Variant, Variant> &kv : v.operator Dictionary()) {
-				Variant key = scan_variant(kv.key, p_seen_resources, seen_objects, recursion_depth, p_changed_something);
-				Variant value = scan_variant(kv.value, p_seen_resources, seen_objects, recursion_depth, p_changed_something);
-				d[key] = value;
-			}
-			v.operator Dictionary().clear();
-			v.operator Dictionary().assign(d);
-			result = v;
-		} break;
-		default: {
-		}
-	}
-	return result;
-}
-
-Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resource, HashMap<String, Ref<Resource>> &p_seen_resources, HashSet<Object *> &seen_objects, int recursion_depth, bool *changed_something) {
+Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resource, HashMap<String, Ref<Resource>> &p_seen_resources, HashSet<Object *> &seen_objects, int recursion_depth) {
 	Ref<PackedScene> r_packed_scene = p_resource;
 	if (_resource_get_class(p_resource) == "PackedScene") {
-		Dictionary bundle = scan_variant(p_resource->get("_bundled"), p_seen_resources, seen_objects, recursion_depth, changed_something);
+		Dictionary bundle = p_resource->get("_bundled");
 		// we need to go through the variants in the bundle and ensure that any MissingResources that are PackedScenes are also replaced with instantiated packed scenes
 		// this is because of PackedScene::SceneState::get_node_instance, which returns a Ref<PackedScene>, which will be null if it's not an instance of a PackedScene
+		// (We do not have to worry about PackedScenes embedded in other resources/dictionaries/arrays because this only matters for SceneState::get_node_instance)
+		Array arr = bundle.get("variants", Array());
+		if (arr.size() > 0) {
+			for (int i = 0; i < arr.size(); i++) {
+				Ref<Resource> res = arr[i];
+				if (res.is_valid() && res->get_save_class() == "PackedScene") {
+					arr[i] = _ensure_resource_is_packed_scene(res, p_seen_resources, seen_objects, recursion_depth);
+				}
+			}
+			bundle.set("variants", arr);
+		}
 		if (r_packed_scene.is_null()) { // MissingResource
 			r_packed_scene = Ref<PackedScene>(memnew(PackedScene));
 			if (!bundle.is_empty()) {
@@ -3223,12 +3154,13 @@ Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resourc
 Ref<PackedScene> ResourceFormatSaverCompatTextInstance::ensure_packed_scenes(const Ref<Resource> &p_resource) {
 	auto info = ResourceInfo::get_info_from_resource(p_resource);
 	if (info.is_valid()) {
-		if (info->load_type == ResourceInfo::REAL_LOAD && info->load_type == ResourceInfo::GLTF_LOAD && p_resource->get_class() == "PackedScene") {
+		if ((info->load_type == ResourceInfo::REAL_LOAD || info->load_type == ResourceInfo::GLTF_LOAD) && p_resource->get_class() == "PackedScene") {
 			return p_resource;
 		}
+	} else if (p_resource->get_class() == "PackedScene") {
+		return p_resource;
 	}
 	HashMap<String, Ref<Resource>> seen_resources;
 	HashSet<Object *> seen_objects;
-	bool changed_something = false;
-	return _ensure_resource_is_packed_scene(p_resource, seen_resources, seen_objects, 0, &changed_something);
+	return _ensure_resource_is_packed_scene(p_resource, seen_resources, seen_objects, 0);
 }
