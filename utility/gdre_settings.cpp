@@ -1118,7 +1118,7 @@ Error GDRESettings::get_version_from_bin_resources() {
 		WARN_PRINT(itos(inconsistent_versions) + " binary resources had inconsistent versions!");
 	}
 	// we somehow didn't get a version major??
-	if (ver_major == 0) {
+	if (ver_major == 0 && ver_minor == 0) {
 		WARN_PRINT("Couldn't determine ver major from binary resources?!");
 		ver_major = version_from_dir;
 		ERR_FAIL_COND_V_MSG(ver_major == 0, ERR_CANT_ACQUIRE_RESOURCE, "Can't find version from directory!");

@@ -1144,6 +1144,7 @@ void ResourceLoaderCompatBinary::open(Ref<FileAccess> p_f, bool p_no_resources, 
 	error = OK;
 
 	f = p_f;
+	bool is_pre1 = false;
 	uint8_t header[4];
 	f->get_buffer(header, 4);
 	if (header[0] == 'R' && header[1] == 'S' && header[2] == 'C' && header[3] == 'C') {
@@ -1157,6 +1158,8 @@ void ResourceLoaderCompatBinary::open(Ref<FileAccess> p_f, bool p_no_resources, 
 		}
 		f = fac;
 		is_compressed = true;
+	} else if (header[0] == 'O' && header[1] == 'B' && header[2] == 'D' && header[3] == 'B') {
+		is_pre1 = true;
 	} else if (header[0] != 'R' || header[1] != 'S' || header[2] != 'R' || header[3] != 'C') {
 		// Not normal.
 		error = ERR_FILE_UNRECOGNIZED;
@@ -1171,7 +1174,11 @@ void ResourceLoaderCompatBinary::open(Ref<FileAccess> p_f, bool p_no_resources, 
 
 	ver_major = f->get_32();
 	ver_minor = f->get_32();
-	ver_format = f->get_32();
+	if (!is_pre1) {
+		ver_format = f->get_32();
+	} else {
+		ver_format = 0;
+	}
 
 	stored_big_endian = big_endian;
 	stored_use_real64 = use_real64;
@@ -1196,7 +1203,6 @@ void ResourceLoaderCompatBinary::open(Ref<FileAccess> p_f, bool p_no_resources, 
 	}
 
 	type = get_unicode_string();
-
 	print_bl("type: " + type);
 	md_at = f->get_position();
 	importmd_ofs = f->get_64();
