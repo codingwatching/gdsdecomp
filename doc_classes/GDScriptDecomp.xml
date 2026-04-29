@@ -1,8 +1,22 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="GDScriptDecomp" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
+		Decompile and compile GDScript bytecode for any supported Godot version.
 	</brief_description>
 	<description>
+		[GDScriptDecomp] is the core class for working with compiled GDScript bytecode ([code].gdc[/code] and [code].gde[/code] files). Instantiate it pinned to a specific Godot engine version or bytecode revision, then decompile binary bytecode back to readable GDScript source, or compile GDScript source back to bytecode. You can also inspect bytecode metadata and enumerate all supported versions.
+		Use one of the static factory methods ([method create_decomp_for_version] or [method create_decomp_for_commit]) to create an instance - do not call [code]GDScriptDecomp.new()[/code] directly, because each revision is a distinct subclass.
+		[codeblock]
+		var decomp = GDScriptDecomp.create_decomp_for_version("4.3.0")
+		if decomp == null:
+		    push_error("No decompiler found for 4.3.0")
+		    return
+		var err = decomp.decompile_byte_code("res://scripts/main.gdc")
+		if err != OK:
+		    push_error("Decompilation failed: " + decomp.get_error_message())
+		    return
+		print(decomp.get_script_text())
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -11,12 +25,14 @@
 			<return type="PackedByteArray" />
 			<param index="0" name="code" type="String" />
 			<description>
+				Compiles the GDScript source string [param code] to bytecode for the version this instance represents. Returns the compiled bytecode, or an empty [PackedByteArray] on failure (call [method get_error_message] for details).
 			</description>
 		</method>
 		<method name="create_decomp_for_commit" qualifiers="static">
 			<return type="GDScriptDecomp" />
 			<param index="0" name="commit_hash" type="int" />
 			<description>
+				Creates a [GDScriptDecomp] instance for a specific bytecode revision identified by its commit hash (as an integer). Returns [code]null[/code] if [param commit_hash] does not match any registered revision.
 			</description>
 		</method>
 		<method name="create_decomp_for_version" qualifiers="static">
@@ -24,12 +40,14 @@
 			<param index="0" name="ver" type="String" />
 			<param index="1" name="p_force" type="bool" default="false" />
 			<description>
+				Creates a [GDScriptDecomp] instance for the given engine version string (e.g. [code]"4.3.0"[/code] or [code]"3.5.2"[/code]). If [param p_force] is [code]true[/code], returns the closest-matching instance even when no bytecode revision is registered exactly for that version; otherwise returns [code]null[/code] on a miss.
 			</description>
 		</method>
 		<method name="decompile_byte_code">
 			<return type="int" enum="Error" />
 			<param index="0" name="path" type="String" />
 			<description>
+				Decompiles the compiled GDScript file at [param path]. On success, retrieve the recovered source with [method get_script_text]. Returns [code]OK[/code] on success or an error code on failure; call [method get_error_message] for details.
 			</description>
 		</method>
 		<method name="decompile_byte_code_encrypted">
@@ -37,11 +55,13 @@
 			<param index="0" name="path" type="String" />
 			<param index="1" name="key" type="PackedByteArray" />
 			<description>
+				Decompiles the encrypted compiled GDScript file at [param path] ([code].gde[/code]). [param key] must be the 32-byte AES-256 key used to encrypt the script. On success, retrieve the recovered source with [method get_script_text]. Returns [code]OK[/code] or an error code.
 			</description>
 		</method>
 		<method name="get_all_decomp_versions_json" qualifiers="static">
 			<return type="Dictionary[]" />
 			<description>
+				Returns an array of dictionaries describing every registered bytecode revision, including version strings, commit hashes, and parent relationships. Each entry is compatible with the [param custom_def] argument of [method register_decomp_version_custom].
 			</description>
 		</method>
 		<method name="get_buffer_encrypted" qualifiers="static">
@@ -50,89 +70,106 @@
 			<param index="1" name="engine_ver_major" type="int" />
 			<param index="2" name="key" type="PackedByteArray" />
 			<description>
+				Decrypts the [code].gde[/code] file at [param path] and returns the raw bytecode buffer. [param engine_ver_major] selects the correct encryption format (Godot 3 and Godot 4 use slightly different framing). [param key] must be the 32-byte AES-256 key. Returns an empty [PackedByteArray] on failure.
 			</description>
 		</method>
 		<method name="get_bytecode_rev" qualifiers="const">
 			<return type="int" />
 			<description>
+				Returns the bytecode revision (commit hash as an integer) for this decompiler instance.
 			</description>
 		</method>
 		<method name="get_bytecode_version" qualifiers="const">
 			<return type="int" />
 			<description>
+				Returns the bytecode format version number for this decompiler instance.
 			</description>
 		</method>
 		<method name="get_bytecode_versions" qualifiers="static">
 			<return type="PackedStringArray" />
 			<description>
+				Returns an array of all registered bytecode version strings.
 			</description>
 		</method>
 		<method name="get_engine_ver_major" qualifiers="const">
 			<return type="int" />
 			<description>
+				Returns the major engine version number (e.g. [code]4[/code] for Godot 4.x) this decompiler targets.
 			</description>
 		</method>
 		<method name="get_engine_version" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the engine version string associated with this decompiler instance (e.g. [code]"4.3.0"[/code]).
 			</description>
 		</method>
 		<method name="get_error_message">
 			<return type="String" />
 			<description>
+				Returns a human-readable description of the last error that occurred during decompilation or compilation.
 			</description>
 		</method>
 		<method name="get_function_count" qualifiers="const">
 			<return type="int" />
 			<description>
+				Returns the number of functions defined in the last decompiled script.
 			</description>
 		</method>
 		<method name="get_function_index" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="func_name" type="String" />
 			<description>
+				Returns the index of the function named [param func_name] in the last decompiled script, or [code]-1[/code] if no such function exists.
 			</description>
 		</method>
 		<method name="get_function_name" qualifiers="const">
 			<return type="String" />
 			<param index="0" name="func_idx" type="int" />
 			<description>
+				Returns the name of the function at index [param func_idx] in the last decompiled script.
 			</description>
 		</method>
 		<method name="get_godot_ver" qualifiers="const">
 			<return type="GodotVer" />
 			<description>
+				Returns the engine version this decompiler targets as a parsed [GodotVer].
 			</description>
 		</method>
 		<method name="get_max_engine_version" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the maximum engine version string that this bytecode revision covers. Revisions span a range of engine versions; use this alongside [method get_engine_version] to see the range.
 			</description>
 		</method>
 		<method name="get_parent" qualifiers="const">
 			<return type="int" />
 			<description>
+				Returns the commit hash of the parent bytecode revision that this revision is derived from, or [code]0[/code] if there is no parent.
 			</description>
 		</method>
 		<method name="get_script_text">
 			<return type="String" />
 			<description>
+				Returns the decompiled GDScript source produced by the most recent successful [method decompile_byte_code] or [method decompile_byte_code_encrypted] call.
 			</description>
 		</method>
 		<method name="get_token_max" qualifiers="const">
 			<return type="int" />
 			<description>
+				Returns the maximum token ID defined for this bytecode revision. Useful for validating bytecode before full decompilation.
 			</description>
 		</method>
 		<method name="get_variant_ver_major" qualifiers="const">
 			<return type="int" />
 			<description>
+				Returns the major version of the [Variant] serialization format used by this bytecode revision.
 			</description>
 		</method>
 		<method name="read_bytecode_version" qualifiers="static">
 			<return type="int" />
 			<param index="0" name="path" type="String" />
 			<description>
+				Reads the bytecode revision commit hash from the [code].gdc[/code] file at [param path] without fully decompiling it. Returns the hash as an integer, or [code]-1[/code] on failure.
 			</description>
 		</method>
 		<method name="read_bytecode_version_encrypted" qualifiers="static">
@@ -141,6 +178,7 @@
 			<param index="1" name="engine_ver_major" type="int" />
 			<param index="2" name="key" type="PackedByteArray" />
 			<description>
+				Reads the bytecode revision commit hash from the encrypted [code].gde[/code] file at [param path]. [param engine_ver_major] selects the correct decryption format; [param key] is the 32-byte AES-256 key. Returns the hash as an integer, or [code]-1[/code] on failure.
 			</description>
 		</method>
 		<method name="register_decomp_version_custom" qualifiers="static">
@@ -148,6 +186,7 @@
 			<param index="0" name="custom_def" type="Dictionary" />
 			<param index="1" name="derived_from" type="int" default="0" />
 			<description>
+				Registers a custom bytecode revision definition at runtime. [param custom_def] uses the same layout as entries returned by [method get_all_decomp_versions_json]. [param derived_from] is the commit hash of the parent revision to inherit token definitions from (use [code]0[/code] to start from scratch). Returns the registered revision hash on success, or [code]-1[/code] on failure.
 			</description>
 		</method>
 		<method name="test_bytecode">
@@ -155,20 +194,25 @@
 			<param index="0" name="buffer" type="PackedByteArray" />
 			<param index="1" name="print_verbose" type="bool" default="false" />
 			<description>
+				Tests whether the raw bytecode in [param buffer] is valid for this decompiler instance without fully decompiling it. Returns one of the [enum BytecodeTestResult] values. Set [param print_verbose] to [code]true[/code] to print diagnostic output.
 			</description>
 		</method>
 		<method name="to_json" qualifiers="const">
 			<return type="Dictionary" />
 			<description>
+				Serializes the bytecode revision definition for this instance to a [Dictionary], compatible with the [param custom_def] argument of [method register_decomp_version_custom].
 			</description>
 		</method>
 	</methods>
 	<constants>
 		<constant name="BYTECODE_TEST_CORRUPT" value="2" enum="BytecodeTestResult">
+			The bytecode data is corrupt or unreadable.
 		</constant>
 		<constant name="BYTECODE_TEST_FAIL" value="1" enum="BytecodeTestResult">
+			The bytecode is structurally intact but does not match this revision.
 		</constant>
 		<constant name="BYTECODE_TEST_PASS" value="0" enum="BytecodeTestResult">
+			The bytecode is valid for this revision.
 		</constant>
 	</constants>
 </class>

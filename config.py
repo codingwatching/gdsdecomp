@@ -103,6 +103,7 @@ def get_doc_classes():
     return [
         "GDScriptDecomp",
         "Glob",
+        "SemVer",
         "GodotVer",
         "GodotREEditorStandalone",
         "ImportExporter",

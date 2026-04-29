@@ -1,8 +1,21 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="GDRESettings" inherits="Object" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
+		Global settings and state for an active Godot RE Tools session.
 	</brief_description>
 	<description>
+		[GDRESettings] holds all state for the currently loaded project session. It manages loading and unloading PCK, APK, ZIP, EXE, or loose-directory bundles; tracks encryption keys and custom decryptors; enumerates project files; and exposes project metadata. Most other GDRE API classes depend on a project being loaded through [GDRESettings] first.
+		[GDRESettings] is registered as an engine singleton. Retrieve it from GDScript with [code]Engine.get_singleton("GDRESettings")[/code]; only one project can be loaded at a time.
+		[codeblock]
+		var settings = Engine.get_singleton("GDRESettings")
+		settings.set_encryption_key_string("000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F")
+		var err = settings.load_project(PackedStringArray(["/path/to/game.pck"]))
+		if err != OK:
+		    push_error("Failed to load project")
+		    return
+		print("Engine: ", settings.get_version_string())
+		settings.unload_project()
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -12,176 +25,210 @@
 			<param index="0" name="src" type="String" />
 			<param index="1" name="dst" type="String" />
 			<description>
+				Adds a remap entry that redirects requests for [param src] to [param dst]. Returns [code]OK[/code] on success.
 			</description>
 		</method>
 		<method name="are_imports_loaded" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] once [method load_import_files] has populated the session's import metadata. This is [code]false[/code] until a project is loaded and imports have been scanned.
 			</description>
 		</method>
 		<method name="close_log_file">
 			<return type="int" enum="Error" />
 			<description>
+				Closes the log file previously opened with [method open_log_file]. Returns [code]OK[/code] on success.
 			</description>
 		</method>
 		<method name="get_auto_display_scale" qualifiers="const">
 			<return type="float" />
 			<description>
+				Returns the automatically detected display scale factor for the current screen, used to size the standalone GUI on high-DPI displays.
 			</description>
 		</method>
 		<method name="get_custom_decryption_script_path" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the filesystem path of the script registered with [method set_custom_decryption_script], or an empty string if none is set.
 			</description>
 		</method>
 		<method name="get_custom_decryptor" qualifiers="const">
 			<return type="CustomDecryptor" />
 			<description>
+				Returns the currently registered [CustomDecryptor], or [code]null[/code] if none is set.
 			</description>
 		</method>
 		<method name="get_cwd">
 			<return type="String" />
 			<description>
+				Returns the current working directory of the GDRE process.
 			</description>
 		</method>
 		<method name="get_disclaimer_text" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the full legal disclaimer shown in the About dialog and at the top of CLI help output.
 			</description>
 		</method>
 		<method name="get_dotnet_assembly_path" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the path to the primary .NET assembly (.dll) for the loaded C# project, or an empty string if the project is not a C# project or no assembly was located.
 			</description>
 		</method>
 		<method name="get_dotnet_decompiler" qualifiers="const">
 			<return type="GodotMonoDecompWrapper" />
 			<description>
+				Returns the helper object used to decompile .NET assemblies belonging to the loaded project, or [code]null[/code] if .NET decompilation is not applicable.
 			</description>
 		</method>
 		<method name="get_encryption_key">
 			<return type="PackedByteArray" />
 			<description>
+				Returns the currently set encryption key as a [PackedByteArray] (16, 24, or 32 bytes). Returns an empty array if no key is set.
 			</description>
 		</method>
 		<method name="get_encryption_key_string">
 			<return type="String" />
 			<description>
+				Returns the currently set encryption key as a hexadecimal string, or an empty string if no key is set.
 			</description>
 		</method>
 		<method name="get_errors">
 			<return type="PackedStringArray" />
 			<description>
+				Returns the list of errors collected during the current session and clears the internal buffer. Use this to display errors in a UI or log file after long-running operations.
 			</description>
 		</method>
 		<method name="get_exec_dir">
 			<return type="String" />
 			<description>
+				Returns the directory that contains the GDRE Tools executable.
 			</description>
 		</method>
 		<method name="get_file_count" qualifiers="const">
 			<return type="int" />
 			<description>
+				Returns the total number of files in the loaded project, across all loaded packs.
 			</description>
 		</method>
 		<method name="get_file_info_array">
 			<return type="Array" />
 			<param index="0" name="filters" type="PackedStringArray" default="PackedStringArray()" />
 			<description>
+				Returns an [Array] of [PackedFileInfo] entries, one per file in the loaded project. If [param filters] is non-empty, only files whose [code]res://[/code]-rooted paths match one of the glob patterns in [param filters] are returned.
 			</description>
 		</method>
 		<method name="get_file_list">
 			<return type="PackedStringArray" />
 			<param index="0" name="filters" type="PackedStringArray" default="PackedStringArray()" />
 			<description>
+				Returns the [code]res://[/code]-rooted paths of all files in the loaded project. If [param filters] is non-empty, only paths matching one of the glob patterns in [param filters] (e.g. [code]res://**/*.gdc[/code]) are returned.
 			</description>
 		</method>
 		<method name="get_game_app_version" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the application version declared by the loaded project (typically from [code]application/config/version[/code] in the project config), or an empty string if none is set.
 			</description>
 		</method>
 		<method name="get_game_name" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the game name declared in the loaded project config (typically from [code]application/config/name[/code]).
 			</description>
 		</method>
 		<method name="get_gdre_resource_path" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the [code]res://[/code]-rooted filesystem path GDRE uses for its own bundled resources.
 			</description>
 		</method>
 		<method name="get_gdre_tmp_path" qualifiers="static">
 			<return type="String" />
 			<description>
+				Returns the path to GDRE's temporary working directory (per-user, auto-cleaned).
 			</description>
 		</method>
 		<method name="get_gdre_user_path" qualifiers="static">
 			<return type="String" />
 			<description>
+				Returns the path to GDRE's persistent user data directory (logs, configuration).
 			</description>
 		</method>
 		<method name="get_gdre_version" qualifiers="static">
 			<return type="String" />
 			<description>
+				Returns the version string of GDRE Tools itself.
 			</description>
 		</method>
 		<method name="get_home_dir" qualifiers="static">
 			<return type="String" />
 			<description>
+				Returns the current user's home directory path.
 			</description>
 		</method>
 		<method name="get_import_files">
 			<return type="Array" />
 			<param index="0" name="copy" type="bool" />
 			<description>
+				Returns an [Array] of all [ImportInfo] objects loaded for the current project. If [param copy] is [code]true[/code], each entry is a deep copy; otherwise the returned references point at the same objects GDRE uses internally, so mutations are reflected across the session.
 			</description>
 		</method>
 		<method name="get_import_info_by_dest" qualifiers="const">
 			<return type="ImportInfo" />
 			<param index="0" name="p_path" type="String" />
 			<description>
+				Returns the [ImportInfo] whose destination files include [param p_path] (an engine-side [code]res://[/code] path), or [code]null[/code] if no import produces that file.
 			</description>
 		</method>
 		<method name="get_import_info_by_source">
 			<return type="ImportInfo" />
 			<param index="0" name="p_path" type="String" />
 			<description>
+				Returns the [ImportInfo] whose source file matches [param p_path], or [code]null[/code] if no matching import is registered.
 			</description>
 		</method>
 		<method name="get_log_file_path">
 			<return type="String" />
 			<description>
+				Returns the filesystem path of the log file currently opened by [method open_log_file], or an empty string if no log file is open.
 			</description>
 		</method>
 		<method name="get_pack_info_list" qualifiers="const">
 			<return type="PackInfo[]" />
 			<description>
+				Returns an array of [PackInfo] entries, one per pack currently loaded (PCK, APK, ZIP, EXE, or directory).
 			</description>
 		</method>
 		<method name="get_pack_path" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the filesystem path of the primary pack that was loaded. This returns a valid path for every [PackInfo.PackType], including [code]DIR[/code] (in which case it is the directory path).
 			</description>
 		</method>
 		<method name="get_pack_type" qualifiers="const">
 			<return type="int" enum="PackInfo.PackType" />
 			<description>
+				Returns the [enum PackInfo.PackType] of the primary loaded pack.
 			</description>
 		</method>
 		<method name="get_project_config_path">
 			<return type="String" />
 			<description>
+				Returns the [code]res://[/code]-rooted path of the loaded project configuration file ([code]project.godot[/code] for Godot 3/4 or [code]engine.cfg[/code] for Godot 2), or an empty string if none was located.
 			</description>
 		</method>
 		<method name="get_project_dotnet_assembly_name" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the name of the C# assembly declared by the loaded project, or an empty string for non-C# projects.
 			</description>
 		</method>
 		<method name="get_project_path" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the filesystem path GDRE treats as the root of the loaded project. For loose-directory loads this is the directory itself; for archives this is the directory containing the pack file.
 			</description>
 		</method>
 		<method name="get_project_setting" qualifiers="const">
@@ -189,48 +236,57 @@
 			<param index="0" name="p_setting" type="String" />
 			<param index="1" name="default_value" type="Variant" default="null" />
 			<description>
+				Returns the value of the project configuration setting [param p_setting] (e.g. [code]application/config/name[/code]) from the loaded project. Returns [param default_value] if the setting is not present.
 			</description>
 		</method>
 		<method name="get_recent_error_string">
 			<return type="String" />
 			<param index="0" name="filter_backtraces" type="bool" default="true" />
 			<description>
+				Returns a single string containing the errors collected since the last call, joined with newlines. If [param filter_backtraces] is [code]true[/code], native backtrace lines are stripped to keep the output user-friendly.
 			</description>
 		</method>
 		<method name="get_remaps" qualifiers="const">
 			<return type="Dictionary" />
 			<param index="0" name="include_imports" type="bool" default="true" />
 			<description>
+				Returns a [Dictionary] mapping original resource paths to their remapped destinations. When [param include_imports] is [code]true[/code] (the default), the import-generated remaps (e.g. [code]*.png.import[/code] -&gt; [code]*.ctex[/code]) are included alongside explicit remaps.
 			</description>
 		</method>
 		<method name="get_sys_info_string" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns a human-readable summary of GDRE and the host system (OS, CPU, GDRE version, Godot version). Used in the About dialog and bug-report output.
 			</description>
 		</method>
 		<method name="get_temp_dotnet_assembly_dir" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the temporary directory used to stage extracted .NET assemblies for the loaded project, or an empty string if one has not been created.
 			</description>
 		</method>
 		<method name="get_ver_major" qualifiers="const">
 			<return type="int" />
 			<description>
+				Returns the major engine version of the loaded project (e.g. [code]4[/code] for Godot 4.x).
 			</description>
 		</method>
 		<method name="get_ver_minor" qualifiers="const">
 			<return type="int" />
 			<description>
+				Returns the minor engine version of the loaded project.
 			</description>
 		</method>
 		<method name="get_ver_rev" qualifiers="const">
 			<return type="int" />
 			<description>
+				Returns the patch/revision engine version of the loaded project.
 			</description>
 		</method>
 		<method name="get_version_string" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the full engine version string of the loaded project (e.g. [code]"4.3.0"[/code]).
 			</description>
 		</method>
 		<method name="globalize_path" qualifiers="const">
@@ -238,33 +294,39 @@
 			<param index="0" name="p_path" type="String" />
 			<param index="1" name="resource_path" type="String" />
 			<description>
+				Converts a [code]res://[/code] path [param p_path] relative to [param resource_path] into an absolute filesystem path inside the loaded project. Returns [param p_path] unchanged if it is already absolute.
 			</description>
 		</method>
 		<method name="had_encryption_error" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] if any encryption-related error occurred since the last [method load_project] call (e.g. wrong key, missing custom decryptor).
 			</description>
 		</method>
 		<method name="has_any_remaps" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] if at least one remap has been registered (either explicitly or via import metadata).
 			</description>
 		</method>
 		<method name="has_loaded_dotnet_assembly" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] if a .NET assembly has been successfully located and loaded for the current project.
 			</description>
 		</method>
 		<method name="has_path_loaded" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="p_path" type="String" />
 			<description>
+				Returns [code]true[/code] if the given [code]res://[/code]-rooted path [param p_path] exists in the loaded project.
 			</description>
 		</method>
 		<method name="has_project_setting">
 			<return type="bool" />
 			<param index="0" name="p_setting" type="String" />
 			<description>
+				Returns [code]true[/code] if the project configuration contains a setting named [param p_setting].
 			</description>
 		</method>
 		<method name="has_remap" qualifiers="const">
@@ -272,32 +334,38 @@
 			<param index="0" name="src" type="String" />
 			<param index="1" name="dst" type="String" />
 			<description>
+				Returns [code]true[/code] if a remap entry redirecting [param src] to [param dst] is currently registered.
 			</description>
 		</method>
 		<method name="is_headless" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] if GDRE is running in headless mode (no display server). Most CLI workflows run headless.
 			</description>
 		</method>
 		<method name="is_pack_loaded" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] if a project is currently loaded.
 			</description>
 		</method>
 		<method name="is_project_config_loaded" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] if the project configuration ([code]project.godot[/code] / [code]engine.cfg[/code]) has been parsed and is available via [method get_project_setting].
 			</description>
 		</method>
 		<method name="load_import_file">
 			<return type="int" enum="Error" />
 			<param index="0" name="p_path" type="String" />
 			<description>
+				Loads a single [code].import[/code] metadata file at [param p_path] into the session. Returns [code]OK[/code] on success.
 			</description>
 		</method>
 		<method name="load_import_files">
 			<return type="int" enum="Error" />
 			<description>
+				Scans the loaded project for [code].import[/code] files and populates the session's import metadata. Called automatically by [method load_project] when loading interactively, but skipped when [method load_project] is invoked with [code]cmd_line_extract = true[/code] (raw-extraction mode does not need import metadata). Call this manually to refresh import state.
 			</description>
 		</method>
 		<method name="load_project">
@@ -306,17 +374,22 @@
 			<param index="1" name="cmd_line_extract" type="bool" default="false" />
 			<param index="2" name="csharp_assembly_override" type="String" default="&quot;&quot;" />
 			<description>
+				Loads a project from one or more PCK, APK, ZIP, EXE, or directory paths. Pass multiple paths to load multi-part archives (e.g. a main PCK plus split DLC PCKs).
+				Set [param cmd_line_extract] to [code]true[/code] when running in raw extraction mode: import metadata and project-config loading are skipped so only the pack's raw file table is available. Provide [param csharp_assembly_override] to manually point at a specific C# assembly when auto-detection picks the wrong one.
+				Returns [code]OK[/code] on success or an error code on failure. Use [method get_errors] to retrieve a detailed error list.
 			</description>
 		</method>
 		<method name="load_project_config">
 			<return type="int" enum="Error" />
 			<description>
+				Explicitly loads the project configuration ([code]project.godot[/code] or [code]engine.cfg[/code]) from the loaded project. Normally called automatically by [method load_project]; use this to re-parse the config after mutating it.
 			</description>
 		</method>
 		<method name="load_translation_key_hint_file">
 			<return type="int" enum="Error" />
 			<param index="0" name="p_path" type="String" />
 			<description>
+				Loads a translation key hint file (typically a plain-text list of known source strings) that improves the accuracy of CSV translation recovery.
 			</description>
 		</method>
 		<method name="localize_path" qualifiers="const">
@@ -324,32 +397,38 @@
 			<param index="0" name="p_path" type="String" />
 			<param index="1" name="resource_path" type="String" />
 			<description>
+				Converts an absolute filesystem path [param p_path] into a [code]res://[/code]-rooted path relative to [param resource_path].
 			</description>
 		</method>
 		<method name="needs_post_load_patch_translation" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] if the loaded project requires translation patching (the [code]--patch-translations[/code] workflow) to produce usable CSV output.
 			</description>
 		</method>
 		<method name="open_log_file">
 			<return type="int" enum="Error" />
 			<param index="0" name="output_dir" type="String" />
 			<description>
+				Opens a log file inside [param output_dir] that receives all subsequent GDRE log messages. Returns [code]OK[/code] on success.
 			</description>
 		</method>
 		<method name="pack_has_project_config" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] if the loaded pack contains a project configuration file.
 			</description>
 		</method>
 		<method name="post_load_patch_translation">
 			<return type="int" enum="Error" />
 			<description>
+				Runs the post-load translation patching step on the currently loaded project. Should only be called when [method needs_post_load_patch_translation] returns [code]true[/code].
 			</description>
 		</method>
 		<method name="project_requires_dotnet_assembly" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] if the loaded project is a C# (Godot Mono) project and therefore requires a matching .NET assembly.
 			</description>
 		</method>
 		<method name="remove_remap">
@@ -358,64 +437,75 @@
 			<param index="1" name="dst" type="String" />
 			<param index="2" name="output_dir" type="String" />
 			<description>
+				Removes the remap entry [param src] -&gt; [param dst]. If [param output_dir] is non-empty, the corresponding file on disk under [param output_dir] is also deleted. Returns [code]OK[/code] on success.
 			</description>
 		</method>
 		<method name="reset_custom_decryptor">
 			<return type="void" />
 			<description>
+				Clears the currently registered [CustomDecryptor].
 			</description>
 		</method>
 		<method name="reset_encryption_key">
 			<return type="void" />
 			<description>
+				Clears the currently set encryption key.
 			</description>
 		</method>
 		<method name="save_project_config">
 			<return type="int" enum="Error" />
 			<param index="0" name="p_out_dir" type="String" />
 			<description>
+				Writes the current project configuration to a text [code]project.godot[/code] (Godot 3/4) or [code]engine.cfg[/code] (Godot 2) file inside [param p_out_dir]. Returns [code]OK[/code] on success.
 			</description>
 		</method>
 		<method name="save_project_config_binary">
 			<return type="int" enum="Error" />
 			<param index="0" name="p_out_dir" type="String" />
 			<description>
+				Writes the current project configuration to a binary [code]project.binary[/code] (Godot 3/4) or [code]engine.cfb[/code] (Godot 2) file inside [param p_out_dir]. Returns [code]OK[/code] on success.
 			</description>
 		</method>
 		<method name="set_custom_decryption_script">
 			<return type="int" enum="Error" />
 			<param index="0" name="p_decryptor_script_path" type="String" />
 			<description>
+				Loads a GDScript file at [param p_decryptor_script_path] that extends [CustomDecryptor] and registers it as the active custom decryptor. Returns [code]OK[/code] on success.
 			</description>
 		</method>
 		<method name="set_custom_decryptor">
 			<return type="void" />
 			<param index="0" name="p_decryptor" type="CustomDecryptor" />
 			<description>
+				Registers an already-instantiated [CustomDecryptor] as the active decryptor for the session.
 			</description>
 		</method>
 		<method name="set_dotnet_assembly_path">
 			<return type="void" />
 			<param index="0" name="p_path" type="String" />
 			<description>
+				Manually sets the path of the primary .NET assembly for the loaded project, overriding auto-detection.
 			</description>
 		</method>
 		<method name="set_encryption_key">
 			<return type="int" enum="Error" />
 			<param index="0" name="key" type="PackedByteArray" />
 			<description>
+				Sets the encryption key from a raw byte array. Godot's standard AES-256 encryption requires 32 bytes; custom decryptors may accept 16 or 24 bytes for AES-128 or AES-192. Returns [code]OK[/code] if the key length is valid.
 			</description>
 		</method>
 		<method name="set_encryption_key_string">
 			<return type="int" enum="Error" />
 			<param index="0" name="key" type="String" />
 			<description>
+				Sets the encryption key from a hexadecimal string (e.g. [code]"000102...1E1F"[/code] for 32 bytes). Returns [code]OK[/code] if the string decodes to a valid key length.
 			</description>
 		</method>
 		<method name="set_project_path">
 			<return type="void" />
 			<param index="0" name="p_path" type="String" />
 			<description>
+				Overrides the project root directory. Normally set automatically by [method load_project].
 			</description>
 		</method>
 		<method name="set_project_setting">
@@ -423,17 +513,20 @@
 			<param index="0" name="p_setting" type="String" />
 			<param index="1" name="value" type="Variant" />
 			<description>
+				Sets the project configuration setting [param p_setting] to [param value] in the in-memory project config. Persist with [method save_project_config] or [method save_project_config_binary].
 			</description>
 		</method>
 		<method name="unload_project">
 			<return type="int" enum="Error" />
 			<param index="0" name="no_reset_ephemeral" type="bool" default="false" />
 			<description>
+				Unloads the currently loaded project and frees all associated resources. Set [param no_reset_ephemeral] to [code]true[/code] to preserve ephemeral settings (such as the encryption key) across the unload. Returns [code]OK[/code] on success.
 			</description>
 		</method>
 		<method name="update_from_ephemeral_settings">
 			<return type="void" />
 			<description>
+				Refreshes internal state from the current ephemeral [GDREConfig] settings. Called automatically after settings that can be changed via CLI flags are updated.
 			</description>
 		</method>
 	</methods>

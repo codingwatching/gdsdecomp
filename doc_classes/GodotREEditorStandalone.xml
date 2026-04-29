@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="GodotREEditorStandalone" inherits="Control" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
+		Root control for the GDRE Tools standalone GUI.
 	</brief_description>
 	<description>
+		[GodotREEditorStandalone] is the top-level [Control] node used by the GDRE Tools standalone application. It hosts the menus, dialogs, and log view, and exposes a handful of helpers that other parts of the GUI (or custom scripts running inside the standalone shell) can call to drive progress bars, show dialogs, and log messages.
+		This class is only meaningful when GDRE is running as the standalone GUI; it has no effect in headless CLI mode.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -10,12 +13,14 @@
 		<method name="get_version">
 			<return type="String" />
 			<description>
+				Returns the GDRE Tools version string shown in the title bar and About dialog.
 			</description>
 		</method>
 		<method name="pck_select_request">
 			<return type="void" />
 			<param index="0" name="path" type="PackedStringArray" />
 			<description>
+				Opens the PCK file-selection dialog pre-populated with the paths in [param path]. Used by the menu shortcuts that load a pack.
 			</description>
 		</method>
 		<method name="popup_confirm_box">
@@ -27,6 +32,7 @@
 			<param index="4" name="ok_button_text" type="String" default="&quot;OK&quot;" />
 			<param index="5" name="cancel_button_text" type="String" default="&quot;Cancel&quot;" />
 			<description>
+				Shows a modal confirmation dialog displaying [param message] under [param title]. [param confirm_callback] is invoked when the user presses the OK button and [param cancel_callback] is invoked on Cancel. Button labels can be overridden with [param ok_button_text] and [param cancel_button_text].
 			</description>
 		</method>
 		<method name="popup_error_box">
@@ -35,6 +41,7 @@
 			<param index="1" name="title" type="String" default="&quot;Error&quot;" />
 			<param index="2" name="callback" type="Callable" default="Callable()" />
 			<description>
+				Shows a modal error dialog displaying [param message] under [param title]. [param callback] is invoked when the dialog is dismissed.
 			</description>
 		</method>
 		<method name="progress_add_task" qualifiers="static">
@@ -44,12 +51,14 @@
 			<param index="2" name="steps" type="int" />
 			<param index="3" name="can_cancel" type="bool" />
 			<description>
+				Registers a new long-running task with the standalone progress UI. [param task] is a unique identifier used by later calls to [method progress_task_step] and [method progress_end_task]. [param label] is the display text, [param steps] the total number of steps, and [param can_cancel] controls whether the UI shows a cancel button.
 			</description>
 		</method>
 		<method name="progress_end_task" qualifiers="static">
 			<return type="void" />
 			<param index="0" name="task" type="String" />
 			<description>
+				Marks the task identified by [param task] as complete and removes it from the progress UI.
 			</description>
 		</method>
 		<method name="progress_task_step" qualifiers="static">
@@ -59,11 +68,13 @@
 			<param index="2" name="step" type="int" />
 			<param index="3" name="force_refresh" type="bool" />
 			<description>
+				Advances the task identified by [param task] to step [param step] and updates its state label to [param state]. Set [param force_refresh] to [code]true[/code] to force an immediate UI redraw (useful when the caller is blocking the main thread). Returns [code]true[/code] if the user has requested to cancel the task.
 			</description>
 		</method>
 		<method name="show_about_dialog">
 			<return type="void" />
 			<description>
+				Shows the About dialog, containing the GDRE version, license disclaimer, and system info.
 			</description>
 		</method>
 		<method name="tree_set_edit_checkbox_cell_only_when_checkbox_is_pressed" qualifiers="static">
@@ -71,12 +82,14 @@
 			<param index="0" name="tree" type="Tree" />
 			<param index="1" name="enabled" type="bool" />
 			<description>
+				Toggles a workaround on the given [Tree] that constrains editable-checkbox cells to only react to clicks on the checkbox itself, rather than anywhere in the cell.
 			</description>
 		</method>
 		<method name="write_log_message">
 			<return type="void" />
 			<param index="0" name="message" type="String" />
 			<description>
+				Appends [param message] to the standalone log view.
 			</description>
 		</method>
 	</methods>

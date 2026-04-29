@@ -1,8 +1,33 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="PckCreator" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
+		Create and build Godot PCK archive files.
 	</brief_description>
 	<description>
+		[PckCreator] builds Godot PCK archives from files on disk. You can create a PCK in a single call with [method pck_create], or use the lower-level [method start_pck] / [method add_files] / [method finish_pck] workflow for more control. The creator supports encryption, embedding into an executable, and custom watermarks.
+		[codeblock]
+		# Single-call approach: pack an entire directory.
+		var creator = PckCreator.new()
+		creator.ver_major = 4
+		creator.ver_minor = 3
+		creator.ver_rev = 0
+		creator.pack_version = 2
+
+		var err = creator.pck_create("/output/game.pck", "/path/to/project")
+		if err != OK:
+		    push_error("PCK creation failed: " + creator.get_error_message())
+
+		# Manual approach: fine-grained control.
+		creator.reset()
+		creator.start_pck("/output/game.pck", 2, 4, 3, 0)
+		var files = {
+		    "/path/to/project/main.gd": "res://main.gd",
+		    "/path/to/project/icon.png": "res://icon.png",
+		}
+		err = creator.add_files(files)
+		if err == OK:
+		    err = creator.finish_pck()
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -11,16 +36,19 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="file_paths_to_pack" type="Dictionary" />
 			<description>
+				Adds files to the in-progress archive. [param file_paths_to_pack] maps source filesystem paths to their destination [code]res://[/code] paths inside the archive (e.g. [code]{"/abs/path/to/file.gd": "res://scripts/file.gd"}[/code]). Returns [code]OK[/code] on success, or an error code if any file could not be read.
 			</description>
 		</method>
 		<method name="finish_pck">
 			<return type="int" enum="Error" />
 			<description>
+				Finalizes and writes the PCK archive to disk. Call this after [method start_pck] and all [method add_files] calls. Returns [code]OK[/code] on success.
 			</description>
 		</method>
 		<method name="get_error_message" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns a human-readable description of the last error.
 			</description>
 		</method>
 		<method name="pck_create">
@@ -30,11 +58,13 @@
 			<param index="2" name="include_filters" type="PackedStringArray" default="PackedStringArray()" />
 			<param index="3" name="exclude_filters" type="PackedStringArray" default="PackedStringArray()" />
 			<description>
+				Convenience method that creates a complete PCK archive in a single call. Packs every file under [param dir] into a new archive at [param pck_path]. [param include_filters] and [param exclude_filters] are arrays of glob patterns (rooted to [code]res://[/code]) that control which files are included - exclusion wins over inclusion when both lists are supplied. Returns [code]OK[/code] on success.
 			</description>
 		</method>
 		<method name="reset">
 			<return type="void" />
 			<description>
+				Resets the creator state so the instance can be reused for a new archive. Restores [member pack_version], [member ver_major], [member ver_minor], and [member ver_rev] to their defaults and clears any accumulated file list.
 			</description>
 		</method>
 		<method name="start_pck">
@@ -49,25 +79,34 @@
 			<param index="7" name="exe_to_embed" type="String" default="&quot;&quot;" />
 			<param index="8" name="watermark" type="String" default="&quot;&quot;" />
 			<description>
+				Begins a new PCK archive at [param pck_path]. [param pck_version] is the PCK format version ([code]0[/code], [code]1[/code], or [code]2[/code]). [param ver_major], [param ver_minor], and [param ver_rev] populate the engine-version fields of the archive header. Set [param encrypt] to [code]true[/code] to encrypt file contents with the key configured on [GDRESettings]. Set [param embed] to [code]true[/code] and provide [param exe_to_embed] to append the PCK to an executable. [param watermark] embeds an optional identifying string in the header.
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="embed" type="bool" setter="set_embed" getter="get_embed" default="false">
+			When [code]true[/code], the PCK is embedded into the executable specified by [member exe_to_embed].
 		</member>
 		<member name="encrypt" type="bool" setter="set_encrypt" getter="get_encrypt" default="false">
+			When [code]true[/code], file data inside the archive is encrypted using the key configured on [GDRESettings].
 		</member>
 		<member name="exe_to_embed" type="String" setter="set_exe_to_embed" getter="get_exe_to_embed" default="&quot;&quot;">
+			Path to the executable to embed the PCK into. Only used when [member embed] is [code]true[/code].
 		</member>
 		<member name="pack_version" type="int" setter="set_pack_version" getter="get_pack_version" default="2">
+			The PCK format version to write. Valid values are [code]0[/code], [code]1[/code], and [code]2[/code].
 		</member>
 		<member name="ver_major" type="int" setter="set_ver_major" getter="get_ver_major" default="4">
+			The major engine version written into the PCK header.
 		</member>
 		<member name="ver_minor" type="int" setter="set_ver_minor" getter="get_ver_minor" default="4">
+			The minor engine version written into the PCK header.
 		</member>
 		<member name="ver_rev" type="int" setter="set_ver_rev" getter="get_ver_rev" default="0">
+			The patch/revision engine version written into the PCK header.
 		</member>
 		<member name="watermark" type="String" setter="set_watermark" getter="get_watermark" default="&quot;&quot;">
+			An optional string embedded in the archive header for identification purposes.
 		</member>
 	</members>
 </class>

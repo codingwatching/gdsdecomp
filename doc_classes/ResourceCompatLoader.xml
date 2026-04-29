@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="ResourceCompatLoader" inherits="Object" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
+		Version-tolerant resource loader used to read resources from older Godot projects.
 	</brief_description>
 	<description>
+		[ResourceCompatLoader] is GDRE's drop-in replacement for Godot's built-in [ResourceLoader] that can read resources written by older engine versions, malformed or stripped resources, and files whose class definitions are missing from the host engine. It drives the bulk of GDRE's loading and conversion work.
+		The loader exposes several load modes (see [enum LoadType]):
+		- [b]fake[/b] loads never instantiate the real resource class; instead they return a [MissingResource]-backed placeholder that preserves every property. This is the safest mode for reading unknown types.
+		- [b]non-global[/b] loads use the real class but keep the loaded resource out of Godot's resource cache.
+		- [b]real[/b] loads fall through to the normal Godot loader, with full cache participation controlled by [param cache_mode].
+		- [b]gltf[/b] loads use GDRE's GLTF-compatible loader path for scene resources.
+		All methods are static. Install the loader globally with [method make_globally_available] to have Godot's own [ResourceLoader] defer to it.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -12,6 +20,7 @@
 			<param index="0" name="loader" type="CompatFormatLoader" />
 			<param index="1" name="at_front" type="bool" default="false" />
 			<description>
+				Registers [param loader] with the compat loader list. If [param at_front] is [code]true[/code], it takes priority over previously-registered loaders.
 			</description>
 		</method>
 		<method name="add_resource_object_converter" qualifiers="static">
@@ -19,6 +28,7 @@
 			<param index="0" name="converter" type="ResourceCompatConverter" />
 			<param index="1" name="at_front" type="bool" default="false" />
 			<description>
+				Registers [param converter] with the compat converter list. Converters upgrade older-format resource objects to their current-engine equivalents. If [param at_front] is [code]true[/code], it takes priority.
 			</description>
 		</method>
 		<method name="fake_load" qualifiers="static">
@@ -26,6 +36,7 @@
 			<param index="0" name="path" type="String" />
 			<param index="1" name="type_hint" type="String" default="&quot;&quot;" />
 			<description>
+				Loads the resource at [param path] without instantiating the real resource class - properties are kept on a placeholder instead. Use this when the resource's type is missing from the host engine or when you only need to inspect properties. [param type_hint] can disambiguate the resource type when the file does not record it.
 			</description>
 		</method>
 		<method name="get_dependencies" qualifiers="static">
@@ -33,6 +44,7 @@
 			<param index="0" name="path" type="String" />
 			<param index="1" name="add_types" type="bool" default="false" />
 			<description>
+				Returns the external resource paths that [param path] depends on. When [param add_types] is [code]true[/code], each returned entry is suffixed with [code]::[/code] and the dependency's resource type.
 			</description>
 		</method>
 		<method name="get_resource_info" qualifiers="static">
@@ -40,18 +52,21 @@
 			<param index="0" name="path" type="String" />
 			<param index="1" name="type_hint" type="String" default="&quot;&quot;" />
 			<description>
+				Returns a [Dictionary] describing the resource at [param path] (type, format, engine version it was written for, UID, and so on) without loading it.
 			</description>
 		</method>
 		<method name="get_resource_script_class" qualifiers="static">
 			<return type="String" />
 			<param index="0" name="path" type="String" />
 			<description>
+				Returns the [code]class_name[/code] of the script attached to the resource at [param path], or an empty string if the resource has no script or the class cannot be determined without fully loading.
 			</description>
 		</method>
 		<method name="get_resource_type" qualifiers="static">
 			<return type="String" />
 			<param index="0" name="path" type="String" />
 			<description>
+				Returns the resource type string stored in [param path]'s header, or an empty string if the file is not a recognized resource.
 			</description>
 		</method>
 		<method name="gltf_load" qualifiers="static">
@@ -59,6 +74,7 @@
 			<param index="0" name="path" type="String" />
 			<param index="1" name="type_hint" type="String" default="&quot;&quot;" />
 			<description>
+				Loads a scene resource at [param path] via GDRE's GLTF-compatible loader. Primarily used to read [code].scn[/code] and [code].tscn[/code] files that will be exported to GLTF.
 			</description>
 		</method>
 		<method name="handles_resource" qualifiers="static">
@@ -66,21 +82,25 @@
 			<param index="0" name="path" type="String" />
 			<param index="1" name="type_hint" type="String" default="&quot;&quot;" />
 			<description>
+				Returns [code]true[/code] if a registered compat loader recognizes [param path] (optionally filtered by [param type_hint]).
 			</description>
 		</method>
 		<method name="is_default_gltf_load" qualifiers="static">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] if GLTF-compat loading is the default for scene resources - see [method set_default_gltf_load].
 			</description>
 		</method>
 		<method name="is_globally_available" qualifiers="static">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] if [ResourceCompatLoader] has been installed globally via [method make_globally_available].
 			</description>
 		</method>
 		<method name="make_globally_available" qualifiers="static">
 			<return type="void" />
 			<description>
+				Installs [ResourceCompatLoader] in front of Godot's built-in [ResourceLoader] so that [code]load()[/code] calls elsewhere in the engine transparently use the compat loader. Pair with [method unmake_globally_available] when you are done.
 			</description>
 		</method>
 		<method name="non_global_load" qualifiers="static">
@@ -88,6 +108,7 @@
 			<param index="0" name="path" type="String" />
 			<param index="1" name="type_hint" type="String" default="&quot;&quot;" />
 			<description>
+				Loads [param path] using the real resource class, but does not register the result in Godot's resource cache. Useful when you need to load the same file multiple times with different settings without cache interference.
 			</description>
 		</method>
 		<method name="real_load" qualifiers="static">
@@ -96,18 +117,21 @@
 			<param index="1" name="type_hint" type="String" default="&quot;&quot;" />
 			<param index="2" name="cache_mode" type="int" enum="ResourceCompatLoader.CacheMode" default="1" />
 			<description>
+				Loads [param path] through the normal Godot loader with full caching behavior controlled by [param cache_mode] - see [enum CacheMode].
 			</description>
 		</method>
 		<method name="remove_resource_format_loader" qualifiers="static">
 			<return type="void" />
 			<param index="0" name="loader" type="CompatFormatLoader" />
 			<description>
+				Removes a previously registered [CompatFormatLoader].
 			</description>
 		</method>
 		<method name="remove_resource_object_converter" qualifiers="static">
 			<return type="void" />
 			<param index="0" name="converter" type="ResourceCompatConverter" />
 			<description>
+				Removes a previously registered [ResourceCompatConverter].
 			</description>
 		</method>
 		<method name="resource_to_string" qualifiers="static">
@@ -115,6 +139,7 @@
 			<param index="0" name="path" type="String" />
 			<param index="1" name="skip_cr" type="bool" default="true" />
 			<description>
+				Loads the resource at [param path] and returns its text-format serialization as a string. When [param skip_cr] is [code]true[/code], carriage returns are stripped from the output for consistent line endings.
 			</description>
 		</method>
 		<method name="save_custom" qualifiers="static">
@@ -124,12 +149,14 @@
 			<param index="2" name="ver_major" type="int" />
 			<param index="3" name="ver_minor" type="int" />
 			<description>
+				Saves [param resource] to [param path] using the resource format of the specified engine version ([param ver_major], [param ver_minor]). Use this when the engine running GDRE differs from the target engine.
 			</description>
 		</method>
 		<method name="set_default_gltf_load" qualifiers="static">
 			<return type="void" />
 			<param index="0" name="enable" type="bool" />
 			<description>
+				Enables or disables GLTF-compat loading as the default for scene resources.
 			</description>
 		</method>
 		<method name="to_binary" qualifiers="static">
@@ -138,6 +165,7 @@
 			<param index="1" name="dst" type="String" />
 			<param index="2" name="flags" type="int" default="0" />
 			<description>
+				Converts the text-format resource at [param path] ([code].tscn[/code] or [code].tres[/code]) to its binary equivalent at [param dst]. [param flags] is a bit mask of [ResourceSaver] flags forwarded to the saver. Returns [code]OK[/code] on success.
 			</description>
 		</method>
 		<method name="to_text" qualifiers="static">
@@ -147,32 +175,43 @@
 			<param index="2" name="flags" type="int" default="0" />
 			<param index="3" name="original_path" type="String" default="&quot;&quot;" />
 			<description>
+				Converts the binary-format resource at [param path] ([code].scn[/code] or [code].res[/code]) to its text equivalent at [param dst]. [param original_path] can be provided so internal [code]res://[/code] references resolve against the resource's original location rather than its on-disk path. [param flags] is a bit mask of [ResourceSaver] flags forwarded to the saver.
 			</description>
 		</method>
 		<method name="unmake_globally_available" qualifiers="static">
 			<return type="void" />
 			<description>
+				Restores Godot's built-in [ResourceLoader] as the default, undoing [method make_globally_available].
 			</description>
 		</method>
 	</methods>
 	<constants>
 		<constant name="CACHE_MODE_IGNORE" value="0" enum="CacheMode">
+			Bypass the resource cache for this load, and do not store the result in the cache.
 		</constant>
 		<constant name="CACHE_MODE_REUSE" value="1" enum="CacheMode">
+			Reuse a cached copy of the resource if one exists; otherwise load and cache the result. This is the default.
 		</constant>
 		<constant name="CACHE_MODE_REPLACE" value="2" enum="CacheMode">
+			Load the resource from disk and replace any cached copy.
 		</constant>
 		<constant name="CACHE_MODE_IGNORE_DEEP" value="3" enum="CacheMode">
+			Like [constant CACHE_MODE_IGNORE], but also bypasses the cache for every sub-resource loaded transitively.
 		</constant>
 		<constant name="CACHE_MODE_REPLACE_DEEP" value="4" enum="CacheMode">
+			Like [constant CACHE_MODE_REPLACE], but also replaces every sub-resource in the cache.
 		</constant>
 		<constant name="FAKE_LOAD" value="0" enum="LoadType">
+			Placeholder load - see [method fake_load].
 		</constant>
 		<constant name="NON_GLOBAL_LOAD" value="1" enum="LoadType">
+			Real-class load that is not registered in the resource cache - see [method non_global_load].
 		</constant>
 		<constant name="GLTF_LOAD" value="2" enum="LoadType">
+			GLTF-compat scene load - see [method gltf_load].
 		</constant>
 		<constant name="REAL_LOAD" value="3" enum="LoadType">
+			Normal cached load - see [method real_load].
 		</constant>
 	</constants>
 </class>

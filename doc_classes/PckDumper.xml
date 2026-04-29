@@ -1,8 +1,29 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="PckDumper" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
+		Extract files from Godot PCK archives.
 	</brief_description>
 	<description>
+		[PckDumper] extracts the raw files stored inside a Godot PCK archive to disk. Unlike [ImportExporter], it does not convert resources back to their source formats - it writes exactly the bytes that are stored in the archive. Use it when you need the engine-format files (e.g. [code].ctex[/code] instead of [code].png[/code], [code].gdc[/code] instead of [code].gd[/code]) rather than their original source equivalents.
+		Load a project with [method GDRESettings.load_project] before using [PckDumper].
+		[codeblock]
+		var settings = Engine.get_singleton("GDRESettings")
+		var err = settings.load_project(PackedStringArray(["path/to/game.pck"]))
+		if err != OK:
+		    push_error("Failed to load project: " + str(err))
+		    return
+
+		var dumper = PckDumper.new()
+		err = dumper.check_md5_all_files()
+		if err != OK and err != ERR_SKIP:
+		    push_warning("Checksum verification failed - archive may be corrupt")
+
+		err = dumper.pck_dump_to_dir("/path/to/output")
+		if err != OK:
+		    push_error("Extraction failed: " + str(err))
+
+		settings.unload_project()
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -10,6 +31,8 @@
 		<method name="check_md5_all_files">
 			<return type="int" enum="Error" />
 			<description>
+				Verifies the MD5 checksum of every file in the loaded pack against the checksums stored in the archive header.
+				Returns [code]OK[/code] if all checksums pass, [code]ERR_BUG[/code] if any file fails verification (the broken files are logged), or [code]ERR_SKIP[/code] if no PCK or embedded-EXE pack is loaded (checksums are not recorded for APK/ZIP/directory loads) or if every file's stored MD5 was empty.
 			</description>
 		</method>
 		<method name="pck_dump_to_dir">
@@ -17,6 +40,7 @@
 			<param index="0" name="dir" type="String" />
 			<param index="1" name="files_to_extract" type="PackedStringArray" default="PackedStringArray()" />
 			<description>
+				Extracts files from the loaded pack to [param dir], preserving their [code]res://[/code]-relative paths. If [param files_to_extract] is non-empty, only those [code]res://[/code]-rooted paths are extracted; otherwise every file is dumped. Returns [code]OK[/code] on success, or an error code if extraction fails.
 			</description>
 		</method>
 	</methods>

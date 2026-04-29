@@ -1,8 +1,27 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="GodotVer" inherits="SemVer" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
+		Represents a parsed Godot engine version string.
 	</brief_description>
 	<description>
+		[GodotVer] is a structured representation of a Godot engine version. It extends [SemVer] (and therefore exposes [code]major[/code], [code]minor[/code], [code]patch[/code], [code]prerelease[/code], and [code]build_metadata[/code]) and adds Godot-specific parsing and factory methods. Use it to compare versions, extract individual components, or check whether a build is a known-official release.
+		Note that [GodotVer]'s parser only recognizes [code]dev[/code], [code]alpha[/code], [code]beta[/code], and [code]rc[/code] (optionally followed by digits, e.g. [code]beta1[/code], [code]rc2[/code]) as [code]prerelease[/code] labels. Any other trailing identifier - including [code]stable[/code], [code]official[/code], flavor tags like [code]mono[/code], and commit hashes - is parsed into [code]build_metadata[/code].
+		[codeblock]
+		var ver = GodotVer.parse_godotver("4.3.stable.official.77dcf97d8")
+		print(ver.major)           # 4
+		print(ver.minor)           # 3
+		print(ver.patch)           # 0
+		print(ver.prerelease)      # "" - "stable" is not a recognized prerelease label
+		print(ver.build_metadata)  # "stable.official.77dcf97d8"
+		print(ver.is_not_custom_build())  # false - build_metadata contains "official"
+
+		var rc = GodotVer.parse_godotver("4.3.0-rc2")
+		print(rc.prerelease)       # "rc2"
+
+		var custom = GodotVer.parse_godotver("4.3.stable.mycustom.123abc")
+		print(custom.build_metadata)  # "stable.mycustom.123abc"
+		print(custom.is_not_custom_build())  # true - build_metadata is non-empty and does not contain "official"
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -15,17 +34,21 @@
 			<param index="3" name="prerelease" type="String" default="&quot;&quot;" />
 			<param index="4" name="build_metadata" type="String" default="&quot;&quot;" />
 			<description>
+				Factory that constructs a [GodotVer] from individual components. [param prerelease] corresponds to the pre-release label and should be one of [code]"dev"[/code], [code]"alpha"[/code], [code]"beta"[/code], or [code]"rc"[/code], optionally suffixed with digits (e.g. [code]"beta1"[/code], [code]"rc2"[/code]); stable releases leave it empty. [param build_metadata] holds extra identifiers that Godot appends to its version strings - typically a flavor and commit hash such as [code]"stable.official.77dcf97d8"[/code], [code]"stable.mono.official.abc123"[/code], or a custom-build marker. Note that [code]"stable"[/code] belongs in [param build_metadata], not [param prerelease].
 			</description>
 		</method>
 		<method name="is_not_custom_build">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] when this version appears to be a non-official (custom) build, as indicated by a non-empty [code]build_metadata[/code] that does not contain [code]"official"[/code]. Returns [code]false[/code] when [code]build_metadata[/code] is empty or when it does contain [code]"official"[/code].
+				Note that the method can only speak with confidence about official builds: an empty [code]build_metadata[/code] leaves the classification ambiguous and the method returns [code]false[/code] in that case.
 			</description>
 		</method>
 		<method name="parse_godotver" qualifiers="static">
 			<return type="GodotVer" />
 			<param index="0" name="ver_text" type="String" />
 			<description>
+				Parses a Godot version string (e.g. [code]"4.3.0"[/code], [code]"3.5.2.stable"[/code], [code]"4.4.dev"[/code], [code]"4.3.stable.official.77dcf97d8"[/code]) and returns a [GodotVer]. The parser recognizes only [code]dev[/code], [code]alpha[/code], [code]beta[/code], and [code]rc[/code] (with optional trailing digits) as [code]prerelease[/code] labels; every other trailing identifier - [code]stable[/code], [code]official[/code], [code]mono[/code], commit hashes, etc. - is captured in [code]build_metadata[/code]. Returns [code]null[/code] if the string cannot be parsed.
 			</description>
 		</method>
 	</methods>
