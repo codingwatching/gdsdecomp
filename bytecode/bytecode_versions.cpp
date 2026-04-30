@@ -55,6 +55,7 @@
 #include "bytecode/bytecode_64872ca.h"
 #include "bytecode/bytecode_7d2d144.h"
 #include "bytecode/bytecode_30c1229.h"
+#include "bytecode/bytecode_2b64f73.h"
 #include "bytecode/bytecode_48f1d02.h"
 #include "bytecode/bytecode_65d48d6.h"
 #include "bytecode/bytecode_be46be7.h"
@@ -116,6 +117,7 @@ void register_decomp_versions() {
 	ClassDB::register_class<GDScriptDecomp_64872ca>();
 	ClassDB::register_class<GDScriptDecomp_7d2d144>();
 	ClassDB::register_class<GDScriptDecomp_30c1229>();
+	ClassDB::register_class<GDScriptDecomp_2b64f73>();
 	ClassDB::register_class<GDScriptDecomp_48f1d02>();
 	ClassDB::register_class<GDScriptDecomp_65d48d6>();
 	ClassDB::register_class<GDScriptDecomp_be46be7>();
@@ -180,6 +182,7 @@ Ref<GDScriptDecomp> GDScriptDecompVersion::create_decomp_for_commit(int p_commit
 		case 0x64872ca: return memnew(GDScriptDecomp_64872ca);
 		case 0x7d2d144: return memnew(GDScriptDecomp_7d2d144);
 		case 0x30c1229: return memnew(GDScriptDecomp_30c1229);
+		case 0x2b64f73: return memnew(GDScriptDecomp_2b64f73);
 		case 0x48f1d02: return memnew(GDScriptDecomp_48f1d02);
 		case 0x65d48d6: return memnew(GDScriptDecomp_65d48d6);
 		case 0xbe46be7: return memnew(GDScriptDecomp_be46be7);
@@ -253,7 +256,8 @@ Vector<GDScriptDecompVersion> GDScriptDecompVersion::decomp_versions = {
 	{ 0x64872ca, "	2.0-dev4 (64872ca / 2015-12-31 / Bytecode version: 8) - Added `Color8` function.", 8, true, "2.0-dev4", "", 0x7d2d144 },
 	{ 0x7d2d144, "	2.0-dev3 (7d2d144 / 2015-12-29 / Bytecode version: 7) - Added `BREAKPOINT` token.", 7, true, "2.0-dev3", "", 0x30c1229 },
 	{ 0x30c1229, "	2.0-dev2 (30c1229 / 2015-12-28 / Bytecode version: 6) - Added `ONREADY` token.", 6, true, "2.0-dev2", "", 0x48f1d02 },
-	{ 0x48f1d02, "	2.0-dev1 (48f1d02 / 2015-06-24 / Bytecode version: 5) - Added `SIGNAL` token.", 5, true, "2.0-dev1", "", 0x65d48d6 },
+	{ 0x2b64f73, "	2.0-dev1 (2b64f73 / 2015-06-27 / Bytecode version: 5) - bytecode version changed", 5, true, "2.0-dev1", "", 0x48f1d02 },
+	{ 0x48f1d02, "	2.0-dev0 (48f1d02 / 2015-06-24 / Bytecode version: 4) - Added `SIGNAL` token.", 4, true, "2.0-dev0", "", 0x65d48d6 },
 	{ 0x65d48d6, "1.1.0-stable (65d48d6 / 2015-05-09 / Bytecode version: 4) - Added `prints` function.", 4, false, "1.1.0-stable", "", 0xbe46be7 },
 	{ 0xbe46be7, "	1.1-dev3 (be46be7 / 2015-04-18 / Bytecode version: 3) - Renamed function get_inst to instance_from_id.", 3, true, "1.1-dev3", "", 0x97f34a1 },
 	{ 0x97f34a1, "	1.1-dev2 (97f34a1 / 2015-03-25 / Bytecode version: 3) - Added `seed`, `get_inst` functions.", 3, true, "1.1-dev2", "", 0x2185c01 },

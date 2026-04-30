@@ -7,21 +7,20 @@
 
 #include "bytecode_base.h"
 
-class GDScriptDecomp_48f1d02 : public GDScriptDecomp {
-	GDCLASS(GDScriptDecomp_48f1d02, GDScriptDecomp);
+class GDScriptDecomp_2b64f73 : public GDScriptDecomp {
+	GDCLASS(GDScriptDecomp_2b64f73, GDScriptDecomp);
 protected:
 	static void _bind_methods(){};
-	static constexpr int bytecode_version = 4;
-	static constexpr int bytecode_rev = 0x48f1d02;
+	static constexpr int bytecode_version = 5;
+	static constexpr int bytecode_rev = 0x2b64f73;
 	static constexpr int engine_ver_major = 2;
 	static constexpr int variant_ver_major = 2;
-	static constexpr const char *bytecode_rev_str = "48f1d02";
-	static constexpr const char *engine_version = "2.0-dev0";
+	static constexpr const char *bytecode_rev_str = "2b64f73";
+	static constexpr const char *engine_version = "2.0-dev1";
 	static constexpr const char *max_engine_version = "";
-	static constexpr const char *date = "2015-06-24";
-	static constexpr int parent = 0x65d48d6;
+	static constexpr const char *date = "2015-06-27";
+	static constexpr int parent = 0x48f1d02;
 
-	virtual Vector<GlobalToken> get_added_tokens() const override { return {GlobalToken::G_TK_PR_SIGNAL}; }
 public:
 	virtual String get_function_name(int p_func) const override;
 	virtual int get_function_count() const override;
@@ -38,6 +37,6 @@ public:
 	virtual String get_engine_version() const override { return engine_version; }
 	virtual String get_max_engine_version() const override { return max_engine_version; }
 	virtual String get_date() const override { return date; }
-	GDScriptDecomp_48f1d02() {}
+	GDScriptDecomp_2b64f73() {}
 };
 

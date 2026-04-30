@@ -122,7 +122,7 @@ inline void test_script_binary(const String &script_name, const Vector<uint8_t> 
 		auto parent = GDScriptDecomp::create_decomp_for_commit(decomp->get_parent());
 		CHECK(parent.is_valid());
 		// Can't test be46be7, the only thing that changed in this commit is the name of the function
-		if (revision != 0xbe46be7) {
+		if (revision != 0xbe46be7 && revision != 0x2b64f73) {
 			auto parent_result = parent->test_bytecode(bytecode, false);
 			CHECK(parent_result == GDScriptDecomp::BYTECODE_TEST_FAIL);
 		}
