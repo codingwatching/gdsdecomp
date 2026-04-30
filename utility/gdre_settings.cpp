@@ -1062,13 +1062,16 @@ Error GDRESettings::get_version_from_bin_resources() {
 		if (decomps.is_empty()) {
 			decomps = BytecodeTester::get_possible_decomps(bytecode_files, true);
 		}
-		ERR_FAIL_COND_V_MSG(decomps.is_empty(), ERR_FILE_NOT_FOUND, "Cannot determine version from bin resources: decomp testing failed!");
-		if (do_thing()) {
-			return OK;
-		}
-		if (min_major == max_major && min_minor == max_minor) {
-			current_project->version = GodotVer::create(min_major, min_minor, 0);
-			return OK;
+		if (decomps.is_empty()) {
+			WARN_PRINT("Could not determine bytecode revision from bytecode files!");
+		} else {
+			if (do_thing()) {
+				return OK;
+			}
+			if (min_major == max_major && min_minor == max_minor) {
+				current_project->version = GodotVer::create(min_major, min_minor, 0);
+				return OK;
+			}
 		}
 	} else {
 		min_minor = 0;
