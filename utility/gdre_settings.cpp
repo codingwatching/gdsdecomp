@@ -1126,17 +1126,16 @@ Error GDRESettings::get_version_from_bin_resources() {
 	if (inconsistent_versions > 0) {
 		WARN_PRINT(itos(inconsistent_versions) + " binary resources had inconsistent versions!");
 	}
+	Vector<String> xml_files = get_file_list({ "*.xml" });
 	// we somehow didn't get a version major??
-	if (ver_major == 0 && ver_minor == 0) {
+	if (ver_major == 0 && ver_minor == 0 && xml_files.is_empty()) {
 		WARN_PRINT("Couldn't determine ver major from binary resources?!");
 		ver_major = version_from_dir;
 		ERR_FAIL_COND_V_MSG(ver_major == 0, ERR_CANT_ACQUIRE_RESOURCE, "Can't find version from directory!");
 	}
 
 	current_project->version = GodotVer::create(ver_major, ver_minor, 0);
-	if (ver_major <= 2) {
-		// get all the *.xml files in the project
-		Vector<String> xml_files = get_file_list({ "*.xml" });
+	if (ver_major <= 2 && !xml_files.is_empty()) {
 		//<resource_file type="PackedScene" subresource_count="3" version="0.99" version_name="Godot Engine v0.99.3291-pre-beta">
 		// we want a regex that matches the version_name string
 		Ref<RegEx> regex = RegEx::create_from_string("<resource_file.*version_name=\"Godot Engine v([^\"]+)\">");
