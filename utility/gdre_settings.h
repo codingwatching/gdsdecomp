@@ -140,6 +140,7 @@ private:
 	Array import_files;
 	HashMap<String, Ref<ImportInfoRemap>> remap_iinfo;
 	String gdre_resource_path = "";
+	String v2_remap_setting = "remap/all";
 
 	struct UID_Cache {
 		CharString cs;
