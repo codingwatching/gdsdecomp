@@ -1885,6 +1885,11 @@ static Error _write_to_str(void *ud, const String &p_string) {
 Error VariantWriterCompat::write_to_string_script(const Variant &p_variant, String &r_string, const uint32_t ver_major, const uint32_t ver_minor, EncodeResourceFunc p_encode_res_func, void *p_encode_res_ud, bool p_compat_4x_force_v3) {
 	r_string = String();
 	switch (ver_major) {
+		case 0:
+			if (ver_minor == 0) {
+				ERR_FAIL_V_MSG(ERR_INVALID_PARAMETER, "Invalid version");
+			}
+			// else fall through
 		case 1:
 		case 2: {
 			return VarWriter<2, false, true>::write_compat_v2_v3(p_variant, _write_to_str, &r_string, p_encode_res_func, p_encode_res_ud);
@@ -1920,6 +1925,11 @@ Error VariantWriterCompat::write_to_string_script(const Variant &p_variant, Stri
 Error VariantWriterCompat::write_to_string_pcfg(const Variant &p_variant, String &r_string, const uint32_t ver_major, const uint32_t ver_minor, EncodeResourceFunc p_encode_res_func, void *p_encode_res_ud, bool p_compat_4x_force_v3) {
 	r_string = String();
 	switch (ver_major) {
+		case 0:
+			if (ver_minor == 0) {
+				ERR_FAIL_V_MSG(ERR_INVALID_PARAMETER, "Invalid version");
+			}
+			// else fall through to the next case
 		case 1:
 		case 2: {
 			return VarWriter<2, true, false>::write_compat_v2_v3(p_variant, _write_to_str, &r_string, p_encode_res_func, p_encode_res_ud);
@@ -1952,6 +1962,11 @@ Error VariantWriterCompat::write_to_string_pcfg(const Variant &p_variant, String
 Error VariantWriterCompat::write_to_string(const Variant &p_variant, String &r_string, const uint32_t ver_major, const uint32_t ver_minor, EncodeResourceFunc p_encode_res_func, void *p_encode_res_ud, bool p_compat_4x_force_v3) {
 	r_string = String();
 	switch (ver_major) {
+		case 0:
+			if (ver_minor == 0) {
+				ERR_FAIL_V_MSG(ERR_INVALID_PARAMETER, "Invalid version");
+			}
+			// else fall through to the next case
 		case 1:
 		case 2: {
 			return VarWriter<2, false, false>::write_compat_v2_v3(p_variant, _write_to_str, &r_string, p_encode_res_func, p_encode_res_ud);

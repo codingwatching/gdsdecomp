@@ -925,7 +925,7 @@ Error GDRESettings::detect_bytecode_revision(bool p_no_valid_version) {
 	auto guess_from_version = [&](Error fail_error = ERR_FILE_CANT_OPEN) {
 		if (ver_major > 0 && ver_minor >= 0) {
 			auto decomp = GDScriptDecomp::create_decomp_for_version(current_project->version->as_text(), true);
-			ERR_FAIL_COND_V_MSG(decomp.is_null(), fail_error, "Cannot determine bytecode revision");
+			ERR_FAIL_COND_V_MSG(decomp.is_null(), fail_error, "Could not find bytecode revision for engine version: " + get_version_string());
 			print_line("Guessing bytecode revision from engine version: " + get_version_string() + " (rev 0x" + String::num_int64(decomp->get_bytecode_rev(), 16) + ")");
 			current_project->bytecode_revision = decomp->get_bytecode_rev();
 			return OK;
@@ -1125,6 +1125,41 @@ Error GDRESettings::get_version_from_bin_resources() {
 	}
 
 	current_project->version = GodotVer::create(ver_major, ver_minor, 0);
+	if (ver_major <= 2) {
+		// get all the *.xml files in the project
+		Vector<String> xml_files = get_file_list({ "*.xml" });
+		//<resource_file type="PackedScene" subresource_count="3" version="0.99" version_name="Godot Engine v0.99.3291-pre-beta">
+		// we want a regex that matches the version_name string
+		Ref<RegEx> regex = RegEx::create_from_string("<resource_file.*version_name=\"Godot Engine v([^\"]+)\">");
+		Ref<GodotVer> max_version = nullptr;
+		for (auto xml_file : xml_files) {
+			Ref<ResourceInfo> res_info;
+			Ref<FileAccess> f = FileAccess::open(xml_file, FileAccess::READ);
+			ERR_CONTINUE_MSG(f.is_null(), "Failed to open XML file: " + xml_file);
+			String header = f->get_line();
+			if (header.begins_with("<?xml version=")) {
+				header = f->get_line();
+			}
+			if (!header.begins_with("<resource_file")) {
+				continue;
+			}
+			auto match = regex->search(header);
+			if (match.is_null()) {
+				continue;
+			}
+			auto version_name = match->get_string(1);
+			if (version_name.is_empty()) {
+				continue;
+			}
+			auto version = GodotVer::parse(version_name);
+			if (version.is_valid() && version->is_valid_semver() && (max_version.is_null() || version->gt(max_version))) {
+				max_version = version;
+			}
+		}
+		if (max_version.is_valid() && max_version->gte(current_project->version)) {
+			current_project->version = max_version;
+		}
+	}
 	return OK;
 }
 
@@ -1133,7 +1168,7 @@ Error GDRESettings::load_project_config() {
 	ERR_FAIL_COND_V_MSG(!is_pack_loaded(), ERR_FILE_CANT_OPEN, "Pack not loaded!");
 	ERR_FAIL_COND_V_MSG(is_project_config_loaded(), ERR_ALREADY_IN_USE, "Project config is already loaded!");
 	ERR_FAIL_COND_V_MSG(!pack_has_project_config(), ERR_FILE_NOT_FOUND, "Could not find project config!");
-	if (get_ver_major() == 2) {
+	if (get_ver_major() <= 2) {
 		err = current_project->pcfg->load_cfb(has_path_loaded("res://engine.cfb") ? "res://engine.cfb" : "res://engine.cfg", get_ver_major(), get_ver_minor());
 		ERR_FAIL_COND_V_MSG(err, err, "Failed to load project config!");
 	} else if (get_ver_major() >= 3) {

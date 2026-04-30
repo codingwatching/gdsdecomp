@@ -3001,6 +3001,11 @@ Error ResourceFormatSaverCompatTextInstance::set_save_settings(const Ref<Resourc
 				format_version = 3;
 			} else {
 				switch (ver_major) {
+					case 0:
+						if (ver_minor == 0) {
+							ERR_FAIL_V_MSG(ERR_INVALID_PARAMETER, "Invalid version: 0.0");
+						}
+						// else fall through to the next case
 					case 1: // v1 did not have text format, but we'll convert it anyway to the v2 format for the previewer
 					case 2:
 						format_version = 1;

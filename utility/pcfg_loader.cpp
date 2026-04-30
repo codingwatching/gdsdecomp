@@ -170,16 +170,16 @@ Error ProjectConfigLoader::load_cfb(const String path, uint32_t ver_major, uint3
 	ERR_FAIL_COND_V_MSG(f.is_null(), err, "Could not open " + path);
 	if (ext == "cfg" || ext == "godot") {
 		err = _load_settings_text(f, path, ver_major);
-		if (err == OK && ver_major == 0) {
+		if (err == OK && ver_major == 0 && ver_minor == 0) {
 			auto ret = get_ver_major_and_minor_for_config_version(config_version);
 			ver_major = ret.first;
 			ver_minor = ret.second;
 		}
 	} else {
-		if (ver_major == 0 && ext == "cfb") {
+		if (ver_major == 0 && ver_minor == 0 && ext == "cfb") {
 			ver_major = 2;
 		}
-		if (ver_major == 0) {
+		if (ver_major == 0 && ver_minor == 0) {
 			err = _try_load_binary_v3_or_v4(path, ver_major);
 		} else {
 			err = _load_settings_binary(f, path, ver_major, false);
@@ -198,7 +198,7 @@ Error ProjectConfigLoader::load_cfb(const String path, uint32_t ver_major, uint3
 Error ProjectConfigLoader::save_cfb(const String dir, uint32_t ver_major, uint32_t ver_minor) {
 	ERR_FAIL_COND_V_MSG(!loaded, ERR_INVALID_DATA, "Attempted to save project config when not loaded!");
 	String file;
-	if (ver_major == 0) {
+	if (ver_major == 0 && ver_minor == 0) {
 		ver_major = major;
 		ver_minor = minor;
 	}
@@ -471,7 +471,7 @@ Error ProjectConfigLoader::_save_settings_text_file(const Ref<FileAccess> &file,
 			value = props[key].variant;
 
 			String vstr;
-			VariantWriterCompat::write_to_string_pcfg(value, vstr, ver_major);
+			VariantWriterCompat::write_to_string_pcfg(value, vstr, ver_major, ver_minor);
 			file->store_string(F->get().property_name_encode() + "=" + vstr + "\n");
 		}
 	}
