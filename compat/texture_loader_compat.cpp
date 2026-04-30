@@ -1438,9 +1438,14 @@ Ref<Resource> ResourceFormatLoaderImageTextureCompat::custom_load(const String &
 	return image_texture;
 }
 
+// only enable this on ver_major <= 2
+static inline bool is_texture_loader_enabled() {
+	int major = GDRESettings::get_singleton()->get_ver_major();
+	return major <= 2 && (major != 0 && GDRESettings::get_singleton()->get_ver_minor() != 0);
+}
+
 void ResourceFormatLoaderImageTextureCompat::get_recognized_extensions(List<String> *p_extensions) const {
-	// only enable this on ver_major <= 2
-	if (GDRESettings::get_singleton()->get_ver_major() > 2 && GDRESettings::get_singleton()->get_ver_major() != 0) {
+	if (is_texture_loader_enabled()) {
 		return;
 	}
 	p_extensions->push_back("png");
@@ -1450,21 +1455,21 @@ void ResourceFormatLoaderImageTextureCompat::get_recognized_extensions(List<Stri
 }
 
 bool ResourceFormatLoaderImageTextureCompat::handles_type(const String &p_type) const {
-	if (GDRESettings::get_singleton()->get_ver_major() > 2 && GDRESettings::get_singleton()->get_ver_major() != 0) {
+	if (is_texture_loader_enabled()) {
 		return false;
 	}
 	return p_type == "Texture" || p_type == "ImageTexture";
 }
 
 String ResourceFormatLoaderImageTextureCompat::get_resource_type(const String &p_path) const {
-	if (GDRESettings::get_singleton()->get_ver_major() > 2 && GDRESettings::get_singleton()->get_ver_major() != 0) {
+	if (is_texture_loader_enabled()) {
 		return String();
 	}
 	return "ImageTexture";
 }
 
 Ref<ResourceInfo> ResourceFormatLoaderImageTextureCompat::get_resource_info(const String &p_path, Error *r_error) const {
-	if (GDRESettings::get_singleton()->get_ver_major() > 2 && GDRESettings::get_singleton()->get_ver_major() != 0) {
+	if (is_texture_loader_enabled()) {
 		return Ref<ResourceInfo>();
 	}
 	static const Vector<String> supported_extensions = { "png", "webp", "jpg", "jpeg" };
