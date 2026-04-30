@@ -56,6 +56,7 @@
 #include "exporters/translation_exporter.h"
 #include "gui/find_replace_bar.h"
 #include "gui/gdre_window.h"
+#include "gui/gdre_xml_highlighter.h"
 #include "gui/gui_icons.h"
 #include "gui/mesh_previewer.h"
 #include "gui/scene_previewer.h"
@@ -508,6 +509,7 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<ScenePreviewer2D>();
 	ClassDB::register_class<ScenePreviewer>();
 	ClassDB::register_class<GDREFindReplaceBar>();
+	ClassDB::register_class<GDREXMLHighlighter>();
 	ClassDB::register_class<GodotMonoDecompWrapper>();
 
 	ClassDB::register_class<GDREConfig>();
