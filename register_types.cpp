@@ -29,6 +29,7 @@
 #include "compat/oggstr_loader_compat.h"
 #include "compat/optimized_translation_extractor.h"
 #include "compat/resource_compat_binary.h"
+#include "compat/resource_compat_obdb.h"
 #include "compat/resource_compat_text.h"
 #include "compat/resource_loader_compat.h"
 #include "compat/sample_loader_compat.h"
@@ -94,6 +95,7 @@ static GDREGuiIcons *gui_icons = nullptr;
 // TODO: move this to its own thing
 static Ref<ResourceFormatLoaderCompatText> text_loader = nullptr;
 static Ref<ResourceFormatLoaderCompatBinary> binary_loader = nullptr;
+static Ref<ResourceFormatLoaderCompatOBDB> obdb_loader = nullptr;
 static Ref<ResourceFormatLoaderCompatTexture2D> texture_loader = nullptr;
 static Ref<ResourceFormatLoaderCompatTexture3D> texture3d_loader = nullptr;
 static Ref<ResourceFormatLoaderCompatTextureLayered> texture_layered_loader = nullptr;
@@ -154,6 +156,7 @@ void free_ver_regex() {
 void init_loaders() {
 	text_loader = memnew(ResourceFormatLoaderCompatText);
 	binary_loader = memnew(ResourceFormatLoaderCompatBinary);
+	obdb_loader = memnew(ResourceFormatLoaderCompatOBDB);
 	texture_loader = memnew(ResourceFormatLoaderCompatTexture2D);
 	texture3d_loader = memnew(ResourceFormatLoaderCompatTexture3D);
 	texture_layered_loader = memnew(ResourceFormatLoaderCompatTextureLayered);
@@ -171,6 +174,7 @@ void init_loaders() {
 	translation_converter = memnew(TranslationConverterCompat);
 	input_event_converter = memnew(InputEventConverterCompat);
 	ResourceCompatLoader::add_resource_format_loader(binary_loader, true);
+	ResourceCompatLoader::add_resource_format_loader(obdb_loader, true);
 	ResourceCompatLoader::add_resource_format_loader(text_loader, true);
 	ResourceCompatLoader::add_resource_format_loader(image_texture_loader, true);
 	ResourceCompatLoader::add_resource_format_loader(texture_loader, true);
@@ -326,6 +330,9 @@ void deinit_loaders() {
 	if (binary_loader.is_valid()) {
 		ResourceCompatLoader::remove_resource_format_loader(binary_loader);
 	}
+	if (obdb_loader.is_valid()) {
+		ResourceCompatLoader::remove_resource_format_loader(obdb_loader);
+	}
 	if (texture_loader.is_valid()) {
 		ResourceCompatLoader::remove_resource_format_loader(texture_loader);
 	}
@@ -376,6 +383,7 @@ void deinit_loaders() {
 	}
 	text_loader = nullptr;
 	binary_loader = nullptr;
+	obdb_loader = nullptr;
 	texture_loader = nullptr;
 	texture3d_loader = nullptr;
 	texture_layered_loader = nullptr;
@@ -448,6 +456,7 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<CompatFormatLoader>();
 	ClassDB::register_class<ResourceFormatLoaderCompatText>();
 	ClassDB::register_class<ResourceFormatLoaderCompatBinary>();
+	ClassDB::register_class<ResourceFormatLoaderCompatOBDB>();
 	ClassDB::register_class<ResourceFormatLoaderCompatTexture2D>();
 	ClassDB::register_class<ResourceFormatLoaderCompatTexture3D>();
 	ClassDB::register_class<ResourceFormatLoaderCompatTextureLayered>();

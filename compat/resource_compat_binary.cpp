@@ -50,6 +50,8 @@
 #include "utility/gdre_settings.h"
 #include "utility/resource_info.h"
 
+#include "resource_compat_obdb.h"
+
 //#define print_bl(m_what) print_line(m_what)
 #define print_bl(m_what) (void)(m_what)
 
@@ -3493,6 +3495,10 @@ Error ResourceFormatLoaderCompatBinary::get_ver_major_minor(const String &p_path
 	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ, &err);
 	if (err != OK || !f.is_valid()) {
 		return err != OK ? err : ERR_FILE_CANT_OPEN;
+	}
+	// Hack necessary for version detection when loading a project from non-pck
+	if (ResourceFormatLoaderCompatOBDB::is_obdb_resource_file(f)) {
+		return ResourceFormatLoaderCompatOBDB::get_ver_major_minor_file(f, r_ver_major, r_ver_minor, r_suspicious);
 	}
 	ResourceLoaderCompatBinary loader;
 	return loader.get_ver_major_minor(f, r_ver_major, r_ver_minor, r_suspicious) ? OK : loader.error;
