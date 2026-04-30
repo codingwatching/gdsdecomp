@@ -909,10 +909,6 @@ func recovery(  input_files:PackedStringArray,
 			return 1
 		if input_file.get_extension().to_lower() == "app":
 			is_dir = false
-		elif !da.dir_exists(input_file.path_join(".import")) && !da.dir_exists(input_file.path_join(".godot")):
-			print_usage()
-			print("Error: " + input_file + " does not appear to be a project directory")
-			return 1
 		else:
 			parent_dir = input_file
 			is_dir = true
