@@ -72,24 +72,28 @@ public:
 	virtual Ref<ResourceInfo> get_resource_info(const String &p_path, Error *r_error) const;
 	virtual bool handles_fake_load() const;
 
+	// Layout of the version bits in p_flags:
+	//   bits 28-31 (4 bits): format_version
+	//   bits 20-27 (8 bits): ver_major
+	//   bits 12-19 (8 bits): ver_minor
+	// Bits 0-11 are reserved for ResourceSaver::SaverFlags (which currently only use bits 0-6).
 	static constexpr int get_format_version_from_flags(uint32_t p_flags) {
-		// we want to get the last 4 bits of the flags
 		return (p_flags >> 28) & 0xF;
 	}
 
 	static constexpr int get_ver_major_from_flags(uint32_t p_flags) {
-		return (p_flags >> 24) & 0xF;
+		return (p_flags >> 20) & 0xFF;
 	}
 
 	static constexpr int get_ver_minor_from_flags(uint32_t p_flags) {
-		return (p_flags >> 20) & 0xF;
+		return (p_flags >> 12) & 0xFF;
 	}
 
 	static constexpr uint32_t set_version_info_in_flags(uint32_t p_flags, int p_format_version, int p_ver_major, int p_ver_minor) {
-		p_flags &= ~0xFFF00000;
-		p_flags |= p_format_version << 28;
-		p_flags |= p_ver_major << 24;
-		p_flags |= p_ver_minor << 20;
+		p_flags &= ~0xFFFFF000;
+		p_flags |= (p_format_version & 0xF) << 28;
+		p_flags |= (p_ver_major & 0xFF) << 20;
+		p_flags |= (p_ver_minor & 0xFF) << 12;
 		return p_flags;
 	}
 
