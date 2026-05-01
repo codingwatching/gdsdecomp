@@ -225,7 +225,7 @@ Ref<ExportReport> GDExtensionExporter::export_resource(const String &output_dir,
 			PluginVersion version = PluginVersion::from_json(info);
 			if (version.is_valid()) {
 				String url = version.release_info.download_url;
-				String zip_path = output_dir.path_join(".tmp").path_join(plugin_name + ".zip");
+				String zip_path = output_dir.path_join(".tmp").path_join(gdre::remove_url_query_params(url).get_file());
 				auto task_id = TaskManager::get_singleton()->add_download_task(url, zip_path);
 				report->set_download_task_id(task_id);
 				report->set_saved_path(zip_path);
