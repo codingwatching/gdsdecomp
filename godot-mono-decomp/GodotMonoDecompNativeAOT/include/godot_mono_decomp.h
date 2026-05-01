@@ -128,6 +128,8 @@ int* GodotMonoDecomp_GetLanguageVersions(int* r_num_versions);
 
 int GodotMonoDecomp_IsCustomVersionDetected(void *decompilerHandle);
 
+bool GodotMonoDecomp_CheckFileIsAssembly(const char* file);
+
 #ifdef __cplusplus
 }
 #endif

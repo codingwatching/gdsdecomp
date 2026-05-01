@@ -56,6 +56,7 @@ public:
 	GodotMonoDecompSettings get_settings() const;
 	Error set_settings(const GodotMonoDecompSettings &p_settings);
 
+	static bool is_file_assembly(const String &file);
 	~GodotMonoDecompWrapper();
 
 private:
