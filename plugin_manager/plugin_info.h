@@ -3,12 +3,14 @@
 #include "core/variant/variant.h"
 #include "utility/godotver.h"
 
-static constexpr int CACHE_VERSION = 4;
+static constexpr int CACHE_VERSION = 5;
 
 struct PluginBin {
 	String name;
-	String md5;
 	Vector<String> tags;
+	bool exists = false;
+	String sha256;
+	String verbatim_sha256;
 
 	Dictionary to_json() const;
 	static PluginBin from_json(Dictionary d);

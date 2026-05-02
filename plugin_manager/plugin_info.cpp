@@ -3,7 +3,9 @@
 Dictionary PluginBin::to_json() const {
 	Dictionary d;
 	d["name"] = name;
-	d["md5"] = md5;
+	d["sha256"] = sha256;
+	d["verbatim_sha256"] = verbatim_sha256;
+	d["exists"] = exists;
 	d["tags"] = tags;
 	return d;
 }
@@ -11,7 +13,9 @@ Dictionary PluginBin::to_json() const {
 PluginBin PluginBin::from_json(Dictionary d) {
 	PluginBin bin;
 	bin.name = d.get("name", "");
-	bin.md5 = d.get("md5", "");
+	bin.sha256 = d.get("sha256", "");
+	bin.verbatim_sha256 = d.get("verbatim_sha256", "");
+	bin.exists = d.get("exists", false);
 	bin.tags = d.get("tags", Vector<String>());
 	return bin;
 }
@@ -126,7 +130,7 @@ bool PluginVersion::bin_hashes_match(const Vector<String> &hashes) const {
 	for (const auto &gdext : gdexts) {
 		for (const auto &bin : gdext.bins) {
 			for (const auto &hash : hashes) {
-				if (bin.md5 == hash) {
+				if (bin.sha256 == hash) {
 					return true;
 				}
 			}

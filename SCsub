@@ -34,6 +34,18 @@ VTRACER_DIR = get_vtracer_dir(MODULE_DIR)
 VTRACER_BUILD_DIR = get_vtracer_build_dir(MODULE_DIR)
 GODOT_MONO_DECOMP_DIR = get_godot_mono_decomp_dir(MODULE_DIR)
 
+INCLUDE_DIRS = [
+    VTRACER_INCLUDE_DIR,
+    GODOT_MONO_DECOMP_INCLUDE_DIR,
+    MODULE_INCLUDE_DIR,
+    MMP3_THIRDPARTY_DIR,
+    LIBOGG_THIRDPARTY_DIR,
+    LIBVORBIS_THIRDPARTY_DIR,
+    LIBTHEORA_THIRDPARTY_DIR,
+    MBEDTLS_THIRDPARTY_DIR,
+    UNSIGNED_HASH_INCLUDE_DIR
+]
+
 # TODO: Keep static branch intact for future use. Runtime/dotnet issues still block rollout.
 mono_native_lib_type = "Shared"
 is_using_clang = env["CXX"].lower().endswith("clang++")
@@ -57,26 +69,12 @@ if env["tests"]:
     env_gdsdecomp.Append(CPPDEFINES=["TESTS_ENABLED"])
     append_cpppaths(
         env,
-        [
-            VTRACER_INCLUDE_DIR,
-            GODOT_MONO_DECOMP_INCLUDE_DIR,
-            MODULE_INCLUDE_DIR,
-            MMP3_THIRDPARTY_DIR,
-            LIBOGG_THIRDPARTY_DIR,
-            LIBVORBIS_THIRDPARTY_DIR,
-        ],
+        INCLUDE_DIRS,
     )
 
 append_cpppaths(
     env_gdsdecomp,
-    [
-        VTRACER_INCLUDE_DIR,
-        GODOT_MONO_DECOMP_INCLUDE_DIR,
-        MODULE_INCLUDE_DIR,
-        THORSVG_THIRDPARTY_DIR,
-        LIBTHEORA_THIRDPARTY_DIR,
-        MBEDTLS_THIRDPARTY_DIR,
-    ],
+    INCLUDE_DIRS,
 )
 
 if env["disable_exceptions"]:
@@ -120,6 +118,8 @@ common_sources = [
     "external/tga/*.cpp",
     "external/tinygltf/tiny_gltf.cc",
     "module_etc_decompress/*.cpp",
+    f'{UNSIGNED_HASH_SRC_DIR}/*.cpp',
+    f'{UNSIGNED_HASH_SRC_DIR}/*.c',
 ]
 add_source_groups(env_gdsdecomp, module_obj, common_sources)
 if env["target"] == "editor":
