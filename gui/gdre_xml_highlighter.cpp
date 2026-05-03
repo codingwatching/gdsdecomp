@@ -395,13 +395,13 @@ void GDREXMLHighlighter::_update_cache() {
 	}
 }
 
-#define _IMPL_COLOR_GETSET(m_name)                              \
-	void GDREXMLHighlighter::set_##m_name(Color p_color) {      \
-		m_name = p_color;                                       \
-		clear_highlighting_cache();                             \
-	}                                                           \
-	Color GDREXMLHighlighter::get_##m_name() const {            \
-		return m_name;                                          \
+#define _IMPL_COLOR_GETSET(m_name)                         \
+	void GDREXMLHighlighter::set_##m_name(Color p_color) { \
+		m_name = p_color;                                  \
+		clear_highlighting_cache();                        \
+	}                                                      \
+	Color GDREXMLHighlighter::get_##m_name() const {       \
+		return m_name;                                     \
 	}
 
 _IMPL_COLOR_GETSET(tag_color)

@@ -116,6 +116,7 @@ class ResourceFormatLoaderCompatOBDB : public CompatFormatLoader {
 	GDCLASS(ResourceFormatLoaderCompatOBDB, CompatFormatLoader);
 
 	static ResourceFormatLoaderCompatOBDB *singleton;
+
 public:
 	static bool is_obdb_resource(const String &p_path);
 	static bool is_obdb_resource_file(const Ref<FileAccess> &p_f);
@@ -137,5 +138,4 @@ public:
 	static ResourceFormatLoaderCompatOBDB *get_singleton();
 	ResourceFormatLoaderCompatOBDB();
 	~ResourceFormatLoaderCompatOBDB();
-
 };

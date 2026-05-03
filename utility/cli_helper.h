@@ -66,7 +66,7 @@ static bool modify_cli_args(List<String> *args, List<String> *user_args) {
 		String arg = E->get();
 		String main_command = arg.get_slice("=", 0);
 
-		if (arg == "--" || arg == "++"){
+		if (arg == "--" || arg == "++") {
 			break;
 		}
 		if (main_commands.has(main_command)) {

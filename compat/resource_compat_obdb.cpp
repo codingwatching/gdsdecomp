@@ -198,8 +198,8 @@ Error ResourceLoaderCompatOBDB::_decode_image(Variant &r_v) {
 			V2Image::Format v2fmt = (format == OBDB_IMAGE_FORMAT_INTENSITY)
 					? V2Image::IMAGE_FORMAT_INTENSITY
 					: ((format == OBDB_IMAGE_FORMAT_INDEXED)
-									? V2Image::IMAGE_FORMAT_INDEXED
-									: V2Image::IMAGE_FORMAT_INDEXED_ALPHA);
+									  ? V2Image::IMAGE_FORMAT_INDEXED
+									  : V2Image::IMAGE_FORMAT_INDEXED_ALPHA);
 			img = ImageParserV2::convert_indexed_image(imgdata, width, height, mipmaps, v2fmt, &err);
 			ERR_FAIL_COND_V_MSG(err != OK, err,
 					vformat("OBDB image: failed to convert legacy format '%s'.",
@@ -760,8 +760,7 @@ Error ResourceLoaderCompatOBDB::_load_section_properties(Object *p_obj, Dictiona
 		// Pre-1.x meta dict is always at name_idx 0 (the saver inserts
 		// "__bin_meta__" first), but we double-check via the string table to be
 		// resilient to malformed inputs.
-		bool is_meta = (r_meta != nullptr) && (name_idx == bin_meta_string_idx ||
-				(name_idx >= 0 && name_idx < string_map.size() && string_map[name_idx] == StringName("__bin_meta__")));
+		bool is_meta = (r_meta != nullptr) && (name_idx == bin_meta_string_idx || (name_idx >= 0 && name_idx < string_map.size() && string_map[name_idx] == StringName("__bin_meta__")));
 
 		if (is_meta) {
 			*r_meta = value;
@@ -1594,8 +1593,6 @@ Error ResourceFormatLoaderCompatOBDB::get_ver_major_minor(const String &p_path, 
 	ERR_FAIL_COND_V_MSG(err != OK, ERR_FILE_CANT_OPEN, vformat("Cannot open file '%s'.", p_path));
 	return get_ver_major_minor_file(f, r_ver_major, r_ver_minor, r_suspicious);
 }
-
-
 
 Error ResourceFormatLoaderCompatOBDB::get_ver_major_minor_file(const Ref<FileAccess> &p_f, uint32_t &r_ver_major, uint32_t &r_ver_minor, bool &r_suspicious) {
 	if (p_f.is_null()) {
