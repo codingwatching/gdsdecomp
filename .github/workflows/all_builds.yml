@@ -137,6 +137,11 @@ jobs:
             bin: ./bin/godot.macos.editor.arm64
 
     steps:
+      - name: Set git to use LF
+        if: matrix.platform == 'windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
       - name: checkout-godot
         uses: actions/checkout@v4
         with:
