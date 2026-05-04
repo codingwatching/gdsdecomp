@@ -201,7 +201,7 @@ namespace GodotMonoDecomp
 		{
 			List<DotNetCoreDepInfo> excludedDepsToComment = new List<DotNetCoreDepInfo>();
 			List<DotNetCoreDepInfo> nonNuGetOrgDepsToComment = new List<DotNetCoreDepInfo>();
-			List<DotNetCoreDepInfo> includedDeps = new List<DotNetCoreDepInfo>();
+			HashSet<DotNetCoreDepInfo> includedDeps = [];
 			HashSet<DotNetCoreDepInfo> includeWarningComment = [];
 
 			foreach (var dep in deps?.deps ?? [])
@@ -217,13 +217,15 @@ namespace GodotMonoDecomp
 				if (dep.HasNoRuntimeComponent)
 				{
 					// double check to see if the module has a reference to this
-					if (module.AssemblyReferences.Any(r => r.Name == dep.Name))
+					if (module.AssemblyReferences.Any(r => dep.Matches(r)))
 					{
 						includeWarningComment.Add(dep);
 						includedDeps.Add(dep);
 						continue;
 					}
 					excludedDepsToComment.Add(dep);
+					// check if it has any dependencies that do have runtime components that the module has a reference to
+					includedDeps.AddRange(dep.deps.Where(d => !d.HasNoRuntimeComponent && d.Type == "package" && module.AssemblyReferences.Any(r => d.Matches(r))));
 					continue;
 				}
 
