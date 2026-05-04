@@ -1209,9 +1209,11 @@ void ResourceLoaderCompatBinary::open(Ref<FileAccess> p_f, bool p_no_resources, 
 		using_uids = true;
 	}
 	f->real_is_double = (flags & ResourceFormatSaverBinaryInstance::FORMAT_FLAG_REAL_T_IS_DOUBLE) != 0;
+#if !REAL_T_IS_DOUBLE
 	if (f->real_is_double) {
 		WARN_PRINT_ONCE("ResourceLoaderCompatBinary: Real type is double, this is not unsupported in this version of GDRE tools.");
 	}
+#endif
 	using_real_t_double = f->real_is_double;
 
 	if (using_uids) {
