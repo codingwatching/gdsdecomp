@@ -1352,7 +1352,11 @@ Dictionary get_node_options(Node *p_node, Node *original_node = nullptr) {
 
 			node_options_dict["physics/body_type"] = body_type;
 			node_options_dict["physics/shape_type"] = shape_type;
-			node_options_dict["physics/physics_material_override"] = physics_material_override.is_valid() ? (Variant)physics_material_override : Variant();
+			if (physics_material_override.is_valid()) {
+				node_options_dict["physics/physics_material_override"] = physics_material_override;
+			} else {
+				node_options_dict["physics/physics_material_override"] = Variant();
+			}
 			node_options_dict["physics/layer"] = physics_layer_bits;
 			node_options_dict["physics/mask"] = physics_mask_bits;
 			// TODO: Decomposition options in the case of shape_type == SHAPE_TYPE_DECOMPOSE_CONVEX;
@@ -3118,6 +3122,12 @@ void GLBExporterInstance::_update_import_params(const String &p_dest_path) {
 			// If we're not removing physics bodies, we don't want the editor to re-generate them when re-importing.
 			if (!remove_physics_bodies && E.value.get("generate/physics", false)) {
 				E.value["generate/physics"] = false;
+			}
+			if (E.value.has("physics/physics_material_override")) {
+				Ref<Resource> physics_material_override = E.value["physics/physics_material_override"];
+				if (physics_material_override.is_valid() && !physics_material_override->is_built_in()) {
+					external_deps_updated.insert(physics_material_override->get_path());
+				}
 			}
 			for (auto &key : E.value.keys()) {
 				if (default_node_options.has(key) && E.value.get(key, Variant()) == default_node_options.get(key, Variant())) {
