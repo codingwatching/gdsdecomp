@@ -210,6 +210,8 @@ namespace GodotMonoDecomp
 				return [];
 			}
 
+			HashSet<DotNetCoreDepInfo> depsToAdd = [];
+
 			foreach (var dep in deps?.deps ?? [])
 			{
 				// not a package reference, skip it
@@ -230,8 +232,12 @@ namespace GodotMonoDecomp
 						continue;
 					}
 					excludedDepsToComment.Add(dep);
+					if (dep.HashMatchesNugetOrgStatus == DotNetCoreDepInfo.HashMatchesNugetOrg.NoMatch)
+					{
+						continue;
+					}
 					// check if it has any dependencies that do have runtime components that the module has a reference to
-					includedDeps.AddRange(dep.deps.Where(d => !d.HasNoRuntimeComponent && d.Type == "package" && module.AssemblyReferences.Any(r => d.Matches(r))));
+					depsToAdd.AddRange(dep.deps.Where(d => !IsImplicitReference(d.Name) && !d.HasNoRuntimeComponent && d.IsAvailableOnNuget && module.AssemblyReferences.Any(r => d.Matches(r))));
 					continue;
 				}
 
@@ -242,6 +248,7 @@ namespace GodotMonoDecomp
 				}
 				includedDeps.Add(dep);
 			}
+			includedDeps.AddRange(depsToAdd.Where(d => !includedDeps.Any(d2 => d2.HasDep(d.AssemblyRef, "package", settings.CreateAdditionalProjectsForProjectReferences))));
 
 			void WritePackageRef(XmlTextWriter xml, DotNetCoreDepInfo dep)
 			{
