@@ -759,7 +759,7 @@ void write_project_metadata_cfg(const String &p_output_dir) {
 			WARN_PRINT("Failed to load project metadata: " + output_path);
 		}
 	}
-	String _custom_features = get_settings()->get_project_setting("_custom_features");
+	String _custom_features = get_settings()->get_project_setting("_custom_features", "");
 	project_metadata->set_value(debug_options_section_key, main_feature_tags_key, _custom_features);
 	gdre::ensure_dir(output_path.get_base_dir());
 	Error err = project_metadata->save(output_path);
