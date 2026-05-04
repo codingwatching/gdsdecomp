@@ -161,11 +161,14 @@ void _stringify_json(String &r_result, const Variant &p_var, const String &p_ind
 
 			String num_str;
 			if (force_single_precision || (double)(float)num == num) {
-				r_result += String::num_scientific((float)num);
+				num_str = String::num_scientific((float)num);
 			} else {
-				r_result += String::num_scientific(num);
+				num_str = String::num_scientific(num);
 			}
 			r_result += num_str;
+			if (!(num_str.contains_char('.') || num_str.contains_char('e'))) {
+				r_result += ".0";
+			}
 			return;
 		}
 		case Variant::PACKED_INT32_ARRAY:
