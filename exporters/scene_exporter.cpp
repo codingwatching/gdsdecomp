@@ -1707,7 +1707,7 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 						}
 					}
 				};
-				if (TaskManager::get_singleton()->dispatch_to_main_thread(add_mesh_instances).has_value()) {
+				if (!TaskManager::get_singleton()->dispatch_to_main_thread(add_mesh_instances).has_value()) {
 					return false; // cancelled
 				}
 			}
