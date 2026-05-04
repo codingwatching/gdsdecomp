@@ -665,6 +665,26 @@ public class GodotModuleDecompiler
 			p => string.IsNullOrEmpty(p) ? "" : "res://" + p
 		).ToArray();
 
+		ITypeDefinition? GetDirectBaseType(List<IType> baseTypes){
+			ITypeDefinition? godotSharpBaseType = null;
+			foreach (var baseType in baseTypes)
+			{
+				var baseTypeDef = baseType.GetDefinition();
+				if (baseTypeDef != null && GodotStuff.IsGodotClass(baseTypeDef))
+				{
+					if (baseTypeDef.GetAttributes().Any(a => a.AttributeType.Name == "GlobalClassAttribute") || baseTypeDef.ParentModule?.AssemblyName == "GodotSharp"){
+						godotSharpBaseType = baseTypeDef;
+						break;
+					} else {
+						return GetDirectBaseType(baseTypeDef.DirectBaseTypes.ToList());
+					}
+				}
+			}
+			return godotSharpBaseType;
+		}
+
+		var godotSharpBaseType = GetDirectBaseType(baseTypes);
+
 		string iconPath = "";
 		if (typeDef.GetAttributes().Any(a => a.AttributeType.Name == "IconAttribute"))
 		{
@@ -688,6 +708,7 @@ public class GodotModuleDecompiler
 			typeDef.Name,
 			baseTypes.Select(t => t.Name).ToArray(),
 			baseTypePaths,
+			godotSharpBaseType?.Name ?? null,
 			propsInfos.ToArray(),
 			signalsInfo.ToArray(),
 			methodsInfo.ToArray(),
