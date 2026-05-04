@@ -613,10 +613,19 @@ Error _wget_sync(const String &p_url, Ref<FileAccess> response, int retries, con
 		return _wget_sync(p_url, response, retries, extra_headers, p_progress, p_cancelled, r_size);
 	};
 	size_t downloaded = 0;
+	constexpr size_t REQUEST_TIMEOUT = 15000;
+	int64_t start_time = OS::get_singleton()->get_ticks_msec();
 
 	while (!done) {
 		WGET_CANCELLED_CHECK();
 		auto status = client->get_status();
+		if (status == HTTPClient::STATUS_REQUESTING) {
+			if (OS::get_singleton()->get_ticks_msec() - start_time > REQUEST_TIMEOUT) {
+				_retry(ERR_TIMEOUT);
+			}
+		} else {
+			start_time = OS::get_singleton()->get_ticks_msec();
+		}
 		switch (status) {
 			case HTTPClient::STATUS_REQUESTING: {
 				client->poll();
