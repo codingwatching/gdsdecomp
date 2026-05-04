@@ -2085,6 +2085,14 @@ ResourceUID::ID GDRESettings::get_uid_for_path(const String &p_path) const {
 	return id;
 }
 
+Dictionary GDRESettings::get_uid_cache() const {
+	Dictionary ret;
+	path_to_uid.for_each([&](const ParallelFlatHashMap<String, ResourceUID::ID>::value_type &e) {
+		ret[e.first] = e.second;
+	});
+	return ret;
+}
+
 constexpr const char *GAME_NAME_SETTING_4x = "application/config/name";
 constexpr const char *GAME_NAME_SETTING_2x = "application/name";
 

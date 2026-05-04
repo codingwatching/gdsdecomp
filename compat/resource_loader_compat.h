@@ -48,6 +48,8 @@ public:
 	static bool handles_resource(const String &p_path, const String &p_type_hint = "");
 	static String get_resource_script_class(const String &p_path);
 	static String get_resource_type(const String &p_path);
+	static bool exists(const String &p_path);
+	static bool has_custom_uid_support(const String &p_path);
 
 	static String resource_to_string(const String &p_path, bool p_skip_cr = true);
 

@@ -442,6 +442,7 @@ public:
 	static String get_home_dir();
 	// ResourceUID does not provide a way to get a UID for a given path, so we have to do it ourselves
 	ResourceUID::ID get_uid_for_path(const String &p_path) const;
+	Dictionary get_uid_cache() const;
 	String get_game_name() const;
 
 	// Get the game's declared version from the project config

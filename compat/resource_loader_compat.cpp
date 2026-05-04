@@ -569,6 +569,38 @@ String ResourceCompatLoader::get_resource_type(const String &p_path) {
 	return loader->get_resource_type(p_path);
 }
 
+bool ResourceCompatLoader::exists(const String &p_path) {
+	String local_path = _validate_local_path(p_path);
+	if (ResourceCache::has(local_path)) {
+		return true; // If cached, it probably exists
+	}
+
+	String path = GDRESettings::get_singleton()->get_mapped_path(local_path);
+
+	for (int i = 0; i < loader_count; i++) {
+		if (!loaders[i]->recognize_path(path, "")) {
+			continue;
+		}
+
+		if (loaders[i]->exists(path)) {
+			return true;
+		}
+	}
+	return ResourceLoader::exists(path);
+}
+
+bool ResourceCompatLoader::has_custom_uid_support(const String &p_path) {
+	if (FileAccess::exists(p_path + ".import")) {
+		return true;
+	}
+
+	auto loader = get_loader_for_path(p_path, "");
+	if (loader.is_null()) {
+		return false;
+	}
+	return loader->has_custom_uid_support();
+}
+
 bool ResourceCompatLoader::is_default_gltf_load() {
 	return doing_gltf_load;
 }

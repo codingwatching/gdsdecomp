@@ -1520,32 +1520,11 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 	// Need to recreate the uid files for the exported resources
 	// check if we're at version 4.4 or higher
 	if ((get_ver_major() == 4 && get_ver_minor() >= 4) || get_ver_major() > 4) {
-		static const Vector<String> non_custom_uid_filters = {
-			"*.image",
-			"*.gdextension",
-			"*.gd",
-			// "*.gdc", -- these show up outside of res://.godot, so we don't want to recreate them
-			"*.ctex",
-			"*.ctexarray",
-			"*.ccube",
-			"*.ccubearray",
-			"*.ctex3d",
-			"*.shader",
-			"*.gdshader",
-			"*.gdshaderinc",
-			"*.dds",
-			"*.ktx",
-			"*.ktx2",
-			"*.ogv",
-			"*.cs"
-		};
-		auto non_custom_uid_files = get_settings()->get_file_list(non_custom_uid_filters);
-		for (int i = 0; i < non_custom_uid_files.size(); i++) {
-			// any hidden directory
-			if (non_custom_uid_files[i].begins_with("res://.")) {
-				continue;
+		auto uid_cache = get_settings()->get_uid_cache();
+		for (auto E : uid_cache) {
+			if (!ResourceCompatLoader::has_custom_uid_support(E.key)) {
+				recreate_uid_file(E.key, false, files_to_export_set);
 			}
-			recreate_uid_file(non_custom_uid_files[i], false, files_to_export_set);
 		}
 	}
 
