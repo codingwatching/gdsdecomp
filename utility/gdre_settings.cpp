@@ -2521,6 +2521,10 @@ bool GDRESettings::detected_godotsteam_usage() const {
 	return is_pack_loaded() && current_project->detected_godotsteam_usage;
 }
 
+bool GDRESettings::requires_double_precision() const {
+	return is_project_config_loaded() && current_project->pcfg->requires_double_precision();
+}
+
 void GDRESettings::_do_string_load(uint32_t i, StringLoadToken *tokens) {
 	String src_ext = tokens[i].path.get_extension().to_lower();
 	// check if script

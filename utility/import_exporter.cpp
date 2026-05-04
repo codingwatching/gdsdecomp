@@ -620,6 +620,7 @@ void ImportExporter::rewrite_metadata(ExportToken &token) {
 				Ref<FileAccess> f = FileAccess::open(output_md_path, FileAccess::WRITE);
 				if (!f.is_null()) {
 					// empty dictionary
+					// p_real_t_is_double doesn't matter here because we're only storing an empty dictionary
 					store_var_compat(f, Dictionary(), iinfo->get_ver_major());
 				}
 			}

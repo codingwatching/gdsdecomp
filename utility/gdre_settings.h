@@ -481,6 +481,8 @@ public:
 	// Returns whether we detected GodotSteam usage in the project
 	bool detected_godotsteam_usage() const;
 
+	bool requires_double_precision() const;
+
 	static bool main_iteration();
 #ifdef TESTS_ENABLED
 

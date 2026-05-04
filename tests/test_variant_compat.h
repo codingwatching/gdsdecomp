@@ -7,12 +7,20 @@
 #include "compat/variant_decoder_compat.h"
 #include "core/input/input_event.h"
 #include "core/io/image.h"
+#include "core/io/marshalls.h"
 #include "core/variant/variant.h"
 #include "core/version_generated.gen.h"
 #include "tests/test_macros.h"
 
 #include "../compat/variant_writer_compat.h"
 #include "utility/file_access_buffer.h"
+#include <cmath>
+
+#if REAL_T_IS_DOUBLE
+#define REQUIRES_DOUBLE_PRECISION true
+#else
+#define REQUIRES_DOUBLE_PRECISION false
+#endif
 
 namespace TestVariantCompat {
 
@@ -49,28 +57,55 @@ void expect_variant_write_match(const Variant &variant, const String &expected_s
 	CHECK(variant_str == expected_str);
 }
 
-void expect_variant_decode_encode_match(const Variant &variant, const String &expected_str, int ver_major, int ver_minor, bool is_compat, bool is_pcfg) {
+Vector<uint8_t> do_encode_variant_compat(const Variant &variant, int ver_major, int ver_minor, bool is_pcfg) {
 	int len;
-	bool p_full_objects = false;
-	Error err = VariantDecoderCompat::encode_variant_compat(ver_major, variant, nullptr, len, p_full_objects);
+	bool p_full_objects = is_pcfg;
+	Error err = VariantDecoderCompat::encode_variant_compat(ver_major, variant, nullptr, len, p_full_objects, REQUIRES_DOUBLE_PRECISION);
 	CHECK(err == OK);
 
 	Vector<uint8_t> buff;
 	buff.resize(len);
 
 	uint8_t *w = buff.ptrw();
-	err = VariantDecoderCompat::encode_variant_compat(ver_major, variant, &w[0], len, p_full_objects);
+	err = VariantDecoderCompat::encode_variant_compat(ver_major, variant, &w[0], len, p_full_objects, REQUIRES_DOUBLE_PRECISION);
+	CHECK(err == OK);
+	return buff;
+}
+
+Vector<uint8_t> do_encode_variant(const Variant &variant, bool is_pcfg = false) {
+	int len;
+	bool p_full_objects = is_pcfg;
+	Error err = encode_variant(variant, nullptr, len, p_full_objects);
 	CHECK(err == OK);
 
-	Variant decoded;
-	err = VariantDecoderCompat::decode_variant_compat(ver_major, decoded, buff.ptr(), len, nullptr, p_full_objects);
+	Vector<uint8_t> buff;
+	buff.resize(len);
+
+	uint8_t *w = buff.ptrw();
+	err = encode_variant(variant, &w[0], len, p_full_objects);
 	CHECK(err == OK);
+	return buff;
+}
+
+Variant expect_variant_decode_encode_match(const Variant &variant, int ver_major, int ver_minor, bool is_pcfg) {
+	Vector<uint8_t> buff = do_encode_variant_compat(variant, ver_major, ver_minor, is_pcfg);
+	REQUIRE(buff.size() > 0);
+
+	Variant decoded;
+	Error err = VariantDecoderCompat::decode_variant_compat(ver_major, decoded, buff.ptr(), buff.size(), nullptr, is_pcfg);
+	CHECK(err == OK);
+	return decoded;
+}
+
+void test_variant_match(const Variant &variant, const String &expected_str, int ver_major, int ver_minor, bool is_compat, bool is_pcfg) {
+	Variant decoded = expect_variant_decode_encode_match(variant, ver_major, ver_minor, is_pcfg);
 	expect_variant_write_match(decoded, expected_str, ver_major, ver_minor, is_pcfg, is_compat);
 }
 
 void test_variant_write_binary_resource(const String &name, Variant p_val, int ver_major, int ver_minor) {
 	Variant r_v;
-	Error err = ResourceFormatLoaderCompatBinary::test_writing_parsing_variant(p_val, r_v, 2, 0);
+	bool using_real_t_double = ver_major >= 4 ? REQUIRES_DOUBLE_PRECISION : false;
+	Error err = ResourceFormatLoaderCompatBinary::test_writing_parsing_variant(p_val, r_v, ver_major, ver_minor, using_real_t_double);
 	CHECK(err == OK);
 	CHECK(r_v == p_val);
 }
@@ -86,7 +121,7 @@ void _ALWAYS_INLINE_ test_variant_write_v2(const String &name, const T &p_val, c
 			CHECK(compat_ret.size() == expected_v2.size());
 			CHECK(compat_ret == expected_v2);
 			if (!no_encode_decode) {
-				expect_variant_decode_encode_match(p_val, compat_ret, 2, 0, false, false);
+				test_variant_match(p_val, compat_ret, 2, 0, false, false);
 				test_variant_write_binary_resource(name, p_val, 2, 0);
 			}
 		}
@@ -104,7 +139,7 @@ void _ALWAYS_INLINE_ test_variant_write_v3(const String &name, const T &p_val, c
 			CHECK(compat_ret.size() == expected_v3.size());
 			CHECK(compat_ret == expected_v3);
 			if (!no_encode_decode) {
-				expect_variant_decode_encode_match(p_val, compat_ret, 3, 0, false, false);
+				test_variant_match(p_val, compat_ret, 3, 0, false, false);
 				test_variant_write_binary_resource(name, p_val, 3, 0);
 			}
 		}
@@ -123,7 +158,7 @@ void _ALWAYS_INLINE_ test_variant_write_v4(const String &name, const T &p_val, b
 		CHECK(compat_ret.size() == gd_ret.size());
 		CHECK(compat_ret == gd_ret);
 		if (!no_encode_decode) {
-			expect_variant_decode_encode_match(p_val, gd_ret, GODOT_VERSION_MAJOR, GODOT_VERSION_MINOR, true, false);
+			test_variant_match(p_val, gd_ret, GODOT_VERSION_MAJOR, GODOT_VERSION_MINOR, true, false);
 			test_variant_write_binary_resource(name, p_val, GODOT_VERSION_MAJOR, GODOT_VERSION_MINOR);
 		}
 	}
@@ -137,7 +172,7 @@ void _ALWAYS_INLINE_ test_variant_write_v4(const String &name, const T &p_val, b
 		CHECK(compat_ret.size() == gd_ret.size());
 		CHECK(compat_ret == gd_ret);
 		if (!no_encode_decode) {
-			expect_variant_decode_encode_match(p_val, gd_ret, GODOT_VERSION_MAJOR, GODOT_VERSION_MINOR, false, false);
+			test_variant_match(p_val, gd_ret, GODOT_VERSION_MAJOR, GODOT_VERSION_MINOR, false, false);
 			test_variant_write_binary_resource(name, p_val, GODOT_VERSION_MAJOR, GODOT_VERSION_MINOR);
 		}
 	}
@@ -333,7 +368,7 @@ TEST_CASE("[GDSDecomp][VariantCompat] Vector<double>") {
 
 // TODO: disabling the rest of the float tests until the pr that fixes float precision lands.
 TEST_CASE("[GDSDecomp][VariantCompat] Vector<float> (with >6 precision)") {
-	Vector<float> arr = { 0.0, 1.0, 1.1, NAN, INFINITY, -INFINITY, 0 };
+	Vector<float> arr = { 0.0f, 1.0f, 1.1f, NAN, INFINITY, -INFINITY, 0 };
 	test_variant_write_v4("Simple Vector<float>", arr);
 }
 
@@ -364,7 +399,7 @@ TEST_CASE("[GDSDecomp][VariantCompat] Vector<Vector2>") {
 	test_vector_write_all("Simple Vector<Vector2>", arr, vector2_array_v2_name, vector2_array_v3_name, arg_str);
 }
 TEST_CASE("[GDSDecomp][VariantCompat] Vector<Vector3> with precision") {
-	Vector<Vector3> arr = { Vector3(0, 0, 0), Vector3(1, 1, 1.1) };
+	Vector<Vector3> arr = { Vector3(0, 0, 0), Vector3(1, 1, 1.1f) };
 	String arg_str = "0, 0, 0, 1, 1, 1.1";
 	test_vector_write_all("Simple Vector<Vector3>", arr, vector3_array_v2_name, vector3_array_v3_name, arg_str);
 }
@@ -387,6 +422,83 @@ TEST_CASE("[GDSDecomp][VariantCompat] Vector<Color>") {
 	Vector<Color> arr = { Color(0, 0, 0, 0), Color(1, 1, 1, 1) };
 	String arg_str = "0, 0, 0, 0, 1, 1, 1, 1";
 	test_vector_write_all("Simple Vector<Color>", arr, "ColorArray", "PoolColorArray", arg_str);
+}
+
+static void current_test(const Variant &variant) {
+	constexpr int ver_major = GODOT_VERSION_MAJOR;
+	constexpr int ver_minor = GODOT_VERSION_MINOR;
+	Variant decoded = expect_variant_decode_encode_match(variant, ver_major, ver_minor, false);
+	CHECK(decoded == variant);
+
+	Vector<uint8_t> ours = do_encode_variant_compat(variant, ver_major, ver_minor, false);
+	Vector<uint8_t> theirs = do_encode_variant(variant);
+
+	CHECK(ours == theirs);
+}
+
+TEST_CASE("[GDSDecomp][VariantCompat] compare encode/decode compat against current") {
+	SUBCASE("Int") {
+		current_test(1);
+	}
+	SUBCASE("Float") {
+		current_test(1.0f);
+		current_test(1.2345678901234567890);
+		current_test(INFINITY);
+		current_test(-INFINITY);
+		current_test(NAN);
+	}
+	SUBCASE("String") {
+		current_test("Hello");
+		current_test("Hello\nWorld");
+		current_test("Hello\tWorld");
+		current_test("Hello\"World");
+		current_test("Hello\\World");
+	}
+	SUBCASE("Vector<int32_t>") {
+		current_test(Vector<int32_t>({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 100, 110, 111, 1000, 1001, 10000, 10001, 100000, 100001, 1000000, 1000001, 10000000, 10000001, 100000000, 100000001, 1000000000, 1000000001 }));
+	}
+	SUBCASE("Vector<int64_t>") {
+		current_test(Vector<int64_t>({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 100, 110, 111, 1000, 1001, 10000, 10001, 100000, 100001, 1000000, 1000001, 10000000, 10000001, 100000000, 100000001, 1000000000, 1000000001 }));
+	}
+	SUBCASE("Vector<float>") {
+		current_test(Vector<float>({ 0.0, -0.0, 1.0, NAN, INFINITY, -INFINITY, 0 }));
+	}
+	SUBCASE("Vector<double>") {
+		current_test(Vector<double>({ 0.0, 1.0, NAN, INFINITY, -INFINITY, 0 }));
+	}
+	SUBCASE("Vector<float> (with >6 precision)") {
+		current_test(Vector<float>({ 0.0f, 1.0f, 1.1f, NAN, INFINITY, -INFINITY, 0 }));
+	}
+	SUBCASE("Vector<String>") {
+		current_test(Vector<String>({ "Hello", "World", "This", "Is", "A", "Test" }));
+	}
+	SUBCASE("Vector<Vector2>") {
+		current_test(Vector<Vector2>({ Vector2(0, 0), Vector2(1, 1) }));
+	}
+	SUBCASE("Vector<Vector3>") {
+		current_test(Vector<Vector3>({ Vector3(0, 0, 0), Vector3(1, 1, 1.1) }));
+	}
+	SUBCASE("Vector<Vector4>") {
+		current_test(Vector<Vector4>({ Vector4(0, 0, 0, 0), Vector4(1, 1, 1, 1) }));
+	}
+	SUBCASE("Vector<Color>") {
+		current_test(Vector<Color>({ Color(0, 0, 0, 0), Color(1, 1, 1, 1) }));
+	}
+	SUBCASE("Array") {
+		current_test(Array({ 1, 2, 3 }));
+		current_test(Array({ "Hello", "World" }));
+		current_test(Array({ Vector2(0, 0), Vector2(1, 1) }));
+		current_test(Array({ Vector3(0, 0, 0), Vector3(1, 1, 1) }));
+		current_test(Array({ Vector4(0, 0, 0, 0), Vector4(1, 1, 1, 1) }));
+		current_test(Array({ Color(0, 0, 0, 0), Color(1, 1, 1, 1) }));
+	}
+	SUBCASE("Dictionary") {
+		current_test(Dictionary({ { "Hello", 1 }, { "World", 2 } }));
+		current_test(Dictionary({ { "Hello", Vector2(0, 0) }, { "World", Vector2(1, 1) } }));
+		current_test(Dictionary({ { "Hello", Vector3(0, 0, 0) }, { "World", Vector3(1, 1, 1) } }));
+		current_test(Dictionary({ { "Hello", Vector4(0, 0, 0, 0) }, { "World", Vector4(1, 1, 1, 1) } }));
+		current_test(Dictionary({ { "Hello", Color(0, 0, 0, 0) }, { "World", Color(1, 1, 1, 1) } }));
+	}
 }
 
 Variant parse_and_get_variant(const String &str, Variant::Type expected_type) {
@@ -419,15 +531,15 @@ void expect_ie_key(const Ref<InputEventKey> &iek, Key key, int device = 0, bool 
 
 void expect_inputevent_decode_encode_match(const Ref<InputEvent> &variant, const String &expected_str, int ver_major, bool is_pcfg) {
 	int len;
-	bool p_full_objects = false;
-	Error err = VariantDecoderCompat::encode_variant_compat(ver_major, variant, nullptr, len, p_full_objects);
+	bool p_full_objects = is_pcfg;
+	Error err = VariantDecoderCompat::encode_variant_compat(ver_major, variant, nullptr, len, p_full_objects, REQUIRES_DOUBLE_PRECISION);
 	CHECK(err == OK);
 
 	Vector<uint8_t> buff;
 	buff.resize(len);
 
 	uint8_t *w = buff.ptrw();
-	err = VariantDecoderCompat::encode_variant_compat(ver_major, variant, &w[0], len, p_full_objects);
+	err = VariantDecoderCompat::encode_variant_compat(ver_major, variant, &w[0], len, p_full_objects, REQUIRES_DOUBLE_PRECISION);
 	CHECK(err == OK);
 
 	Variant decoded;
@@ -666,15 +778,15 @@ void compare_images(const Ref<Image> &original_img, const Ref<Image> &decoded_im
 
 void expect_image_decode_encode_match(const Ref<Image> &img, const String &expected_str, int ver_major, bool is_pcfg) {
 	int len;
-	bool p_full_objects = false;
-	Error err = VariantDecoderCompat::encode_variant_compat(ver_major, img, nullptr, len, p_full_objects);
+	bool p_full_objects = is_pcfg;
+	Error err = VariantDecoderCompat::encode_variant_compat(ver_major, img, nullptr, len, p_full_objects, REQUIRES_DOUBLE_PRECISION);
 	CHECK(err == OK);
 
 	Vector<uint8_t> buff;
 	buff.resize(len);
 
 	uint8_t *w = buff.ptrw();
-	err = VariantDecoderCompat::encode_variant_compat(ver_major, img, &w[0], len, p_full_objects);
+	err = VariantDecoderCompat::encode_variant_compat(ver_major, img, &w[0], len, p_full_objects, REQUIRES_DOUBLE_PRECISION);
 	CHECK(err == OK);
 
 	Variant decoded;
@@ -1078,6 +1190,213 @@ TEST_CASE("[GDSDecomp][VariantCompat] Writer recursive dictionary") {
 	d.clear();
 	d1.clear();
 	d2.clear();
+}
+
+void check_match(Variant variant, uint8_t *our_buffer, int our_len) {
+	Vector<uint8_t> theirs = do_encode_variant(variant);
+
+	REQUIRE(theirs.size() == our_len);
+	for (int i = 0; i < our_len; i++) {
+		CHECK(theirs[i] == our_buffer[i]);
+	}
+}
+
+TEST_CASE("[GDSDecomp][VariantCompat] NIL Variant encoding") {
+	int r_len;
+	Variant variant;
+	uint8_t buffer[4];
+
+	CHECK(VariantDecoderCompat::encode_variant_compat(GODOT_VERSION_MAJOR, variant, buffer, r_len, false, REQUIRES_DOUBLE_PRECISION) == OK);
+	CHECK_MESSAGE(r_len == 4, "Length == 4 bytes for header.");
+	CHECK_MESSAGE(buffer[0] == 0x00, "Variant::NIL");
+	CHECK(buffer[1] == 0x00);
+	CHECK(buffer[2] == 0x00);
+	CHECK(buffer[3] == 0x00);
+	check_match(variant, buffer, r_len);
+	// No value
+}
+
+TEST_CASE("[GDSDecomp][VariantCompat] INT 32 bit Variant encoding") {
+	int r_len;
+	Variant variant(0x12345678);
+	uint8_t buffer[8];
+
+	CHECK(VariantDecoderCompat::encode_variant_compat(GODOT_VERSION_MAJOR, variant, buffer, r_len, false, REQUIRES_DOUBLE_PRECISION) == OK);
+	CHECK_MESSAGE(r_len == 8, "Length == 4 bytes for header + 4 bytes for `int32_t`.");
+	CHECK_MESSAGE(buffer[0] == 0x02, "Variant::INT");
+	CHECK(buffer[1] == 0x00);
+	CHECK(buffer[2] == 0x00);
+	CHECK(buffer[3] == 0x00);
+	// Check value
+	CHECK(buffer[4] == 0x78);
+	CHECK(buffer[5] == 0x56);
+	CHECK(buffer[6] == 0x34);
+	CHECK(buffer[7] == 0x12);
+	check_match(variant, buffer, r_len);
+}
+
+TEST_CASE("[GDSDecomp][VariantCompat] INT 64 bit Variant encoding") {
+	int r_len;
+	Variant variant(uint64_t(0x0f123456789abcdef));
+	uint8_t buffer[12];
+
+	CHECK(VariantDecoderCompat::encode_variant_compat(GODOT_VERSION_MAJOR, variant, buffer, r_len, false, REQUIRES_DOUBLE_PRECISION) == OK);
+	CHECK_MESSAGE(r_len == 12, "Length == 4 bytes for header + 8 bytes for `int64_t`.");
+	CHECK_MESSAGE(buffer[0] == 0x02, "Variant::INT");
+	CHECK(buffer[1] == 0x00);
+	CHECK_MESSAGE(buffer[2] == 0x01, "HEADER_DATA_FLAG_64");
+	CHECK(buffer[3] == 0x00);
+	// Check value
+	CHECK(buffer[4] == 0xef);
+	CHECK(buffer[5] == 0xcd);
+	CHECK(buffer[6] == 0xab);
+	CHECK(buffer[7] == 0x89);
+	CHECK(buffer[8] == 0x67);
+	CHECK(buffer[9] == 0x45);
+	CHECK(buffer[10] == 0x23);
+	CHECK(buffer[11] == 0xf1);
+	check_match(variant, buffer, r_len);
+}
+
+TEST_CASE("[GDSDecomp][VariantCompat] FLOAT single precision Variant encoding") {
+	int r_len;
+	Variant variant(0.15625f);
+	uint8_t buffer[8];
+
+	CHECK(VariantDecoderCompat::encode_variant_compat(GODOT_VERSION_MAJOR, variant, buffer, r_len, false, REQUIRES_DOUBLE_PRECISION) == OK);
+	CHECK_MESSAGE(r_len == 8, "Length == 4 bytes for header + 4 bytes for `float`.");
+	CHECK_MESSAGE(buffer[0] == 0x03, "Variant::FLOAT");
+	CHECK(buffer[1] == 0x00);
+	CHECK(buffer[2] == 0x00);
+	CHECK(buffer[3] == 0x00);
+	// Check value
+	CHECK(buffer[4] == 0x00);
+	CHECK(buffer[5] == 0x00);
+	CHECK(buffer[6] == 0x20);
+	CHECK(buffer[7] == 0x3e);
+	check_match(variant, buffer, r_len);
+}
+
+TEST_CASE("[GDSDecomp][VariantCompat] FLOAT double precision Variant encoding") {
+	int r_len;
+	Variant variant(0.33333333333333333);
+	uint8_t buffer[12];
+
+	CHECK(VariantDecoderCompat::encode_variant_compat(GODOT_VERSION_MAJOR, variant, buffer, r_len, false, REQUIRES_DOUBLE_PRECISION) == OK);
+	CHECK_MESSAGE(r_len == 12, "Length == 4 bytes for header + 8 bytes for `double`.");
+	CHECK_MESSAGE(buffer[0] == 0x03, "Variant::FLOAT");
+	CHECK(buffer[1] == 0x00);
+	CHECK_MESSAGE(buffer[2] == 0x01, "HEADER_DATA_FLAG_64");
+	CHECK(buffer[3] == 0x00);
+	// Check value
+	CHECK(buffer[4] == 0x55);
+	CHECK(buffer[5] == 0x55);
+	CHECK(buffer[6] == 0x55);
+	CHECK(buffer[7] == 0x55);
+	CHECK(buffer[8] == 0x55);
+	CHECK(buffer[9] == 0x55);
+	CHECK(buffer[10] == 0xd5);
+	CHECK(buffer[11] == 0x3f);
+	check_match(variant, buffer, r_len);
+}
+
+TEST_CASE("[GDSDecomp][VariantCompat] Typed array encoding") {
+	int r_len;
+	Array array;
+	array.set_typed(Variant::INT, StringName(), Ref<Script>());
+	array.push_back(Variant(uint64_t(0x0f123456789abcdef)));
+	uint8_t buffer[24];
+
+	CHECK(VariantDecoderCompat::encode_variant_compat(GODOT_VERSION_MAJOR, array, buffer, r_len, false, REQUIRES_DOUBLE_PRECISION) == OK);
+	CHECK_MESSAGE(r_len == 24, "Length == 4 bytes for header + 4 bytes for array type + 4 bytes for array size + 12 bytes for element.");
+	CHECK_MESSAGE(buffer[0] == 0x1c, "Variant::ARRAY");
+	CHECK(buffer[1] == 0x00);
+	CHECK_MESSAGE(buffer[2] == 0x01, "CONTAINER_TYPE_KIND_BUILTIN");
+	CHECK(buffer[3] == 0x00);
+	// Check array type.
+	CHECK_MESSAGE(buffer[4] == 0x02, "Variant::INT");
+	CHECK(buffer[5] == 0x00);
+	CHECK(buffer[6] == 0x00);
+	CHECK(buffer[7] == 0x00);
+	// Check array size.
+	CHECK(buffer[8] == 0x01);
+	CHECK(buffer[9] == 0x00);
+	CHECK(buffer[10] == 0x00);
+	CHECK(buffer[11] == 0x00);
+	// Check element type.
+	CHECK_MESSAGE(buffer[12] == 0x02, "Variant::INT");
+	CHECK(buffer[13] == 0x00);
+	CHECK_MESSAGE(buffer[14] == 0x01, "HEADER_DATA_FLAG_64");
+	CHECK(buffer[15] == 0x00);
+	// Check element value.
+	CHECK(buffer[16] == 0xef);
+	CHECK(buffer[17] == 0xcd);
+	CHECK(buffer[18] == 0xab);
+	CHECK(buffer[19] == 0x89);
+	CHECK(buffer[20] == 0x67);
+	CHECK(buffer[21] == 0x45);
+	CHECK(buffer[22] == 0x23);
+	CHECK(buffer[23] == 0xf1);
+	check_match(array, buffer, r_len);
+}
+
+TEST_CASE("[GDSDecomp][VariantCompat] Typed dicttionary encoding") {
+	int r_len;
+	Dictionary dictionary;
+	dictionary.set_typed(Variant::INT, StringName(), Ref<Script>(), Variant::INT, StringName(), Ref<Script>());
+	dictionary[Variant(uint64_t(0x0f123456789abcdef))] = Variant(uint64_t(0x0f123456789abcdef));
+	uint8_t buffer[40];
+
+	CHECK(VariantDecoderCompat::encode_variant_compat(GODOT_VERSION_MAJOR, dictionary, buffer, r_len, false, REQUIRES_DOUBLE_PRECISION) == OK);
+	CHECK_MESSAGE(r_len == 40, "Length == 4 bytes for header + 8 bytes for dictionary type + 4 bytes for dictionary size + 24 bytes for key-value pair.");
+	CHECK_MESSAGE(buffer[0] == 0x1b, "Variant::DICTIONARY");
+	CHECK(buffer[1] == 0x00);
+	CHECK_MESSAGE(buffer[2] == 0x05, "key: CONTAINER_TYPE_KIND_BUILTIN | value: CONTAINER_TYPE_KIND_BUILTIN");
+	CHECK(buffer[3] == 0x00);
+	// Check dictionary key type.
+	CHECK_MESSAGE(buffer[4] == 0x02, "Variant::INT");
+	CHECK(buffer[5] == 0x00);
+	CHECK(buffer[6] == 0x00);
+	CHECK(buffer[7] == 0x00);
+	// Check dictionary value type.
+	CHECK_MESSAGE(buffer[8] == 0x02, "Variant::INT");
+	CHECK(buffer[9] == 0x00);
+	CHECK(buffer[10] == 0x00);
+	CHECK(buffer[11] == 0x00);
+	// Check dictionary size.
+	CHECK(buffer[12] == 0x01);
+	CHECK(buffer[13] == 0x00);
+	CHECK(buffer[14] == 0x00);
+	CHECK(buffer[15] == 0x00);
+	// Check key type.
+	CHECK_MESSAGE(buffer[16] == 0x02, "Variant::INT");
+	CHECK(buffer[17] == 0x00);
+	CHECK_MESSAGE(buffer[18] == 0x01, "HEADER_DATA_FLAG_64");
+	CHECK(buffer[19] == 0x00);
+	// Check key value.
+	CHECK(buffer[20] == 0xef);
+	CHECK(buffer[21] == 0xcd);
+	CHECK(buffer[22] == 0xab);
+	CHECK(buffer[23] == 0x89);
+	CHECK(buffer[24] == 0x67);
+	CHECK(buffer[25] == 0x45);
+	CHECK(buffer[26] == 0x23);
+	CHECK(buffer[27] == 0xf1);
+	// Check value type.
+	CHECK_MESSAGE(buffer[28] == 0x02, "Variant::INT");
+	CHECK(buffer[29] == 0x00);
+	CHECK_MESSAGE(buffer[30] == 0x01, "HEADER_DATA_FLAG_64");
+	CHECK(buffer[31] == 0x00);
+	// Check value value.
+	CHECK(buffer[32] == 0xef);
+	CHECK(buffer[33] == 0xcd);
+	CHECK(buffer[34] == 0xab);
+	CHECK(buffer[35] == 0x89);
+	CHECK(buffer[36] == 0x67);
+	CHECK(buffer[37] == 0x45);
+	CHECK(buffer[38] == 0x23);
+	CHECK(buffer[39] == 0xf1);
+	check_match(dictionary, buffer, r_len);
 }
 
 } //namespace TestVariantCompat

@@ -174,7 +174,7 @@ public:
 
 	static Error rewrite_v2_import_metadata(const String &p_path, const String &p_dst, Ref<ResourceImportMetadatav2> imd);
 
-	static Error test_writing_parsing_variant(Variant p_v, Variant &r_v, int ver_major, int ver_minor);
+	static Error test_writing_parsing_variant(Variant p_v, Variant &r_v, int ver_major, int ver_minor, bool using_real_t_double);
 };
 
 class ResourceFormatSaverCompatBinaryInstance {

@@ -30,6 +30,9 @@
 
 #include "gdscript_v2_tokenizer_buffer.h"
 
+#include "compat/variant_decoder_compat.h"
+#include "utility/gdre_settings.h"
+
 #include "core/io/compression.h"
 #include "core/io/marshalls.h"
 
@@ -267,6 +270,10 @@ Vector<uint8_t> GDScriptV2TokenizerBufferCompat::parse_code_string(const String 
 	HashMap<uint32_t, uint32_t> token_lines;
 	HashMap<uint32_t, uint32_t> token_columns;
 
+	// TODO: This shouldn't actually matter, as no real_t variants (Vector2, Vector3, etc.) are actually encoded as variants;
+	// Rather, they get turned into their respective constructor tokens (e.g. TK_IDENTIFIER=Vector2, TK_PARENTHESIS_OPEN, TK_CONSTANT=<float>, etc...)
+	bool real_t_is_double = GDRESettings::get_singleton()->requires_double_precision();
+
 	GDScriptV2TokenizerCompatText tokenizer(p_decomp);
 	tokenizer.set_source_code(p_code);
 	tokenizer.set_multiline_mode(true); // Ignore whitespace tokens.
@@ -363,7 +370,7 @@ Vector<uint8_t> GDScriptV2TokenizerBufferCompat::parse_code_string(const String 
 		Error err = encode_variant(v, nullptr, len, false);
 		ERR_FAIL_COND_V_MSG(err != OK, Vector<uint8_t>(), "Error when trying to encode Variant.");
 		contents.resize(buf_pos + len);
-		encode_variant(v, &contents.write[buf_pos], len, false);
+		VariantDecoderCompat::encode_variant_compat(p_decomp->get_variant_ver_major(), v, &contents.write[buf_pos], len, false, real_t_is_double);
 		buf_pos += len;
 	}
 

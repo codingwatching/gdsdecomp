@@ -18,6 +18,11 @@ TEST_CASE("[GDSDecomp] Engine version major is still 4") {
 	CHECK(GODOT_VERSION_MAJOR == 4);
 }
 
+// If this test fails, we need to update `VariantParserCompat` and `VariantDecoderCompat` to support the new variant type.
+TEST_CASE("[GDSDecomp][VariantCompat][Current] Variant::VARIANT_MAX hasn't changed") {
+	CHECK(Variant::VARIANT_MAX == 39);
+}
+
 TEST_CASE("[GDSDecomp][PackedData] Current PCK version hasn't changed") {
 	CHECK(PACK_FORMAT_VERSION == GDREPackedSource::CURRENT_PACK_FORMAT_VERSION);
 }

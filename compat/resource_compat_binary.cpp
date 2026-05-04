@@ -3654,10 +3654,11 @@ String ResourceFormatSaverCompatBinaryInstance::get_local_path(const String &p_p
 	return p_resource.is_valid() ? p_resource->get_path() : "";
 }
 
-Error ResourceFormatLoaderCompatBinary::test_writing_parsing_variant(Variant p_v, Variant &r_v, int ver_major, int ver_minor) {
+Error ResourceFormatLoaderCompatBinary::test_writing_parsing_variant(Variant p_v, Variant &r_v, int ver_major, int ver_minor, bool using_real_t_double) {
 	ResourceFormatSaverCompatBinaryInstance saver;
 	int format = ResourceFormatSaverCompatBinary::get_default_format_version(ver_major, ver_minor);
 	auto fa = FileAccessBuffer::create();
+	fa->real_is_double = using_real_t_double;
 	saver.ver_format = format;
 	saver.ver_major = ver_major;
 	saver.ver_minor = ver_minor;
@@ -3680,6 +3681,7 @@ Error ResourceFormatLoaderCompatBinary::test_writing_parsing_variant(Variant p_v
 	loader.ver_major = ver_major;
 	loader.ver_minor = ver_minor;
 	loader.using_named_scene_ids = false;
+	loader.using_real_t_double = using_real_t_double;
 	for (const auto &[k, v] : resource_map) {
 		loader.internal_index_cache["::" + itos(v)] = k;
 	}
