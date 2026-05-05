@@ -990,6 +990,7 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 	size_t export_files_count = partial_export ? _files_to_export.size() : _files.size();
 	const HashSet<String> files_to_export_set = vector_to_hashset(partial_export ? _files_to_export : get_settings()->get_file_list());
 
+	report->uses_double_precision = GDRESettings::get_singleton()->requires_double_precision();
 	// *** Detect steam
 	report->godotsteam_detected = detect_uses_prebuilt_steam_template();
 	std::shared_ptr<ProcessRunnerStruct> process_runner;
@@ -1994,6 +1995,16 @@ Dictionary ImportExporterReport::get_session_notes() {
 	base_ext_set.insert("ogg");
 	base_ext_set.insert("mp3");
 
+	if (uses_double_precision) {
+#if !REAL_T_IS_DOUBLE
+		Dictionary double_precision_warning;
+		double_precision_warning["title"] = "Inaccurate Project Export";
+		double_precision_warning["message"] = "This version of GDRE Tools was built with single precision, but this project uses double precision.\nResources exported with this version may be inaccurate.";
+		double_precision_warning["details"] = PackedStringArray();
+		notes["double_precision_warning"] = double_precision_warning;
+#endif
+	}
+
 	if (custom_version_detected) {
 		Dictionary custom_version;
 		custom_version["title"] = "Custom Godot engine version detected";
@@ -2353,7 +2364,11 @@ String ImportExporterReport::get_editor_message_string() {
 	if (godotsteam_detected) {
 		report += "GodotSteam can be found here: https://codeberg.org/GodotSteam/GodotSteam/releases \n";
 	}
-	if (custom_version_detected) {
+	if (uses_double_precision) {
+		report += "This Project requires a Godot engine built with double precision." + String("\n");
+		report += "You must build the engine with `precision=double` flag to edit this project." + String("\n");
+		report += "See https://docs.godotengine.org/en/stable/engine_details/development/compiling/index.html for more information." + String("\n");
+	} else if (custom_version_detected) {
 		report += "Custom Godot engine version detected!" + String("\n");
 		report += "You may encounter errors when opening the project in the editor." + String("\n");
 	}
@@ -2509,6 +2524,10 @@ bool ImportExporterReport::is_custom_version_detected() const {
 	return custom_version_detected;
 }
 
+bool ImportExporterReport::is_using_double_precision() const {
+	return uses_double_precision;
+}
+
 void ImportExporterReport::print_report() {
 	print_line("\n\n********************************EXPORT REPORT********************************" + String("\n"));
 	print_line(get_report_string());
@@ -2558,6 +2577,7 @@ Dictionary ImportExporterReport::to_json() const {
 	json["custom_version_detected"] = custom_version_detected;
 	json["exported_scenes"] = exported_scenes;
 	json["show_headless_warning"] = show_headless_warning;
+	json["uses_double_precision"] = uses_double_precision;
 	json["session_files_total"] = session_files_total;
 	json["log_file_location"] = log_file_location;
 	json["decompiled_scripts"] = decompiled_scripts;
@@ -2600,6 +2620,7 @@ Ref<ImportExporterReport> ImportExporterReport::from_json(const Dictionary &p_js
 	report->custom_version_detected = p_json.get("custom_version_detected", false);
 	report->exported_scenes = p_json.get("exported_scenes", false);
 	report->show_headless_warning = p_json.get("show_headless_warning", false);
+	report->uses_double_precision = p_json.get("uses_double_precision", false);
 	report->session_files_total = p_json.get("session_files_total", 0);
 	report->log_file_location = p_json.get("log_file_location", "");
 	report->output_dir = p_json.get("output_dir", "");
@@ -2651,6 +2672,9 @@ bool ImportExporterReport::is_equal_to(const Ref<ImportExporterReport> &p_import
 		return false;
 	}
 	if (show_headless_warning != p_import_exporter_report->show_headless_warning) {
+		return false;
+	}
+	if (uses_double_precision != p_import_exporter_report->uses_double_precision) {
 		return false;
 	}
 	if (session_files_total != p_import_exporter_report->session_files_total) {
@@ -2727,6 +2751,7 @@ void ImportExporterReport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_steam_detected"), &ImportExporterReport::is_steam_detected);
 	ClassDB::bind_method(D_METHOD("is_mono_detected"), &ImportExporterReport::is_mono_detected);
 	ClassDB::bind_method(D_METHOD("is_custom_version_detected"), &ImportExporterReport::is_custom_version_detected);
+	ClassDB::bind_method(D_METHOD("is_using_double_precision"), &ImportExporterReport::is_using_double_precision);
 }
 
 #include "exporters/gdre_test_macros.h"
