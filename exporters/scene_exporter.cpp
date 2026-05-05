@@ -2032,21 +2032,14 @@ static const HashSet<String> shader_param_names = {
 
 bool set_param_not_in_property_list(Ref<BaseMaterial3D> p_base_material, const String &p_param_name, const Variant &p_value) {
 	// if the param is not in the property list, but it does have a setter, we can set it
-	if (p_base_material->has_method(vformat("set_%s", p_param_name))) {
-		if (p_base_material->has_method(vformat("get_%s", p_param_name))) {
-			String method_name = vformat("get_%s", p_param_name);
+	String setter_name = vformat("set_%s", p_param_name);
+	bool is_valid = false;
+	int arg_count = p_base_material->get_method_argument_count(setter_name, &is_valid);
+	if (is_valid && arg_count == 1) {
+		String getter_name = vformat("get_%s", p_param_name);
+		if (p_base_material->get_method_argument_count(getter_name, &is_valid) == 0 && is_valid) {
 			// check the method signature
-			List<MethodInfo> method_list;
-			p_base_material->get_method_list(&method_list);
-			for (auto &E : method_list) {
-				if (E.name == method_name) {
-					if (E.arguments.size() != 0) {
-						return false;
-					}
-					break;
-				}
-			}
-			Variant base_material_val = p_base_material->call(method_name);
+			Variant base_material_val = p_base_material->call(getter_name);
 			if (base_material_val.get_type() != p_value.get_type()) {
 				return false;
 			}
@@ -2187,6 +2180,31 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> GLBExporterInstance::convert_shader_
 		base_material_params.insert(E.name);
 	}
 
+	// base shader switches the texture names in the shader
+	static const HashMap<String, String> shader_texture_name_to_base_material_texture_param = {
+		{ "texture_albedo", "albedo_texture" },
+		{ "texture_orm", "orm_texture" },
+		{ "texture_metallic", "metallic_texture" },
+		{ "texture_roughness", "roughness_texture" },
+		{ "texture_emission", "emission_texture" },
+		{ "texture_normal", "normal_texture" },
+		{ "texture_bent_normal", "bent_normal_texture" },
+		{ "texture_rim", "rim_texture" },
+		{ "texture_clearcoat", "clearcoat_texture" },
+		{ "texture_flowmap", "anisotropy_flowmap" },
+		{ "texture_ambient_occlusion", "ao_texture" },
+		{ "texture_heightmap", "heightmap_texture" },
+		{ "texture_subsurface_scattering", "subsurf_scatter_texture" },
+		{ "texture_subsurface_transmittance", "subsurf_scatter_transmittance_texture" },
+		{ "texture_backlight", "backlight_texture" },
+		{ "texture_refraction", "refraction_texture" },
+		{ "texture_detail_mask", "detail_mask" },
+		{ "texture_detail_albedo", "detail_albedo" },
+		{ "texture_detail_normal", "detail_normal" },
+		{ "texture_depth", "depth_texture" },
+		{ "texture_orm", "orm_texture" },
+	};
+
 	static const HashMap<String, BaseMaterial3D::TextureParam> texture_param_map = {
 		{ "albedo_texture", BaseMaterial3D::TEXTURE_ALBEDO },
 		{ "orm_texture", BaseMaterial3D::TEXTURE_ORM },
@@ -2306,6 +2324,10 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> GLBExporterInstance::convert_shader_
 		if (did_set) {
 			set_texture = true;
 			auto param = texture_param_map.has(param_name) ? texture_param_map.get(param_name) : BaseMaterial3D::TEXTURE_MAX;
+			if (param == BaseMaterial3D::TEXTURE_MAX && shader_texture_name_to_base_material_texture_param.has(param_name)) {
+				param = texture_param_map.get(shader_texture_name_to_base_material_texture_param.get(param_name));
+			}
+
 			if (param != BaseMaterial3D::TEXTURE_MAX) {
 				base_material_texture_candidates[param].push_back(Pair<String, Ref<Texture>>(param_name, tex));
 			} else {
