@@ -157,8 +157,6 @@ class GLBExporterInstance {
 
 	constexpr static const char *const COPYRIGHT_STRING_FORMAT = "The Creators of '%s'";
 
-	Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> convert_shader_material_to_base_material(Ref<ShaderMaterial> p_shader_material, Node *p_parent = nullptr);
-
 	ObjExporter::MeshInfo _get_mesh_options_for_import_params();
 
 	static String get_resource_path(const Ref<Resource> &res);
