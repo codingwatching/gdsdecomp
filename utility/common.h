@@ -46,6 +46,23 @@ Vector<String> get_files_at(const String &p_dir, const Vector<String> &wildcards
 Vector<String> get_directories_at_recursive(const String &p_dir, bool absolute = true, bool include_hidden = true);
 Vector<String> get_dirs_at(const String &p_dir, const Vector<String> &wildcards, bool absolute = true);
 
+_ALWAYS_INLINE_ bool base10_float_string_needs_trailing_zero(const String &p_str) {
+	int length = p_str.length();
+	if (unlikely(length == 0)) {
+		return false;
+	}
+	auto data = p_str.ptr();
+	if (!is_digit(data[0]) && data[0] != '-' && data[0] != '+') {
+		return false;
+	}
+	for (int i = 1; i < length; i++) {
+		if (!is_digit(data[i])) {
+			return false;
+		}
+	}
+	return true;
+}
+
 String num_scientific(double p_num);
 String num_scientific(float p_num);
 bool is_fs_path(const String &p_path);
