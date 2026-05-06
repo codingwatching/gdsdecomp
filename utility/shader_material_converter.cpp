@@ -396,25 +396,27 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 		}
 		auto &info = uniform_infos[real_param_name];
 		String param_name = real_param_name;
-		Variant &val = info.value;
+		Variant val = info.value;
 
 		bool did_set = false;
+		if (info.is_global()) {
+			Variant global_val = ProjectSettings::get_singleton()->get_setting("shader_globals/" + real_param_name);
+			if (global_val.get_type() != Variant::NIL) {
+				val = global_val;
+			}
+		} else if (info.is_instance() && p_parent) {
+			bool valid = false;
+			Variant instance_val = p_parent->get("instance_shader_parameters/" + real_param_name, &valid);
+			if (valid) {
+				val = instance_val;
+			}
+		}
 		if (shader_texture_name_to_base_material_texture_param.has(param_name)) {
 			param_name = shader_texture_name_to_base_material_texture_param.get(param_name);
 		}
+
 		if (base_material_params.has(param_name)) {
-			Variant base_material_val;
-			if (global_uniforms.has(param_name)) {
-				base_material_val = ProjectSettings::get_singleton()->get_setting("shader_globals/" + param_name);
-			} else if (instance_uniforms.has(param_name) && p_parent) {
-				bool valid = false;
-				Variant parent_val = p_parent->get(param_name, &valid);
-				if (valid) {
-					base_material_val = parent_val;
-				}
-			} else {
-				base_material_val = base_material->get(param_name);
-			}
+			Variant base_material_val = base_material->get(param_name);
 
 			if (base_material_val.get_type() == val.get_type()) {
 				base_material->set(param_name, val);
@@ -433,7 +435,7 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 		if (!tex.is_valid()) {
 			continue;
 		}
-		if (did_set || shader_texture_name_to_base_material_texture_param.has(param_name)) {
+		if (did_set) {
 			set_texture = true;
 			auto param = texture_param_map.has(param_name) ? texture_param_map.get(param_name) : BaseMaterial3D::TEXTURE_MAX;
 
@@ -490,16 +492,11 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 		auto &candidates = base_material_texture_candidates[BaseMaterial3D::TextureParam(i)];
 		auto existing_tex = base_material->get_texture(BaseMaterial3D::TextureParam(i));
 
-		bool should_not_set = candidates.is_empty() && !existing_tex.is_valid();
-		if (should_not_set) {
-			continue;
-		}
-
-		if (feature_to_enable_map.has(BaseMaterial3D::TextureParam(i))) {
+		if ((!candidates.is_empty() || existing_tex.is_valid()) && feature_to_enable_map.has(BaseMaterial3D::TextureParam(i))) {
 			base_material->set_feature(feature_to_enable_map[BaseMaterial3D::TextureParam(i)], true);
 		}
 
-		if (existing_tex.is_valid()) {
+		if (existing_tex.is_valid() || candidates.is_empty()) {
 			continue;
 		}
 		if (candidates.size() == 1) {
@@ -556,8 +553,9 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 			base_material->set_albedo(albedo);
 		}
 	}
+	// set the resource properties
 	base_material->set_name(p_shader_material->get_name());
-	// set the path to the shader material's path so that we can add it to the external deps found if necessary
+	base_material->set_local_to_scene(p_shader_material->is_local_to_scene());
 	base_material->set_path_cache(p_shader_material->get_path());
 	base_material->merge_meta_from(p_shader_material.ptr());
 
