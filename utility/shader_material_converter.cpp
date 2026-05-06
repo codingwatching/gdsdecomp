@@ -8,6 +8,7 @@
 #include "scene/resources/texture.h"
 #include "servers/rendering/rendering_server.h"
 #include "servers/rendering/rendering_server_globals.h"
+#include "servers/rendering/shader_converter.h"
 #include "servers/rendering/shader_preprocessor.h"
 #include "servers/rendering/shader_types.h"
 
@@ -241,7 +242,19 @@ ShaderLanguage::ShaderNode *get_shader_node(ShaderLanguage &sl, Ref<Shader> shad
 	info.shader_types = ShaderTypes::get_singleton()->get_types();
 	info.global_shader_uniform_type_func = _get_global_shader_uniform_type;
 	Error err = sl.compile(preprocessed_code, info);
+	if (err) {
+		ShaderDeprecatedConverter sdc;
+		if (sdc.is_code_deprecated(preprocessed_code)) {
+			ERR_FAIL_COND_V_MSG(!sdc.convert_code(preprocessed_code), nullptr, vformat("Shader conversion failed (line %d): %s", sdc.get_error_line(), sdc.get_error_text()));
+			code = sdc.emit_code();
+			preprocessed_code = code;
+			err = sl.compile(preprocessed_code, info);
+		} else if (sdc.get_error_text() != "") { // Preprocessing failed.
+			ERR_FAIL_V_MSG(nullptr, vformat("Shader conversion failed (line %d): %s", sdc.get_error_line(), sdc.get_error_text()));
+		} // If the code is reported as not deprecated, let it fall through to the compile step after this if block so that we get the full compile error.
+	}
 	ERR_FAIL_COND_V_MSG(err != OK, nullptr, vformat("Failed to compile shader %s (line %d): %s", shader->get_path(), sl.get_error_line(), sl.get_error_text()));
+
 	return sl.get_shader();
 }
 
