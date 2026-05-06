@@ -107,9 +107,14 @@ Error FontFileExporter::_export_bitmap_font(const String &p_dest_path, const Str
 			is_packed = false;
 		}
 	}
-#endif
-	// disable packed for now
+#else
+	// disable packed for now, Godot doesn't support them, no point in checking for them
 	bool is_packed = false;
+#endif
+
+	if (is_packed) {
+		return ERR_UNAVAILABLE;
+	}
 
 	// Detect format type
 	bool is_monochrome = (first_format == Image::FORMAT_LA8 || first_format == Image::FORMAT_L8);
@@ -794,7 +799,11 @@ Ref<ExportReport> FontFileExporter::export_resource(const String &output_dir, Re
 		Error err = _export_bitmap_font(dst_path, src_path, fontfile);
 		report->set_error(err);
 		report->set_saved_path(dst_path);
-		if (err == OK && import_infos->get_ver_major() >= 4) {
+		if (err == ERR_UNAVAILABLE) {
+			// We don't currently support packed bmfont formats
+			report->set_unsupported_format_type("Packed bmfont format");
+		}
+		if (import_infos->get_ver_major() >= 4) {
 			Ref<ResourceInfo> res_info = ResourceInfo::get_info_from_resource(fontfile);
 			Dictionary params;
 			Array fallbacks;
