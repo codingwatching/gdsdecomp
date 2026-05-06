@@ -323,6 +323,153 @@ Ref<Texture2D> get_texture_2d(const Variant &val, const ShaderMaterialConverter:
 	return tex2d;
 }
 
+BaseMaterial3D::BlendMode blend_mode_from_string(const String &p_string) {
+	if (p_string == "blend_mix") {
+		return BaseMaterial3D::BLEND_MODE_MIX;
+	} else if (p_string == "blend_add") {
+		return BaseMaterial3D::BLEND_MODE_ADD;
+	} else if (p_string == "blend_sub") {
+		return BaseMaterial3D::BLEND_MODE_SUB;
+	} else if (p_string == "blend_mul") {
+		return BaseMaterial3D::BLEND_MODE_MUL;
+	} else if (p_string == "blend_premul_alpha") {
+		return BaseMaterial3D::BLEND_MODE_PREMULT_ALPHA;
+	}
+	// default
+	return BaseMaterial3D::BLEND_MODE_MIX;
+}
+
+BaseMaterial3D::DepthDrawMode depth_draw_mode_from_string(const String &p_string) {
+	if (p_string == "depth_draw_opaque") {
+		return BaseMaterial3D::DEPTH_DRAW_OPAQUE_ONLY;
+	} else if (p_string == "depth_draw_always") {
+		return BaseMaterial3D::DEPTH_DRAW_ALWAYS;
+	} else if (p_string == "depth_draw_never") {
+		return BaseMaterial3D::DEPTH_DRAW_DISABLED;
+	}
+	// default
+	return BaseMaterial3D::DEPTH_DRAW_OPAQUE_ONLY;
+}
+
+BaseMaterial3D::DepthTest depth_test_from_string(const String &p_string) {
+	if (p_string == "depth_test_default") {
+		return BaseMaterial3D::DEPTH_TEST_DEFAULT;
+	} else if (p_string == "depth_test_inverted") {
+		return BaseMaterial3D::DEPTH_TEST_INVERTED;
+	}
+	// default
+	return BaseMaterial3D::DEPTH_TEST_DEFAULT;
+}
+
+BaseMaterial3D::CullMode cull_mode_from_string(const String &p_string) {
+	if (p_string == "cull_back") {
+		return BaseMaterial3D::CULL_BACK;
+	} else if (p_string == "cull_front") {
+		return BaseMaterial3D::CULL_FRONT;
+	} else if (p_string == "cull_disabled") {
+		return BaseMaterial3D::CULL_DISABLED;
+	}
+	// default
+	return BaseMaterial3D::CULL_BACK;
+}
+
+BaseMaterial3D::SpecularMode specular_mode_from_string(const String &p_string) {
+	if (p_string == "specular_schlick_ggx") {
+		return BaseMaterial3D::SPECULAR_SCHLICK_GGX;
+	} else if (p_string == "specular_toon") {
+		return BaseMaterial3D::SPECULAR_TOON;
+	} else if (p_string == "specular_disabled") {
+		return BaseMaterial3D::SPECULAR_DISABLED;
+	}
+	// default
+	return BaseMaterial3D::SPECULAR_SCHLICK_GGX;
+}
+
+BaseMaterial3D::DiffuseMode diffuse_mode_from_string(const String &p_string) {
+	if (p_string == "diffuse_lambert") {
+		return BaseMaterial3D::DIFFUSE_LAMBERT;
+	} else if (p_string == "diffuse_lambert_wrap") {
+		return BaseMaterial3D::DIFFUSE_LAMBERT_WRAP;
+	} else if (p_string == "diffuse_burley") {
+		return BaseMaterial3D::DIFFUSE_BURLEY;
+	}
+	// default
+	return BaseMaterial3D::DIFFUSE_BURLEY;
+}
+
+HashMap<String, Variant> set_params_from_render_mode(const Vector<StringName> &render_modes, const Ref<BaseMaterial3D> &base_material) {
+	HashMap<String, Variant> params;
+	for (String E : render_modes) {
+		if (E.begins_with("blend_")) {
+			auto blend_mode = blend_mode_from_string(E);
+			base_material->set_blend_mode(blend_mode);
+			params["blend_mode"] = blend_mode;
+		} else if (E.begins_with("depth_draw_")) {
+			auto depth_draw_mode = depth_draw_mode_from_string(E);
+			base_material->set_depth_draw_mode(depth_draw_mode);
+			params["depth_draw_mode"] = depth_draw_mode;
+		} else if (E.begins_with("cull_")) {
+			auto cull_mode = cull_mode_from_string(E);
+			base_material->set_cull_mode(cull_mode);
+			params["cull_mode"] = cull_mode;
+		} else if (E.begins_with("diffuse_")) {
+			auto diffuse_mode = diffuse_mode_from_string(E);
+			base_material->set_diffuse_mode(diffuse_mode);
+			params["diffuse_mode"] = diffuse_mode;
+		} else if (E.begins_with("specular_")) {
+			auto specular_mode = specular_mode_from_string(E);
+			base_material->set_specular_mode(specular_mode);
+			params["specular_mode"] = specular_mode;
+		} else if (E.begins_with("depth_test_")) {
+			auto depth_test = depth_test_from_string(E);
+			base_material->set_depth_test(depth_test);
+			params["depth_test"] = depth_test;
+		} else if (E == "unshaded") {
+			base_material->set_shading_mode(BaseMaterial3D::SHADING_MODE_UNSHADED);
+			params["shading_mode"] = BaseMaterial3D::SHADING_MODE_UNSHADED;
+		} else if (E == "sss_mode_skin") {
+			base_material->set_feature(BaseMaterial3D::FEATURE_SUBSURFACE_SCATTERING, true);
+			params["subsurf_scatter_enabled"] = true;
+		} else if (E == "shadows_disabled") {
+			base_material->set_flag(BaseMaterial3D::FLAG_DONT_RECEIVE_SHADOWS, true);
+			params["shadows_disabled"] = true;
+		} else if (E == "ambient_light_disabled") {
+			base_material->set_flag(BaseMaterial3D::FLAG_DISABLE_AMBIENT_LIGHT, true);
+			params["ambient_light_disabled"] = true;
+		} else if (E == "shadow_to_opacity") {
+			base_material->set_flag(BaseMaterial3D::FLAG_USE_SHADOW_TO_OPACITY, true);
+			params["shadow_to_opacity"] = true;
+		} else if (E == "vertex_lighting") {
+			base_material->set_shading_mode(BaseMaterial3D::SHADING_MODE_PER_VERTEX);
+			params["shading_mode"] = BaseMaterial3D::SHADING_MODE_PER_VERTEX;
+		} else if (E == "particle_trails") {
+			base_material->set_flag(BaseMaterial3D::FLAG_PARTICLE_TRAILS_MODE, true);
+			params["particle_trails"] = true;
+		} else if (E == "alpha_to_coverage") {
+			base_material->set_alpha_antialiasing(BaseMaterial3D::ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE);
+			params["alpha_antialiasing_mode"] = BaseMaterial3D::ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE;
+		} else if (E == "alpha_to_coverage_and_one") {
+			base_material->set_alpha_antialiasing(BaseMaterial3D::ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE_AND_TO_ONE);
+			params["alpha_antialiasing_mode"] = BaseMaterial3D::ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE_AND_TO_ONE;
+		} else if (E == "fog_disabled") {
+			base_material->set_flag(BaseMaterial3D::FLAG_DISABLE_FOG, true);
+			params["fog_disabled"] = true;
+		} else if (E == "specular_occlusion_disabled") {
+			base_material->set_flag(BaseMaterial3D::FLAG_DISABLE_SPECULAR_OCCLUSION, true);
+			params["specular_occlusion_disabled"] = true;
+		} else if (E == "depth_prepass_alpha") {
+			base_material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA_DEPTH_PRE_PASS);
+			params["transparency"] = BaseMaterial3D::TRANSPARENCY_ALPHA_DEPTH_PRE_PASS;
+		}
+		// UNUSED RENDER MODES:
+		// "light_only", "collision_use_scale", "disable_force", "disable_velocity", "debug_shadow_splits"
+		// "skip_vertex_transform", "world_vertex_coords", "ensure_correct_normals", "wireframe",
+		// "keep_data", "use_half_res_pass",
+		// "use_quarter_res_pass", "use_debanding"
+	}
+	return params;
+}
+
 Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_shader_material_to_base_material(Ref<ShaderMaterial> p_shader_material, Node *p_parent) {
 	// we need to manually create a BaseMaterial3D from the shader material
 	// We do this by getting the shader uniforms and then mapping them to the BaseMaterial3D properties
@@ -740,6 +887,22 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 		if (instance_uniforms.has(E.key)) {
 			set_instance_uniforms = true;
 			break;
+		}
+	}
+	auto render_mode_params = set_params_from_render_mode(shader_info.render_modes, base_material);
+
+	if (base_material->get_transparency() == BaseMaterial3D::TRANSPARENCY_DISABLED) {
+		auto albedo_tex = base_material->get_texture(BaseMaterial3D::TEXTURE_ALBEDO);
+		if (albedo_tex.is_valid()) {
+			Ref<Image> albedo_image = albedo_tex->get_image();
+			if (albedo_image.is_valid()) {
+				Image::AlphaMode alpha_mode = albedo_image->detect_alpha();
+				if (alpha_mode == Image::ALPHA_BLEND) {
+					base_material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA);
+				} else if (alpha_mode == Image::ALPHA_BIT) {
+					base_material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA_SCISSOR);
+				}
+			}
 		}
 	}
 	return { base_material, { set_texture, set_instance_uniforms } };
