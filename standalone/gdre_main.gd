@@ -1527,6 +1527,7 @@ func handle_cli(args: PackedStringArray) -> bool:
 			scripts_only = true
 		elif arg.begins_with("--key"):
 			enc_key = get_arg_value(arg)
+			set_setting = true
 		elif arg.begins_with("--custom-decryption-script"):
 			var decryptor_script_path = get_cli_abs_path(get_arg_value(arg))
 			if decryptor_script_path.is_empty():
@@ -1675,6 +1676,8 @@ func handle_cli(args: PackedStringArray) -> bool:
 			test_recovery = true
 			if arg.contains("="):
 				test_output_dir = get_cli_abs_path(get_arg_value(arg))
+		elif !arg.begins_with("--"):
+			pass
 		else:
 			print_usage()
 			print("ERROR: invalid option '" + arg + "'")
@@ -1692,12 +1695,18 @@ func handle_cli(args: PackedStringArray) -> bool:
 		ret_code = 1
 		return true
 
-	if set_setting and main_cmds.size() == 0:
-		if GDRESettings.is_headless():
+	if main_cmds.size() == 0:
+		if (GDRESettings.is_headless() or not set_setting):
 			print_usage()
 			print("ERROR: no command specified")
 			ret_code = 1
 			return true
+		if !enc_key.is_empty():
+			if GDRESettings.set_encryption_key_string(enc_key) != OK:
+				print_usage()
+				print("Invalid key! Key must be a hex string with 64 characters")
+				ret_code = 1
+				return true
 		return false
 
 	had_main = true
