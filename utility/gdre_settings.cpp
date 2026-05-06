@@ -3199,9 +3199,9 @@ void GDRESettings::add_logger() {
 
 void GDRESettings::_set_shader_globals() {
 	if (is_project_config_loaded() && ProjectSettings::get_singleton()) {
-		Dictionary shader_globals = current_project->pcfg->get_section("shader_globals");
-		if (!shader_globals.is_empty()) {
-			for (const auto &E : shader_globals) {
+		Dictionary globals = current_project->pcfg->get_section("shader_globals");
+		if (!globals.is_empty()) {
+			for (const auto &E : globals) {
 				String key = "shader_globals/" + String(E.key);
 				ProjectSettings::get_singleton()->set_setting(key, E.value);
 			}
@@ -3214,6 +3214,74 @@ void GDRESettings::_set_shader_globals() {
 			if (RenderingServer::get_singleton()) {
 				RenderingServer::get_singleton()->global_shader_parameters_load_settings(true);
 			}
+
+			for (const auto &E : globals) {
+				String key = String(E.key);
+				Dictionary d = E.value;
+
+				ERR_CONTINUE(!d.has("type"));
+				ERR_CONTINUE(!d.has("value"));
+
+				String type = d["type"];
+
+				static const char *global_var_type_names[RSE::GLOBAL_VAR_TYPE_MAX] = {
+					"bool",
+					"bvec2",
+					"bvec3",
+					"bvec4",
+					"int",
+					"ivec2",
+					"ivec3",
+					"ivec4",
+					"rect2i",
+					"uint",
+					"uvec2",
+					"uvec3",
+					"uvec4",
+					"float",
+					"vec2",
+					"vec3",
+					"vec4",
+					"color",
+					"rect2",
+					"mat2",
+					"mat3",
+					"mat4",
+					"transform_2d",
+					"transform",
+					"sampler2D",
+					"sampler2DArray",
+					"sampler3D",
+					"samplerCube",
+					"samplerExternalOES",
+				};
+
+				RSE::GlobalShaderParameterType gvtype = RSE::GLOBAL_VAR_TYPE_MAX;
+
+				for (int i = 0; i < RSE::GLOBAL_VAR_TYPE_MAX; i++) {
+					if (global_var_type_names[i] == type) {
+						gvtype = RSE::GlobalShaderParameterType(i);
+						break;
+					}
+				}
+
+				ERR_CONTINUE(gvtype == RSE::GLOBAL_VAR_TYPE_MAX); //type invalid
+
+				Variant value = d["value"];
+
+				if (gvtype >= RSE::GLOBAL_VAR_TYPE_SAMPLER2D) {
+					String path = value;
+					// Don't load the textures, but still add the parameter so shaders compile correctly while loading.
+					if (path.is_empty()) {
+						value = Ref<Resource>();
+					} else {
+						Ref<Resource> resource = ResourceLoader::load(path);
+						value = resource;
+					}
+				}
+				shader_globals[key] = value;
+			}
+
 			if (!previous) {
 				ResourceCompatLoader::unmake_globally_available();
 			}
@@ -3223,9 +3291,9 @@ void GDRESettings::_set_shader_globals() {
 
 void GDRESettings::_clear_shader_globals() {
 	if (is_project_config_loaded() && ProjectSettings::get_singleton()) {
-		Dictionary shader_globals = current_project->pcfg->get_section("shader_globals");
-		if (!shader_globals.is_empty()) {
-			for (const auto &E : shader_globals) {
+		Dictionary globals = current_project->pcfg->get_section("shader_globals");
+		if (!globals.is_empty()) {
+			for (const auto &E : globals) {
 				String key = "shader_globals/" + String(E.key);
 				if (ProjectSettings::get_singleton()->has_setting(key)) {
 					ProjectSettings::get_singleton()->clear(key);
@@ -3236,4 +3304,12 @@ void GDRESettings::_clear_shader_globals() {
 			}
 		}
 	}
+	shader_globals.clear();
+}
+
+Variant GDRESettings::get_shader_global(const String &p_name) const {
+	if (!shader_globals.has(p_name)) {
+		return Variant();
+	}
+	return shader_globals.get(p_name);
 }

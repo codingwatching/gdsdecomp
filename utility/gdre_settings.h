@@ -171,6 +171,7 @@ private:
 	ParallelFlatHashMap<String, ResourceUID::ID> path_to_uid;
 	HashMap<String, Dictionary> script_cache;
 	Vector<Ref<Script>> cached_scripts;
+	HashMap<String, Variant> shader_globals;
 
 	Vector<uint8_t> enc_key;
 	String custom_decryption_script_path;
@@ -449,6 +450,8 @@ public:
 	String get_game_app_version() const;
 	// the reverse of `get_remap()`; gets the source path for the given destination path
 	String get_remapped_source_path(const String &p_dst) const;
+
+	Variant get_shader_global(const String &p_name) const;
 
 	Vector<String> get_errors();
 

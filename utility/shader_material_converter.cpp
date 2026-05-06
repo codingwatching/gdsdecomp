@@ -524,7 +524,7 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 		}
 		bool did_set = false;
 		if (info.is_global()) {
-			Variant global_val = ProjectSettings::get_singleton()->get_setting("shader_globals/" + real_param_name);
+			Variant global_val = GDRESettings::get_singleton()->get_shader_global(real_param_name);
 			if (global_val.get_type() != Variant::NIL) {
 				val = global_val;
 			}
