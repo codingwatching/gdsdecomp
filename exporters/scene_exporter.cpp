@@ -1888,7 +1888,9 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 				convert_animation_tracks_to_v4_for_player(player);
 			}
 		};
-		convert_all_players_to_v4();
+		if (!TaskManager::get_singleton()->dispatch_to_main_thread(convert_all_players_to_v4).has_value()) {
+			return nullptr; // cancelled
+		}
 	}
 
 	for (int32_t node_i = 0; node_i < animation_player_nodes.size(); node_i++) {
