@@ -2920,6 +2920,7 @@ Error GLBExporterInstance::_get_return_error() {
 		"Cannot generate mipmaps with width or height equal to 0", // texture export failure caused by zero-sized source images
 		"Condition \"p_texture->get_image().is_null()\" is true. Returning: -1", // texture export failure caused by zero-sized source images
 	};
+	String last_error_message;
 	if (gltf_serialization_error_messages.size() > 0) {
 		Vector<int64_t> error_messages_to_remove;
 		bool removed_last_error = false;
@@ -2933,6 +2934,21 @@ Error GLBExporterInstance::_get_return_error() {
 				continue;
 			}
 			removed_last_error = false;
+
+			// If the exact same error message is emitted twice in a row, we can ignore the second one
+			if (message == last_error_message) {
+				error_messages_to_remove.push_back(i);
+				removed_last_error = true;
+				continue;
+			}
+			last_error_message = message;
+			if (message.contains("but the track in the Godot AnimationPlayer is using a different interpolation.")) {
+				// lots of spurious warnings from this one
+				error_messages_to_remove.push_back(i);
+				removed_last_error = true;
+				continue;
+			}
+
 			if (message.begins_with("WARNING:")) {
 				// don't count it, but don't remove it either
 				continue;
