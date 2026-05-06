@@ -1875,7 +1875,7 @@ ResourceUID::ID ResourceFormatLoaderCompatText::get_resource_uid(const String &p
 }
 
 bool ResourceFormatLoaderCompatText::has_custom_uid_support() const {
-	return CompatFormatLoader::has_custom_uid_support();
+	return true;
 }
 
 void ResourceFormatLoaderCompatText::get_dependencies(const String &p_path, List<String> *p_dependencies, bool p_add_types) {
