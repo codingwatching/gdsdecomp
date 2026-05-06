@@ -8,6 +8,7 @@
 #include "scene/resources/texture.h"
 #include "servers/rendering/rendering_server.h"
 #include "servers/rendering/rendering_server_globals.h"
+#include "servers/rendering/shader_preprocessor.h"
 #include "servers/rendering/shader_types.h"
 
 #include "utility/common.h"
@@ -224,6 +225,14 @@ static ShaderLanguage::DataType _get_global_shader_uniform_type(const StringName
 ShaderLanguage::ShaderNode *get_shader_node(ShaderLanguage &sl, Ref<Shader> shader) {
 	String code = shader->get_code();
 	ERR_FAIL_COND_V_MSG(code.is_empty(), nullptr, "Shader code is empty");
+
+	ShaderPreprocessor preprocessor;
+	String preprocessed_code;
+	String error_text;
+	List<ShaderPreprocessor::FilePosition> error_positions;
+	Error result = preprocessor.preprocess(code, shader->get_path(), preprocessed_code, &error_text, &error_positions, nullptr, nullptr);
+	ERR_FAIL_COND_V_MSG(result != OK, nullptr, vformat("Failed to preprocess shader %s (line %d): %s", shader->get_path(), error_positions.front() ? error_positions.front()->get().line : 0, error_text));
+
 	ShaderLanguage::ShaderCompileInfo info;
 	auto mode = shader->get_mode();
 	info.functions = ShaderTypes::get_singleton()->get_functions(RSE::ShaderMode(mode));
@@ -231,8 +240,8 @@ ShaderLanguage::ShaderNode *get_shader_node(ShaderLanguage &sl, Ref<Shader> shad
 	info.stencil_modes = ShaderTypes::get_singleton()->get_stencil_modes(RSE::ShaderMode(mode));
 	info.shader_types = ShaderTypes::get_singleton()->get_types();
 	info.global_shader_uniform_type_func = _get_global_shader_uniform_type;
-	Error err = sl.compile(code, info);
-	ERR_FAIL_COND_V_MSG(err != OK, nullptr, "Failed to compile shader");
+	Error err = sl.compile(preprocessed_code, info);
+	ERR_FAIL_COND_V_MSG(err != OK, nullptr, vformat("Failed to compile shader %s (line %d): %s", shader->get_path(), sl.get_error_line(), sl.get_error_text()));
 	return sl.get_shader();
 }
 
