@@ -36,6 +36,7 @@
 #include "compat/script_loader.h"
 #include "compat/texture_loader_compat.h"
 #include "compat/video_stream_compat.h"
+#include "compat/visual_shader_compat.h"
 #include "crypto/crypto_core_gdre_contexts.h"
 #include "crypto/custom_decryptor.h"
 #include "crypto/file_access_encrypted_custom.h"
@@ -115,6 +116,7 @@ static Ref<LargeTextureConverterCompat> large_texture_converter = nullptr;
 static Ref<FakeScriptConverterCompat> fake_script_converter = nullptr;
 static Ref<TranslationConverterCompat> translation_converter = nullptr;
 static Ref<InputEventConverterCompat> input_event_converter = nullptr;
+static Ref<VisualShaderConverterCompat> visual_shader_converter = nullptr;
 
 //exporters
 static Ref<AutoConvertedExporter> auto_converted_exporter = nullptr;
@@ -173,6 +175,7 @@ void init_loaders() {
 	fake_script_converter = memnew(FakeScriptConverterCompat);
 	translation_converter = memnew(TranslationConverterCompat);
 	input_event_converter = memnew(InputEventConverterCompat);
+	visual_shader_converter = memnew(VisualShaderConverterCompat);
 	ResourceCompatLoader::add_resource_format_loader(binary_loader, true);
 	ResourceCompatLoader::add_resource_format_loader(obdb_loader, true);
 	ResourceCompatLoader::add_resource_format_loader(text_loader, true);
@@ -192,6 +195,7 @@ void init_loaders() {
 	ResourceCompatLoader::add_resource_object_converter(fake_script_converter, true);
 	ResourceCompatLoader::add_resource_object_converter(translation_converter, true);
 	ResourceCompatLoader::add_resource_object_converter(input_event_converter, true);
+	ResourceCompatLoader::add_resource_object_converter(visual_shader_converter, true);
 }
 
 void init_exporters() {
@@ -381,6 +385,9 @@ void deinit_loaders() {
 	if (input_event_converter.is_valid()) {
 		ResourceCompatLoader::remove_resource_object_converter(input_event_converter);
 	}
+	if (visual_shader_converter.is_valid()) {
+		ResourceCompatLoader::remove_resource_object_converter(visual_shader_converter);
+	}
 	text_loader = nullptr;
 	binary_loader = nullptr;
 	obdb_loader = nullptr;
@@ -400,6 +407,7 @@ void deinit_loaders() {
 	fake_script_converter = nullptr;
 	translation_converter = nullptr;
 	input_event_converter = nullptr;
+	visual_shader_converter = nullptr;
 }
 
 void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
