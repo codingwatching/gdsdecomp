@@ -1,5 +1,5 @@
 #include "shader_material_converter.h"
-#include "core/config/project_settings.h"
+
 #include "modules/regex/regex.h"
 #include "scene/main/node.h"
 #include "scene/resources/image_texture.h"
@@ -7,6 +7,12 @@
 #include "scene/resources/shader.h"
 #include "scene/resources/texture.h"
 #include "servers/rendering/rendering_server.h"
+#include "servers/rendering/rendering_server_globals.h"
+#include "servers/rendering/shader_types.h"
+
+#include "utility/common.h"
+#include "utility/gdre_settings.h"
+
 using SL = ShaderLanguage;
 
 namespace {
@@ -135,16 +141,36 @@ bool set_param_not_in_property_list(Ref<BaseMaterial3D> p_base_material, const S
 	return false;
 }
 
-HashMap<String, ShaderMaterialConverter::UniformInfo> ShaderMaterialConverter::parse_shader_uniforms(const Ref<ShaderMaterial> &p_shader_material) {
-	Ref<Shader> shader = p_shader_material->get_shader();
-	ERR_FAIL_COND_V_MSG(shader.is_null(), {}, "Shader on ShaderMaterial is NULL: " + p_shader_material->get_path());
+Vector<StringName> fallback_get_render_modes(Ref<Shader> shader) {
+	constexpr const char *render_mode_re_str = R"(\brender_mode\s+(?:\s*\/\/.*$)*(\w+(?:\s*(?:\s*\/\/.*$)*,(?:\s*\/\/.*$)*\s*\w+)*))";
+	// Ref<RegEx> render_mode_re = RegEx::create_from_string(R"(\brender_mode\s+(\w+(?:\s*,\s*\w+)*))");
+	Ref<RegEx> render_mode_re = RegEx::create_from_string(render_mode_re_str);
+	String code = shader->get_code();
+	HashSet<StringName> render_modes;
+	auto render_mode_matches = render_mode_re->search_all(code);
+	for (auto &E : render_mode_matches) {
+		Ref<RegExMatch> match = E;
+		String render_mode_str = match->get_string(1);
+		Vector<String> render_mode_parts = render_mode_str.split(",");
+		for (auto &E : render_mode_parts) {
+			E = E.strip_edges();
+			if (E.is_empty()) {
+				continue;
+			}
+			render_modes.insert(E);
+		}
+	}
+	return gdre::hashset_to_vector(render_modes);
+}
+
+HashMap<String, ShaderMaterialConverter::UniformInfo> fallback_parse_shader_uniforms(const Ref<Shader> &shader) {
 	List<PropertyInfo> uniform_list;
 	shader->get_shader_uniform_list(&uniform_list, false);
 	HashMap<String, PropertyInfo> property_infos;
 	for (auto &E : uniform_list) {
 		property_infos[E.name] = E;
 	}
-	HashMap<String, UniformInfo> uniform_infos;
+	HashMap<String, ShaderMaterialConverter::UniformInfo> uniform_infos;
 	String shader_code = shader->get_code();
 	if (shader_code.is_empty()) {
 		return uniform_infos;
@@ -156,11 +182,11 @@ HashMap<String, ShaderMaterialConverter::UniformInfo> ShaderMaterialConverter::p
 
 	for (auto &E : matches) {
 		Ref<RegExMatch> match = E;
-		UniformInfo info;
+		ShaderMaterialConverter::UniformInfo info;
 		String param_name = match->get_string(3);
 		info.name = match->get_string("name");
-		info.scope = UniformInfo::parse_scope(match->get_string("scope"));
-		info.type = UniformInfo::parse_data_type(match->get_string("type"));
+		info.scope = ShaderMaterialConverter::UniformInfo::parse_scope(match->get_string("scope"));
+		info.type = ShaderMaterialConverter::UniformInfo::parse_data_type(match->get_string("type"));
 		String array_size_str = match->get_string("array_size");
 		if (array_size_str.is_empty()) {
 			array_size_str = match->get_string("array_size2");
@@ -168,7 +194,7 @@ HashMap<String, ShaderMaterialConverter::UniformInfo> ShaderMaterialConverter::p
 		if (!array_size_str.is_empty()) {
 			info.array_size = array_size_str.to_int();
 		}
-		info.hints = UniformInfo::parse_hints(match->get_string("hint_string").strip_edges());
+		info.hints = ShaderMaterialConverter::UniformInfo::parse_hints(match->get_string("hint_string").strip_edges());
 		if (property_infos.has(info.name)) {
 			info.property_info = property_infos.get(info.name);
 		}
@@ -181,6 +207,68 @@ HashMap<String, ShaderMaterialConverter::UniformInfo> ShaderMaterialConverter::p
 		uniform_infos[info.name] = info;
 	}
 	return uniform_infos;
+}
+
+ShaderMaterialConverter::ShaderInfo fallback_parse_shader_info(const Ref<Shader> &p_shader) {
+	ShaderMaterialConverter::ShaderInfo info;
+	info.render_modes = fallback_get_render_modes(p_shader);
+	info.uniforms = fallback_parse_shader_uniforms(p_shader);
+	return info;
+}
+
+static ShaderLanguage::DataType _get_global_shader_uniform_type(const StringName &p_name) {
+	RSE::GlobalShaderParameterType gvt = RenderingServerGlobals::material_storage->global_shader_parameter_get_type(p_name);
+	return (ShaderLanguage::DataType)RS::global_shader_uniform_type_get_shader_datatype(gvt);
+}
+
+ShaderLanguage::ShaderNode *get_shader_node(ShaderLanguage &sl, Ref<Shader> shader) {
+	String code = shader->get_code();
+	ERR_FAIL_COND_V_MSG(code.is_empty(), nullptr, "Shader code is empty");
+	ShaderLanguage::ShaderCompileInfo info;
+	auto mode = shader->get_mode();
+	info.functions = ShaderTypes::get_singleton()->get_functions(RSE::ShaderMode(mode));
+	info.render_modes = ShaderTypes::get_singleton()->get_modes(RSE::ShaderMode(mode));
+	info.stencil_modes = ShaderTypes::get_singleton()->get_stencil_modes(RSE::ShaderMode(mode));
+	info.shader_types = ShaderTypes::get_singleton()->get_types();
+	info.global_shader_uniform_type_func = _get_global_shader_uniform_type;
+	Error err = sl.compile(code, info);
+	ERR_FAIL_COND_V_MSG(err != OK, nullptr, "Failed to compile shader");
+	return sl.get_shader();
+}
+
+Variant get_default_parameter(const SL::ShaderNode::Uniform &uniform) {
+	if (uniform.default_value.is_empty()) {
+		return ShaderLanguage::get_default_datatype_value(uniform.type, uniform.array_size, uniform.hint);
+	}
+	return ShaderLanguage::constant_value_to_variant(uniform.default_value, uniform.type, uniform.array_size, uniform.hint);
+}
+
+ShaderMaterialConverter::ShaderInfo ShaderMaterialConverter::parse_shader_info(const Ref<Shader> &shader) {
+	ShaderLanguage sl;
+	auto shader_node = get_shader_node(sl, shader);
+	if (!shader_node) {
+		return fallback_parse_shader_info(shader);
+	}
+	ShaderMaterialConverter::ShaderInfo shader_info;
+
+	shader_info.render_modes = shader_node->render_modes;
+	for (auto &E : shader_node->uniforms) {
+		ShaderMaterialConverter::UniformInfo info;
+		info.name = E.key;
+		info.type = E.value.type;
+		info.array_size = E.value.array_size;
+		info.hints = { E.value.hint };
+		if (info.is_texture()) {
+			info.default_value = shader->get_default_texture_parameter(info.name);
+		}
+		if (info.default_value.get_type() == Variant::NIL) {
+			info.default_value = get_default_parameter(E.value);
+		}
+		info.scope = E.value.scope;
+		info.property_info = ShaderLanguage::uniform_to_property_info(E.value);
+		shader_info.uniforms[info.name] = info;
+	}
+	return shader_info;
 }
 
 Ref<Texture2D> get_texture_2d(const Variant &val, const ShaderMaterialConverter::UniformInfo &info) {
@@ -244,6 +332,7 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 	List<StringName> list;
 	Ref<Shader> shader = p_shader_material->get_shader();
 	ERR_FAIL_COND_V_MSG(shader.is_null(), {}, "Shader on ShaderMaterial is NULL: " + p_shader_material->get_path());
+
 	List<PropertyInfo> prop_list;
 	HashSet<String> global_uniforms;
 	HashSet<String> instance_uniforms;
@@ -256,8 +345,8 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 	};
 	bool has_orm = false;
 	HashSet<String> shader_uniforms;
-	HashMap<String, UniformInfo> uniform_infos = parse_shader_uniforms(p_shader_material);
-	for (auto &E : uniform_infos) {
+	ShaderMaterialConverter::ShaderInfo shader_info = parse_shader_info(shader);
+	for (auto &E : shader_info.uniforms) {
 		auto &info = E.value;
 		shader_uniforms.insert(info.name);
 		if (info.scope == UniformInfo::Scope::SCOPE_GLOBAL) {
@@ -509,13 +598,9 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 	};
 
 	Vector<TextureCandidate> unknown_texture_candidates;
-	for (const String &real_param_name : shader_uniforms) {
-		if (!uniform_infos.has(real_param_name)) {
-			WARN_PRINT(vformat("Unknown shader uniform: %s", real_param_name));
-			// insert it into the uniform_infos map with a default hint
-			uniform_infos[real_param_name] = { real_param_name, UniformInfo::Scope::SCOPE_LOCAL, SL::DataType::TYPE_MAX, {} };
-		}
-		auto &info = uniform_infos[real_param_name];
+	for (auto &E : shader_info.uniforms) {
+		auto &info = E.value;
+		String real_param_name = E.key;
 		String param_name = real_param_name;
 
 		Variant val = p_shader_material->get_shader_parameter(info.name);

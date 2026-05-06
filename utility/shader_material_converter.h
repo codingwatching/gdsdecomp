@@ -81,8 +81,13 @@ public:
 		static Vector<Hint> parse_hints(const String &p_hint);
 	};
 
+	struct ShaderInfo {
+		Vector<StringName> render_modes;
+		HashMap<String, UniformInfo> uniforms;
+	};
+
 private:
-	static HashMap<String, UniformInfo> parse_shader_uniforms(const Ref<ShaderMaterial> &p_shader_material);
+	static ShaderInfo parse_shader_info(const Ref<Shader> &p_shader);
 
 public:
 	using Hint = ShaderLanguage::ShaderNode::Uniform::Hint;
