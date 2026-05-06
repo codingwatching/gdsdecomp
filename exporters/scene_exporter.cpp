@@ -767,8 +767,15 @@ String GLBExporterInstance::get_path_options(const Dictionary &import_opts) {
 }
 
 void GLBExporterInstance::set_cache_res(const dep_info &info, const Ref<Resource> &texture, bool force_replace) {
-	if (texture.is_null() || (!force_replace && ResourceCache::get_ref(info.dep).is_valid())) {
+	if (texture.is_null()) {
+		loaded_deps.push_back(texture);
 		return;
+	}
+	if (!force_replace) {
+		if (auto existing = ResourceCache::get_ref(info.dep); existing.is_valid()) {
+			loaded_deps.push_back(existing);
+			return;
+		}
 	}
 #ifdef TOOLS_ENABLED
 	texture->set_import_path(info.remap);
@@ -777,6 +784,14 @@ void GLBExporterInstance::set_cache_res(const dep_info &info, const Ref<Resource
 	texture->set_path_cache("");
 	texture->set_path(info.dep, true);
 	loaded_deps.push_back(texture);
+}
+
+bool GLBExporterInstance::check_cached_res(const dep_info &info) {
+	if (auto existing = ResourceCache::get_ref(info.dep); existing.is_valid()) {
+		loaded_deps.push_back(existing);
+		return true;
+	}
+	return false;
 }
 
 String GLBExporterInstance::get_name_res(const Dictionary &dict, const Ref<Resource> &res, int64_t idx) {
@@ -903,7 +918,7 @@ Error GLBExporterInstance::_load_deps() {
 		dep_info &info = E.value;
 		if (info.type == "Script") {
 			has_script = true;
-		} else if (info.dep.get_extension().to_lower().contains("shader")) {
+		} else if (info.type == "Shader") {
 			has_shader = true;
 		} else {
 			if (info.type == "Animation" || info.type == "AnimationLibrary") {
@@ -964,6 +979,39 @@ Error GLBExporterInstance::_load_deps() {
 			set_cache_res(info, texture, false);
 			continue;
 		}
+		// old visual
+		// if (ver_major < GODOT_VERSION_MAJOR && info.real_type == "VisualShader" && replace_shader_materials) {
+		// 	if (check_cached_res(info)) {
+		// 		continue;
+		// 	}
+		// 	auto visual_shader = ResourceCompatLoader::custom_load(
+		// 			info.remap, "",
+		// 			ResourceInfo::FAKE_LOAD,
+		// 			&err,
+		// 			using_threaded_load(),
+		// 			ResourceFormatLoader::CACHE_MODE_IGNORE); // not ignore deep, we want to reuse dependencies if they exist
+		// 	if (err != OK || visual_shader.is_null()) {
+		// 		if (ignore_missing_dependencies) {
+		// 			missing_dependencies.push_back(info.dep);
+		// 			WARN_PRINT(vformat("%s: Dependency %s -> %s failed to load.", source_path, info.dep, info.remap));
+		// 			continue;
+		// 		}
+		// 		GDRE_SCN_EXP_FAIL_V_MSG(ERR_FILE_MISSING_DEPENDENCIES, vformat("Dependency %s -> %s failed to load.", info.dep, info.remap));
+		// 	}
+		// 	bool got = false;
+		// 	String code = visual_shader->get("code", &got);
+		// 	ERR_CONTINUE_MSG(!got || code.is_empty(), vformat("Failed to get code from VisualShader %s", info.dep));
+		// 	Ref<Shader> shader;
+		// 	std::function<void(const String &)> make_new_shader = [&](const String &p_code) -> void {
+		// 		shader = memnew(Shader());
+		// 		shader->set_code(p_code);
+		// 		set_cache_res(info, shader, false);
+		// 	};
+		// 	if (!TaskManager::get_singleton()->dispatch_to_main_thread(make_new_shader, code).has_value()) {
+		// 		return ERR_SKIP;
+		// 	}
+		// 	continue;
+		// }
 		if (!FileAccess::exists(info.remap) && !FileAccess::exists(info.dep)) {
 			if (ignore_missing_dependencies) {
 				missing_dependencies.push_back(info.dep);
@@ -992,31 +1040,31 @@ Error GLBExporterInstance::_load_deps() {
 			String our_path = GDRESettings::get_singleton()->get_mapped_path(info.dep);
 			if (our_path != info.remap) {
 				WARN_PRINT(vformat("Dependency %s:%s is not mapped to the same path: %s", info.dep, info.remap, our_path));
-				if (!ResourceCache::has(info.dep)) {
-					auto result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<Resource>()>)[&]() -> Ref<Resource> {
-						return ResourceCompatLoader::custom_load(
-								info.remap, "",
-								ResourceCompatLoader::get_default_load_type(),
-								&err,
-								using_threaded_load(),
-								ResourceFormatLoader::CACHE_MODE_IGNORE); // not ignore deep, we want to reuse dependencies if they exist
-					});
-					if (!result.has_value()) {
-						return ERR_SKIP; // cancelled
+				if (check_cached_res(info)) {
+					continue;
+				}
+				auto result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<Resource>()>)[&]() -> Ref<Resource> {
+					auto res = ResourceCompatLoader::custom_load(
+							info.remap, "",
+							ResourceCompatLoader::get_default_load_type(),
+							&err,
+							using_threaded_load(),
+							ResourceFormatLoader::CACHE_MODE_IGNORE); // not ignore deep, we want to reuse dependencies if they exist
+					set_cache_res(info, res, false);
+					return res;
+				});
+				if (!result.has_value()) {
+					return ERR_SKIP; // cancelled
+				}
+				auto texture = result.value();
+				if (err || texture.is_null()) {
+					if (ignore_missing_dependencies) {
+						missing_dependencies.push_back(info.dep);
+						WARN_PRINT(vformat("%s: Dependency %s:%s failed to load.", source_path, info.dep, info.remap));
+						continue;
 					}
-					auto texture = result.value();
-					if (err || texture.is_null()) {
-						if (ignore_missing_dependencies) {
-							missing_dependencies.push_back(info.dep);
-							WARN_PRINT(vformat("%s: Dependency %s:%s failed to load.", source_path, info.dep, info.remap));
-							continue;
-						}
-						GDRE_SCN_EXP_FAIL_V_MSG(ERR_FILE_MISSING_DEPENDENCIES,
-								vformat("Dependency %s:%s failed to load.", info.dep, info.remap));
-					}
-					if (!ResourceCache::has(info.dep)) {
-						set_cache_res(info, texture, false);
-					}
+					GDRE_SCN_EXP_FAIL_V_MSG(ERR_FILE_MISSING_DEPENDENCIES,
+							vformat("Dependency %s:%s failed to load.", info.dep, info.remap));
 				}
 			} else { // if mapped_path logic changes, we have to set this to true
 				// no_threaded_load = true;

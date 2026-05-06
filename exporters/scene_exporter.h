@@ -166,6 +166,7 @@ class GLBExporterInstance {
 
 	String add_errors_to_report(Error p_err, const String &err_msg = "");
 	void set_cache_res(const dep_info &info, const Ref<Resource> &texture, bool force_replace);
+	bool check_cached_res(const dep_info &info);
 
 	[[nodiscard]] Node *_set_stuff_from_instanced_scene(Node *root);
 	Error _export_instanced_scene(Node *root, const String &p_dest_path);
