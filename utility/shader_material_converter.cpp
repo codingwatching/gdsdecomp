@@ -6,6 +6,7 @@
 #include "scene/resources/material.h"
 #include "scene/resources/shader.h"
 #include "scene/resources/texture.h"
+#include "servers/rendering/rendering_server.h"
 using SL = ShaderLanguage;
 
 namespace {
@@ -171,7 +172,12 @@ HashMap<String, ShaderMaterialConverter::UniformInfo> ShaderMaterialConverter::p
 		if (property_infos.has(info.name)) {
 			info.property_info = property_infos.get(info.name);
 		}
-		info.value = p_shader_material->get_shader_parameter(info.name);
+		if (info.is_texture()) {
+			info.default_value = shader->get_default_texture_parameter(info.name);
+		}
+		if (info.default_value.get_type() == Variant::NIL) {
+			info.default_value = RenderingServer::get_singleton()->shader_get_parameter_default(shader->get_rid(), info.name);
+		}
 		uniform_infos[info.name] = info;
 	}
 	return uniform_infos;
@@ -279,43 +285,46 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 	Ref<BaseMaterial3D> base_material = memnew(BaseMaterial3D(has_orm));
 
 	// this is initialized with the 3.x params that are still valid in 4.x (`_set()` handles the remapping) but won't show up in the property list
-	HashSet<String> base_material_params = {
-		"flags_use_shadow_to_opacity",
-		"flags_use_shadow_to_opacity",
-		"flags_no_depth_test",
-		"flags_use_point_size",
-		"flags_fixed_size",
-		"flags_albedo_tex_force_srgb",
-		"flags_do_not_receive_shadows",
-		"flags_disable_ambient_light",
-		"params_diffuse_mode",
-		"params_specular_mode",
-		"params_blend_mode",
-		"params_cull_mode",
-		"params_depth_draw_mode",
-		"params_point_size",
-		"params_billboard_mode",
-		"params_billboard_keep_scale",
-		"params_grow",
-		"params_grow_amount",
-		"params_alpha_scissor_threshold",
-		"params_alpha_hash_scale",
-		"params_alpha_antialiasing_edge",
-		"depth_scale",
-		"depth_deep_parallax",
-		"depth_min_layers",
-		"depth_max_layers",
-		"depth_flip_tangent",
-		"depth_flip_binormal",
-		"depth_texture",
-		"emission_energy",
-		"flags_transparent",
-		"flags_unshaded",
-		"flags_vertex_lighting",
-		"params_use_alpha_scissor",
-		"params_use_alpha_hash",
-		"depth_enabled",
+	static const HashMap<String, Variant::Type> v3_material_param_to_type_map = {
+		{ "flags_use_shadow_to_opacity", Variant::Type::BOOL },
+		{ "flags_no_depth_test", Variant::Type::BOOL },
+		{ "flags_use_point_size", Variant::Type::BOOL },
+		{ "flags_fixed_size", Variant::Type::BOOL },
+		{ "flags_albedo_tex_force_srgb", Variant::Type::BOOL },
+		{ "flags_do_not_receive_shadows", Variant::Type::BOOL },
+		{ "flags_disable_ambient_light", Variant::Type::BOOL },
+		{ "params_diffuse_mode", Variant::Type::INT },
+		{ "params_specular_mode", Variant::Type::INT },
+		{ "params_blend_mode", Variant::Type::INT },
+		{ "params_cull_mode", Variant::Type::INT },
+		{ "params_depth_draw_mode", Variant::Type::INT },
+		{ "params_point_size", Variant::Type::FLOAT },
+		{ "params_billboard_mode", Variant::Type::INT },
+		{ "params_billboard_keep_scale", Variant::Type::BOOL },
+		{ "params_grow", Variant::Type::BOOL },
+		{ "params_grow_amount", Variant::Type::FLOAT },
+		{ "params_alpha_scissor_threshold", Variant::Type::FLOAT },
+		{ "params_alpha_hash_scale", Variant::Type::FLOAT },
+		{ "params_alpha_antialiasing_edge", Variant::Type::INT },
+		{ "depth_scale", Variant::Type::FLOAT },
+		{ "depth_deep_parallax", Variant::Type::FLOAT },
+		{ "depth_min_layers", Variant::Type::INT },
+		{ "depth_max_layers", Variant::Type::INT },
+		{ "depth_flip_tangent", Variant::Type::BOOL },
+		{ "depth_flip_binormal", Variant::Type::BOOL },
+		{ "depth_texture", Variant::Type::FLOAT },
+		{ "emission_energy", Variant::Type::FLOAT },
+		{ "flags_transparent", Variant::Type::BOOL },
+		{ "flags_unshaded", Variant::Type::BOOL },
+		{ "flags_vertex_lighting", Variant::Type::BOOL },
+		{ "params_use_alpha_scissor", Variant::Type::BOOL },
+		{ "params_use_alpha_hash", Variant::Type::BOOL },
+		{ "depth_enabled", Variant::Type::BOOL },
 	};
+	HashSet<String> base_material_params;
+	for (auto &E : v3_material_param_to_type_map) {
+		base_material_params.insert(E.key);
+	}
 	List<PropertyInfo> base_material_prop_list;
 	base_material->get_property_list(&base_material_prop_list);
 	bool hit_base_material_group = false;
@@ -508,8 +517,11 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 		}
 		auto &info = uniform_infos[real_param_name];
 		String param_name = real_param_name;
-		Variant val = info.value;
 
+		Variant val = p_shader_material->get_shader_parameter(info.name);
+		if (val.get_type() == Variant::NIL) {
+			val = info.default_value;
+		}
 		bool did_set = false;
 		if (info.is_global()) {
 			Variant global_val = ProjectSettings::get_singleton()->get_setting("shader_globals/" + real_param_name);
@@ -529,8 +541,12 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 
 		if (base_material_params.has(param_name)) {
 			Variant base_material_val = base_material->get(param_name);
+			Variant::Type base_material_val_type = base_material_val.get_type();
+			if (v3_material_param_to_type_map.has(param_name)) {
+				base_material_val_type = v3_material_param_to_type_map.get(param_name);
+			}
 
-			if (base_material_val.get_type() == val.get_type()) {
+			if (base_material_val_type == val.get_type()) {
 				base_material->set(param_name, val);
 				did_set = true;
 				set_params[real_param_name] = val;

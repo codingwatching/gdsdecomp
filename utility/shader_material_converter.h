@@ -23,7 +23,7 @@ public:
 		int array_size = 0;
 		PropertyInfo property_info;
 
-		Variant value;
+		Variant default_value;
 
 		bool is_instance() const {
 			return scope == Scope::SCOPE_INSTANCE;
