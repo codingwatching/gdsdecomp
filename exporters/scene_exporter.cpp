@@ -2958,8 +2958,11 @@ Error GLBExporterInstance::_get_return_error() {
 				if (message.contains(e)) {
 					error_messages_to_remove.push_back(i);
 					removed_last_error = true;
-					continue;
+					break;
 				}
+			}
+			if (removed_last_error) {
+				continue;
 			}
 
 			// Otherwise, we haven't removed all the errors
