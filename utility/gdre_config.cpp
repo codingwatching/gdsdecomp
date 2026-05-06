@@ -340,7 +340,7 @@ Vector<Ref<GDREConfigSetting>> GDREConfig::_init_default_settings() {
 		memnew(GDREConfigSetting(
 				"Exporter/Scene/GLTF/force_require_KHR_node_visibility",
 				"Force require KHR_node_visibility extension",
-				"By default, the exporter will only require the KHR_node_visibility extension if the scenes are from Godot 4.5 or later.\nThis setting forces the exporter to require the extension regardless of engine version.",
+				"By default, the exporter will only set KHR_node_visibility as an optional extension.\nThis setting forces the exporter to require the extension regardless of engine version.",
 				false)),
 		memnew(GDREConfigSetting(
 				"Exporter/Scene/GLTF/ignore_missing_dependencies",

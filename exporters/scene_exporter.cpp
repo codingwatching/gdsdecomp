@@ -2112,7 +2112,7 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 				WARN_PRINT("Skinned meshes have physics nodes, but still exporting as non-single-root.");
 			}
 		}
-		if (after_4_4 || force_require_KHR_node_visibility) {
+		if (force_require_KHR_node_visibility) {
 			doc->set_visibility_mode(GLTFDocument::VisibilityMode::VISIBILITY_MODE_INCLUDE_REQUIRED);
 		} else {
 			doc->set_visibility_mode(GLTFDocument::VisibilityMode::VISIBILITY_MODE_INCLUDE_OPTIONAL);
