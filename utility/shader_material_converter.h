@@ -25,20 +25,44 @@ public:
 
 		Variant value;
 
-		bool is_instance() {
+		bool is_instance() const {
 			return scope == Scope::SCOPE_INSTANCE;
 		}
-		bool is_global() {
+		bool is_global() const {
 			return scope == Scope::SCOPE_GLOBAL;
 		}
-		bool is_local() {
+		bool is_local() const {
 			return scope == Scope::SCOPE_LOCAL;
 		}
-		bool is_texture() {
-			return type == DataType::TYPE_SAMPLER2D;
+		bool is_texture() const {
+			switch (type) {
+				case DataType::TYPE_SAMPLER2D:
+				case DataType::TYPE_ISAMPLER2D:
+				case DataType::TYPE_USAMPLER2D:
+				case DataType::TYPE_SAMPLER2DARRAY:
+				case DataType::TYPE_ISAMPLER2DARRAY:
+				case DataType::TYPE_USAMPLER2DARRAY:
+				case DataType::TYPE_SAMPLER3D:
+				case DataType::TYPE_ISAMPLER3D:
+				case DataType::TYPE_USAMPLER3D:
+					return true;
+				default:
+					return false;
+			}
 		}
 
-		bool is_array() {
+		bool is_texture_2d() const {
+			switch (type) {
+				case DataType::TYPE_SAMPLER2D:
+				case DataType::TYPE_ISAMPLER2D:
+				case DataType::TYPE_USAMPLER2D:
+					return !is_array();
+				default:
+					return false;
+			}
+		}
+
+		bool is_array() const {
 			return array_size > 0;
 		}
 

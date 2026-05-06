@@ -1,9 +1,10 @@
 #include "shader_material_converter.h"
-#include "modules/regex/regex.h"
 #include "core/config/project_settings.h"
+#include "modules/regex/regex.h"
+#include "scene/main/node.h"
+#include "scene/resources/image_texture.h"
 #include "scene/resources/material.h"
 #include "scene/resources/shader.h"
-#include "scene/main/node.h"
 #include "scene/resources/texture.h"
 using SL = ShaderLanguage;
 
@@ -174,6 +175,58 @@ HashMap<String, ShaderMaterialConverter::UniformInfo> ShaderMaterialConverter::p
 		uniform_infos[info.name] = info;
 	}
 	return uniform_infos;
+}
+
+Ref<Texture2D> get_texture_2d(const Variant &val, const ShaderMaterialConverter::UniformInfo &info) {
+	Ref<Texture> tex = val;
+	if (!tex.is_valid()) {
+		if (info.is_texture() && info.is_array()) {
+			Array val_array = val;
+			for (auto &E : val_array) {
+				tex = E;
+				if (tex.is_valid()) {
+					break;
+				}
+			}
+		}
+	}
+	if (!tex.is_valid()) {
+		return Ref<Texture2D>();
+	}
+
+	Ref<Texture2D> tex2d = tex;
+	if (!tex2d.is_valid() && info.is_texture()) {
+		Ref<Image> img;
+		if (Ref<TextureLayered> tex_layered = tex; tex_layered.is_valid()) {
+			// use the first one that is valid
+			for (int i = 0; i < tex_layered->get_layers(); i++) {
+				img = tex_layered->get_layer_data(0);
+				if (img.is_valid()) {
+					break;
+				}
+			}
+		} else if (Ref<Texture3D> tex_3d = tex; tex_3d.is_valid()) {
+			// use the first one that is valid
+			auto images = tex_3d->get_data();
+			for (int i = 0; i < images.size(); i++) {
+				img = images[0];
+				if (img.is_valid()) {
+					break;
+				}
+			}
+		}
+		if (img.is_valid()) {
+			Ref<ImageTexture> img_tex = memnew(ImageTexture);
+			img_tex->create_from_image(img);
+			img_tex->set_name(tex->get_name());
+			img_tex->set_path_cache(tex->get_path());
+			img_tex->set_local_to_scene(tex->is_local_to_scene());
+			img_tex->merge_meta_from(tex.ptr());
+			tex2d = img_tex;
+		}
+	}
+
+	return tex2d;
 }
 
 Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_shader_material_to_base_material(Ref<ShaderMaterial> p_shader_material, Node *p_parent) {
@@ -373,7 +426,16 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 		}
 		return did_set;
 	};
-	auto add_texture_candidate = [&](const UniformInfo &info, const Ref<Texture> &tex) {
+
+	auto third_pass_texture_candidate = [&](const UniformInfo &info, const Ref<Texture> &tex) {
+		if (info.hints.has(Hint::HINT_ROUGHNESS_NORMAL) && info.name.to_lower().contains("normal") && base_material_texture_candidates[BaseMaterial3D::TEXTURE_NORMAL].is_empty()) {
+			base_material_texture_candidates[BaseMaterial3D::TEXTURE_NORMAL].push_back({ info, tex });
+			return true;
+		}
+		return false;
+	};
+
+	auto second_pass_texture_candidate = [&](const UniformInfo &info, const Ref<Texture> &tex) {
 		const String &param_name = info.name;
 		String lparam_name = param_name.to_lower();
 		if (lparam_name.contains("albedo")) {
@@ -387,6 +449,56 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 		}
 		return true;
 	};
+
+	auto first_pass_texture_candidates = [&](const UniformInfo &info, const Ref<Texture> &tex) {
+		if (info.hints.has(Hint::HINT_SOURCE_COLOR)) {
+			base_material_texture_candidates[BaseMaterial3D::TEXTURE_ALBEDO].push_back({ info, tex });
+		} else if (info.hints.has(Hint::HINT_DEFAULT_WHITE)) {
+			return add_orm_texture_candidate(info, tex);
+		} else if (info.hints.has(Hint::HINT_NORMAL)) {
+			base_material_texture_candidates[BaseMaterial3D::TEXTURE_NORMAL].push_back({ info, tex });
+		} else if (info.hints.has(Hint::HINT_DEFAULT_BLACK)) {
+			base_material_texture_candidates[BaseMaterial3D::TEXTURE_EMISSION].push_back({ info, tex });
+		} else {
+			return false;
+		}
+		return true;
+	};
+
+	auto filter_texture_candidates = [&](const Vector<TextureCandidate> &candidates, bool ignore_non_2d) {
+		Vector<TextureCandidate> filtered_candidates;
+		HashSet<int64_t> added;
+		for (int i = 0; i < candidates.size(); i++) {
+			auto &E = candidates[i];
+			if ((!ignore_non_2d || E.first.is_texture_2d()) && first_pass_texture_candidates(E.first, E.second)) {
+				added.insert(i);
+			}
+		}
+		for (int i = 0; i < candidates.size(); i++) {
+			auto &E = candidates[i];
+			if (!added.has(i)) {
+				if ((!ignore_non_2d || E.first.is_texture_2d()) && second_pass_texture_candidate(E.first, E.second)) {
+					added.insert(i);
+				}
+			}
+		}
+		for (int i = 0; i < candidates.size(); i++) {
+			auto &E = candidates[i];
+			if (!added.has(i)) {
+				if ((!ignore_non_2d || E.first.is_texture_2d()) && third_pass_texture_candidate(E.first, E.second)) {
+					added.insert(i);
+				}
+			}
+		}
+
+		for (int i = 0; i < candidates.size(); i++) {
+			if (!added.has(i)) {
+				filtered_candidates.push_back(candidates[i]);
+			}
+		}
+		return filtered_candidates;
+	};
+
 	Vector<TextureCandidate> unknown_texture_candidates;
 	for (const String &real_param_name : shader_uniforms) {
 		if (!uniform_infos.has(real_param_name)) {
@@ -431,7 +543,7 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 			non_set_params[real_param_name] = val;
 		}
 
-		Ref<Texture> tex = val;
+		Ref<Texture2D> tex = get_texture_2d(val, info);
 		if (!tex.is_valid()) {
 			continue;
 		}
@@ -441,53 +553,16 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 
 			if (param != BaseMaterial3D::TEXTURE_MAX) {
 				base_material_texture_candidates[param].push_back({ info, tex });
+				continue;
 			} else {
 				WARN_PRINT(vformat("Unknown texture parameter: %s", param_name));
 			}
-			continue;
 		}
 
-		// trying to capture "uniform sampler2D emissive_texture : hint_black;"
-
-		// renames from 3.x to 4.x
-		// { "hint_albedo", "source_color" },
-		// { "hint_aniso", "hint_anisotropy" },
-		// { "hint_black", "hint_default_black" },
-		// { "hint_black_albedo", "hint_default_black" },
-		// { "hint_color", "source_color" },
-		// { "hint_white", "hint_default_white" },
-		auto lparam_name = param_name.to_lower();
-
-		if (info.hints.has(Hint::HINT_SOURCE_COLOR)) {
-			base_material_texture_candidates[BaseMaterial3D::TEXTURE_ALBEDO].push_back({ info, tex });
-		} else if (info.hints.has(Hint::HINT_DEFAULT_WHITE)) {
-			add_orm_texture_candidate(info, tex);
-		} else if (info.hints.has(Hint::HINT_NORMAL)) {
-			base_material_texture_candidates[BaseMaterial3D::TEXTURE_NORMAL].push_back({ info, tex });
-		} else if (info.hints.has(Hint::HINT_DEFAULT_BLACK)) {
-			// if (param_name.contains("emissive") || param_name.contains("emission")) {
-			// 	base_material_texture_candidates[BaseMaterial3D::TEXTURE_EMISSION].push_back(Pair<String, Ref<Texture>>(param_name, tex));
-			// } else {
-			// 	default_textures[param_name.trim_prefix("shader_parameter/")] = tex;
-			// }
-			base_material_texture_candidates[BaseMaterial3D::TEXTURE_EMISSION].push_back({ info, tex });
-		} else {
-			unknown_texture_candidates.push_back({ info, tex });
-		}
+		unknown_texture_candidates.push_back({ info, tex });
 	}
-	Vector<TextureCandidate> still_unknown_texture_candidates;
-	for (auto &E : unknown_texture_candidates) {
-		if (!add_texture_candidate(E.first, E.second)) {
-			still_unknown_texture_candidates.push_back(E);
-		};
-	}
-	for (auto &E : still_unknown_texture_candidates) {
-		if (E.first.hints.has(Hint::HINT_ROUGHNESS_NORMAL) && E.first.name.to_lower().contains("normal") && base_material_texture_candidates[BaseMaterial3D::TEXTURE_NORMAL].is_empty()) {
-			base_material_texture_candidates[BaseMaterial3D::TEXTURE_NORMAL].push_back(E);
-		} else {
-			WARN_PRINT(vformat("Unknown texture parameter: %s", E.first.name));
-		}
-	}
+	unknown_texture_candidates = filter_texture_candidates(unknown_texture_candidates, true);
+	unknown_texture_candidates = filter_texture_candidates(unknown_texture_candidates, false);
 	for (int i = 0; i < BaseMaterial3D::TEXTURE_MAX; i++) {
 		auto &candidates = base_material_texture_candidates[BaseMaterial3D::TextureParam(i)];
 		auto existing_tex = base_material->get_texture(BaseMaterial3D::TextureParam(i));
