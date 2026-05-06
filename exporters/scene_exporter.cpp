@@ -3,6 +3,7 @@
 #include "compat/resource_loader_compat.h"
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
+#include "core/object/property_info.h"
 #include "core/os/thread_safe.h"
 #include "core/variant/variant.h"
 #include "core/version_generated.gen.h"
@@ -1552,6 +1553,13 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 	HashMap<Ref<ShaderMaterial>, Ref<BaseMaterial3D>> shader_material_to_base_material_map;
 
 	HashSet<Ref<Mesh>> meshes_in_mesh_instances;
+	auto cache_material = [&shader_material_to_base_material_map](const Ref<ShaderMaterial> &shader_material, const Ref<BaseMaterial3D> &base_material, Pair<bool, bool> used_textures_and_is_instance) {
+		// We don't want to cache it if it has instance uniforms that were actually used,
+		// since they will need to be created per-instance
+		if (base_material.is_valid() && !used_textures_and_is_instance.second) {
+			shader_material_to_base_material_map[shader_material] = base_material;
+		}
+	};
 
 	auto process_mesh_instance = [&](MeshInstance3D *mesh_instance) {
 		auto skin = mesh_instance->get_skin();
@@ -1568,6 +1576,20 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 			}
 		}
 		if (replace_shader_materials && mesh.is_valid()) {
+			if (Ref<ShaderMaterial> shader_mat_override = mesh_instance->get_material_override(); shader_mat_override.is_valid()) {
+				auto [base_material, used_textures_and_is_instance] = ShaderMaterialConverter::convert_shader_material_to_base_material(shader_mat_override, mesh_instance);
+				if (base_material.is_valid()) {
+					mesh_instance->set_material_override(base_material);
+				}
+				cache_material(shader_mat_override, base_material, used_textures_and_is_instance);
+			}
+			if (Ref<ShaderMaterial> shader_mat_overlay = mesh_instance->get_material_overlay(); shader_mat_overlay.is_valid()) {
+				auto [base_material, used_textures_and_is_instance] = ShaderMaterialConverter::convert_shader_material_to_base_material(shader_mat_overlay, mesh_instance);
+				if (base_material.is_valid()) {
+					mesh_instance->set_material_overlay(base_material);
+				}
+				cache_material(shader_mat_overlay, base_material, used_textures_and_is_instance);
+			}
 			for (int surface_i = 0; surface_i < mesh->get_surface_count(); surface_i++) {
 				Ref<ShaderMaterial> shader_material;
 				Ref<Material> active_surface_material = mesh_instance->get_active_material(surface_i);
@@ -1595,11 +1617,7 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 						if (!base_material.is_valid()) {
 							base_material = base_material_pair.first;
 						}
-						// We don't want to cache it if it has instance uniforms that were actually used,
-						// since they will need to be created per-instance
-						if (base_material.is_valid() && !base_material_pair.second.second) {
-							shader_material_to_base_material_map[shader_material] = base_material;
-						}
+						cache_material(shader_material, base_material, base_material_pair.second);
 					}
 					if (base_material.is_valid()) {
 						mesh_instance->set_surface_override_material(surface_i, base_material);
@@ -1723,16 +1741,39 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 		std::function<void(Ref<ArrayMesh>)> replace_with_mi = [&](Ref<ArrayMesh> mesh) {
 			auto mesh_instance = generate_mesh_instance(node, mesh, node);
 			mesh_instance->set_name(node->get_name());
+			mesh_instance->set_scene_file_path(node->get_scene_file_path());
 			process_mesh_instance(mesh_instance);
 			replaced_node_names.push_back(get_node_path(node).operator String() + ":" + node->get_class());
 			auto node3d = Object::cast_to<Node3D>(node);
 			auto transform = node3d ? node3d->get_transform() : Transform3D();
 			auto script = node->get_script();
+			original_node = node;
+			String original_class = node->get_class();
+			List<PropertyInfo> properties;
+			node->get_property_list(&properties);
+			//VisualInstance3D, CollisionObject3D, NavigationRegion3D
+			//E.usage == PROPERTY_USAGE_CATEGORY && E.name == "BaseMaterial3D"
+			const HashSet<StringName> original_classes = { "VisualInstance3D", "CollisionObject3D", "NavigationRegion3D" };
+			bool hit_node_3d_category = false;
+			for (auto &E : properties) {
+				// setting any of the Node or Object properties will screw this up
+				if ((E.usage & PROPERTY_USAGE_CATEGORY) && E.name == "Node3D") {
+					hit_node_3d_category = true;
+				}
+				if (!hit_node_3d_category) {
+					continue;
+				}
+				if ((E.usage & PROPERTY_USAGE_CATEGORY) && !mesh_instance->is_class(E.name)) {
+					break;
+				}
+				if (E.usage & PROPERTY_USAGE_STORAGE) {
+					mesh_instance->set(E.name, node->get(E.name));
+				}
+			}
 			node->replace_by(mesh_instance);
 			mesh_instance->set_transform(transform);
 			mesh_instance->set_script(script);
 
-			original_node = node;
 			node = mesh_instance;
 			if (original_node == root) {
 				root = node;
