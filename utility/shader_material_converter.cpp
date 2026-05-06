@@ -139,6 +139,9 @@ bool set_param_not_in_property_list(Ref<BaseMaterial3D> p_base_material, const S
 	} else if (p_param_name == "metallness" && p_value.get_type() == Variant::FLOAT) {
 		p_base_material->set_metallic(p_value);
 		return true;
+	} else if (p_param_name.contains("vertex_color") && p_param_name.contains("use") && p_value.get_type() == Variant::BOOL) {
+		p_base_material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, p_value);
+		return true;
 	}
 	return false;
 }
@@ -879,6 +882,9 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 			set_texture = true;
 			set_params[candidates[0].first.name] = candidates[0].second;
 		}
+	}
+	if (set_params.has("alpha_scissor_threshold") && base_material->get_transparency() != BaseMaterial3D::TRANSPARENCY_ALPHA_SCISSOR) {
+		base_material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA_SCISSOR);
 	}
 	if (shader_uniforms.has("brightness") && p_shader_material->get_shader_parameter("brightness").get_type() == Variant::FLOAT) {
 		float brightness = p_shader_material->get_shader_parameter("brightness");
