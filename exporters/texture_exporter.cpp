@@ -1230,6 +1230,10 @@ String TextureExporter::get_name() const {
 }
 
 String TextureExporter::get_default_export_extension(const String &res_path) const {
+	String extension = res_path.get_extension();
+	if (res_path.has_extension("dpitex")) {
+		return "svg";
+	}
 	return "png";
 }
 
