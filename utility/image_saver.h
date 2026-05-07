@@ -12,6 +12,12 @@ protected:
 	static Error _save_image(const String &p_path, const Ref<Image> &p_image, bool p_lossy, float p_quality = 1.0);
 
 public:
+	static constexpr bool ver_supports_lossless_webp(int ver_major, int ver_minor) {
+		return ver_major > 3 || (ver_major == 3 && ver_minor >= 4);
+	}
+	static constexpr bool ver_supports_lossless_webp(const Pair<int, int> &p_version) {
+		return ver_supports_lossless_webp(p_version.first, p_version.second);
+	}
 	static Error decompress_image(const Ref<Image> &p_image);
 	static Error save_image(const String &p_path, const Ref<Image> &p_image, bool p_lossy, float p_quality = 1.0, bool p_duplicate = true);
 	static Error save_image_as_tga(const String &p_path, const Ref<Image> &p_image, bool p_duplicate = true);

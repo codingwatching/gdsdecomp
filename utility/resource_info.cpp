@@ -70,6 +70,11 @@ bool ResourceInfo::resource_has_info(Ref<Resource> res) {
 	return ((Ref<ResourceInfo>)res->get_meta(META_COMPAT, Ref<ResourceInfo>())).is_valid();
 }
 
+Pair<int, int> ResourceInfo::get_ver_major_minor(Ref<Resource> res) {
+	Ref<ResourceInfo> info = get_info_from_resource(res);
+	return info.is_valid() ? Pair<int, int>(info->ver_major, info->ver_minor) : Pair<int, int>(0, 0);
+}
+
 int ResourceInfo::get_ver_major() const {
 	return ver_major;
 }

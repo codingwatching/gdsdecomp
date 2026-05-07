@@ -37,7 +37,8 @@ Error FontFileExporter::_export_image(const String &p_dest_path, const String &p
 	ERR_FAIL_COND_V_MSG(err, err, "Failed to load font file " + p_src_path);
 	r_image = fontfile->get_texture_image(0, {}, 0);
 	ERR_FAIL_COND_V_MSG(r_image.is_null(), ERR_FILE_CORRUPT, "Font file " + p_src_path + " is not an image");
-	return ImageSaver::save_image(p_dest_path, r_image, false);
+	r_image = r_image->duplicate();
+	return ImageSaver::save_image(p_dest_path, r_image, !ImageSaver::ver_supports_lossless_webp(ResourceInfo::get_ver_major_minor(fontfile)), 1.0, false);
 }
 
 Error FontFileExporter::_export_bitmap_font(const String &p_dest_path, const String &p_src_path, Ref<FontFile> &r_fontfile) {
@@ -225,7 +226,7 @@ Error FontFileExporter::_export_bitmap_font(const String &p_dest_path, const Str
 			String texture_filename = actual_page_count == 1 ? (base_name + ".png") : (base_name + "_" + String::num_int64(page) + ".png");
 			String texture_path = base_dir.path_join(texture_filename);
 
-			err = ImageSaver::save_image(texture_path, combined, false);
+			err = ImageSaver::save_image(texture_path, combined, false, 1.0, false);
 			ERR_FAIL_COND_V_MSG(err != OK, err, "Failed to save texture " + texture_path);
 
 			texture_filenames.push_back(texture_filename);
@@ -294,7 +295,7 @@ Error FontFileExporter::_export_bitmap_font(const String &p_dest_path, const Str
 				String texture_filename = actual_page_count == 1 ? (base_name + ".png") : (base_name + "_" + String::num_int64(i) + ".png");
 				String texture_path = base_dir.path_join(texture_filename);
 
-				err = ImageSaver::save_image(texture_path, combined, false);
+				err = ImageSaver::save_image(texture_path, combined, false, 1.0, false);
 				ERR_FAIL_COND_V_MSG(err != OK, err, "Failed to save texture " + texture_path);
 
 				texture_filenames.push_back(texture_filename);
@@ -367,7 +368,7 @@ Error FontFileExporter::_export_bitmap_font(const String &p_dest_path, const Str
 				String texture_filename = actual_page_count == 1 ? (base_name + ".png") : (base_name + "_" + String::num_int64(i) + ".png");
 				String texture_path = base_dir.path_join(texture_filename);
 
-				err = ImageSaver::save_image(texture_path, combined, false);
+				err = ImageSaver::save_image(texture_path, combined, false, 1.0, false);
 				ERR_FAIL_COND_V_MSG(err != OK, err, "Failed to save texture " + texture_path);
 
 				texture_filenames.push_back(texture_filename);
@@ -442,7 +443,7 @@ Error FontFileExporter::_export_bitmap_font(const String &p_dest_path, const Str
 				String texture_path = base_dir.path_join(texture_filename);
 
 				// Save texture
-				err = ImageSaver::save_image(texture_path, export_img, false);
+				err = ImageSaver::save_image(texture_path, export_img, false, 1.0, false);
 				ERR_FAIL_COND_V_MSG(err != OK, err, "Failed to save texture " + texture_path);
 
 				texture_filenames.push_back(texture_filename);
