@@ -1,0 +1,17 @@
+[remap]
+
+importer="font_data_bmfont"
+type="FontFile"
+uid="uid://cieseosajcj5x"
+path="res://.godot/imported/test-8bpp-png-binary-encoded-glyph-and-outline.fnt-6e6ff0fe3ba609179e0543203bbd22d4.fontdata"
+
+[deps]
+
+source_file="res://test-8bpp-png-binary-encoded-glyph-and-outline.fnt"
+dest_files=["res://.godot/imported/test-8bpp-png-binary-encoded-glyph-and-outline.fnt-6e6ff0fe3ba609179e0543203bbd22d4.fontdata"]
+
+[params]
+
+fallbacks=[]
+compress=true
+scaling_mode=2

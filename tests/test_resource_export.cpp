@@ -5,10 +5,21 @@
 #include "tests/test_macros.h"
 #include <compat/resource_compat_text.h>
 #include <compat/resource_loader_compat.h>
+#include <exporters/fontfile_exporter.h>
 #include <modules/gdsdecomp/exporters/resource_exporter.h>
 #include <scene/resources/audio_stream_wav.h>
+#include <scene/resources/font.h>
 
 namespace TestResourceExport {
+
+String get_resource_type_dir(const String &version, const String &resource_type) {
+	return get_test_resources_path().path_join(version).path_join(resource_type);
+}
+
+bool check_if_resource_type_dir_exists(const String &version, const String &resource_type) {
+	String resource_type_dir = get_resource_type_dir(version, resource_type);
+	return DirAccess::exists(resource_type_dir);
+}
 
 Error test_export_sample(const String &version) {
 	String test_dir = get_test_resources_path().path_join(version).path_join("sample");
@@ -93,6 +104,89 @@ Error test_export_texture(const String &version) {
 			}
 		}
 	}
+	return OK;
+}
+
+List<String> process_dependencies(const List<String> &_deps, const String &test_dir) {
+	List<String> deps;
+	for (const String &dep : _deps) {
+		auto f = dep.split("::", false);
+		auto d = f[f.size() - 1];
+		deps.push_back(test_dir.path_join(d.strip_edges().trim_prefix("res://")));
+	}
+	return deps;
+}
+
+List<String> get_dependencies(const String &file, const String &test_dir) {
+	List<String> _deps;
+	ResourceCompatLoader::get_dependencies(file, &_deps, false);
+	return process_dependencies(_deps, test_dir);
+}
+
+Error test_export_bmfont(const String &version) {
+	String test_dir = get_test_resources_path().path_join(version).path_join("bmfont");
+	// We have to set the resource dir first, since the fontdata files have dependencies
+	String previous_resource_dir = GDRESettings::get_singleton()->get_project_path();
+	GDRESettings::get_singleton()->set_project_path(test_dir);
+
+	Vector<String> files = gdre::get_recursive_dir_list(test_dir, { "*.fontdata" });
+	String output_dir = get_tmp_path().path_join(version).path_join("bmfont");
+	for (const String &file : files) {
+		auto original_dependencies = get_dependencies(file, test_dir);
+		// original file is in the root; the exports are in the .godot/imported folder
+		String original_file = test_dir.path_join(file.rsplit("-", true, 1)[0].get_file());
+		String output_file = output_dir.path_join(original_file.get_file());
+		Error err = Exporter::export_file(output_file, file);
+		CHECK(err == OK);
+		Ref<FontFile> original_fontfile;
+		original_fontfile.instantiate();
+		err = original_fontfile->_load_bitmap_font(original_file, &original_dependencies);
+		REQUIRE(err == OK);
+		REQUIRE(original_fontfile.is_valid());
+
+		Ref<FontFile> exported_fontfile;
+		exported_fontfile.instantiate();
+		// We use the same dependencies here, because the fontfile exporter doesn't copy the image dependencies (that is taken care of by the texture exporter)
+		err = exported_fontfile->_load_bitmap_font(output_file, &original_dependencies);
+		REQUIRE(err == OK);
+		REQUIRE(exported_fontfile.is_valid());
+		CHECK(original_fontfile->get_data() == exported_fontfile->get_data());
+		CHECK(original_fontfile->get_fallbacks() == exported_fontfile->get_fallbacks());
+		CHECK(original_fontfile->get_fixed_size_scale_mode() == exported_fontfile->get_fixed_size_scale_mode());
+		CHECK(original_fontfile->get_antialiasing() == exported_fontfile->get_antialiasing());
+		CHECK(original_fontfile->get_disable_embedded_bitmaps() == exported_fontfile->get_disable_embedded_bitmaps());
+		CHECK(original_fontfile->get_hinting() == exported_fontfile->get_hinting());
+		// go through all the glyphs and check if the glyphs are the same
+		int cache_count = original_fontfile->get_cache_count();
+		CHECK(cache_count == exported_fontfile->get_cache_count());
+		static const int font_size = 16;
+		static const Vector2i font_size_vec(font_size, 0);
+		for (int i = 0; i < cache_count; i++) {
+			auto glyphs = original_fontfile->get_glyph_list(i, font_size_vec);
+			auto exported_glyphs = exported_fontfile->get_glyph_list(i, font_size_vec);
+			CHECK(glyphs.size() == exported_glyphs.size());
+			for (int j = 0; j < glyphs.size(); j++) {
+				CHECK(glyphs[j] == exported_glyphs[j]);
+				CHECK(original_fontfile->get_glyph_size(i, font_size_vec, glyphs[j]) == exported_fontfile->get_glyph_size(i, font_size_vec, exported_glyphs[j]));
+				CHECK(original_fontfile->get_glyph_offset(i, font_size_vec, glyphs[j]) == exported_fontfile->get_glyph_offset(i, font_size_vec, exported_glyphs[j]));
+				CHECK(original_fontfile->get_glyph_texture_idx(i, font_size_vec, glyphs[j]) == exported_fontfile->get_glyph_texture_idx(i, font_size_vec, exported_glyphs[j]));
+				CHECK(original_fontfile->get_glyph_uv_rect(i, font_size_vec, glyphs[j]) == exported_fontfile->get_glyph_uv_rect(i, font_size_vec, exported_glyphs[j]));
+				CHECK(original_fontfile->get_kerning(i, font_size, Vector2i(glyphs[j], exported_glyphs[j])) == exported_fontfile->get_kerning(i, font_size, Vector2i(exported_glyphs[j], glyphs[j])));
+				CHECK(original_fontfile->get_glyph_advance(i, font_size, glyphs[j]) == exported_fontfile->get_glyph_advance(i, font_size, exported_glyphs[j]));
+				char32_t char_from_glyph = original_fontfile->get_char_from_glyph_index(font_size, glyphs[j]);
+				char32_t exported_char_from_glyph = exported_fontfile->get_char_from_glyph_index(font_size, exported_glyphs[j]);
+				CHECK(char_from_glyph == exported_char_from_glyph);
+				CHECK(original_fontfile->get_glyph_index(font_size, char_from_glyph) == exported_fontfile->get_glyph_index(font_size, exported_char_from_glyph));
+			}
+			auto kerning_pairs = original_fontfile->get_kerning_list(i, font_size);
+			auto exported_kerning_pairs = exported_fontfile->get_kerning_list(i, font_size);
+			CHECK(kerning_pairs.size() == exported_kerning_pairs.size());
+			for (int j = 0; j < kerning_pairs.size(); j++) {
+				CHECK(kerning_pairs[j] == exported_kerning_pairs[j]);
+			}
+		}
+	}
+	GDRESettings::get_singleton()->set_project_path(previous_resource_dir);
 	return OK;
 }
 
