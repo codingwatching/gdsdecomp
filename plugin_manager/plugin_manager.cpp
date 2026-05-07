@@ -273,7 +273,7 @@ struct PrePopTask {
 	}
 };
 
-Error PluginManager::prepop_cache(const Vector<String> &plugin_names) {
+Error PluginManager::prepop_cache(const Vector<String> &plugin_names, const String &output_path) {
 	bool multithread = !GDREConfig::get_singleton()->get_setting("force_single_threaded", false);
 	prepopping = true;
 	String plugin_names_str = String(", ").join(plugin_names);
@@ -320,7 +320,7 @@ Error PluginManager::prepop_cache(const Vector<String> &plugin_names) {
 			}
 		}
 	}
-	save_cache();
+	save_plugin_version_static_cache(output_path);
 	if (err != OK) {
 		return err;
 	}
@@ -420,6 +420,8 @@ Error PluginManager::populate_plugin_version_hashes(PluginVersion &plugin_versio
 		close_and_remove_zip();
 		return err;
 	}
+
+	plugin_version.archive_sha256 = gdre::get_sha256(zip_path);
 
 	auto files = gdre::get_recursive_dir_list(unzupped_path, {}, false, true);
 	for (int64_t i = files.size() - 1; i >= 0; i--) {
@@ -612,7 +614,7 @@ void PluginManager::save_plugin_version_cache() {
 		for (auto &E : plugin_version_cache) {
 			String cache_key = E.key;
 			PluginVersion version = E.value;
-			if (version.is_valid() && (is_prepopping() || !version.is_static_cached)) {
+			if (version.is_valid() && !version.is_static_cached) {
 				Dictionary version_json = version.to_json();
 				String source = version.release_info.plugin_source;
 				String primary_id = itos(version.release_info.primary_id);
@@ -648,12 +650,43 @@ void PluginManager::save_plugin_version_cache() {
 	data.clear();
 }
 
+Error PluginManager::save_plugin_version_static_cache(const String &output_path) {
+	Vector<Pair<String, Dictionary>> vec;
+	Dictionary data;
+	{
+		MutexLock lock(plugin_version_cache_mutex);
+		for (auto &E : plugin_version_cache) {
+			vec.push_back(Pair<String, Dictionary>(E.key, E.value.to_json()));
+		}
+	}
+	struct _VecSort {
+		bool operator()(const Pair<String, Dictionary> &a, const Pair<String, Dictionary> &b) const {
+			return a.first < b.first;
+		}
+	};
+	vec.sort_custom<_VecSort>();
+	for (auto &E : vec) {
+		data[E.first] = E.second;
+	}
+	gdre::ensure_dir(output_path.get_base_dir());
+	auto file = FileAccess::open(output_path, FileAccess::WRITE);
+	ERR_FAIL_COND_V_MSG(file.is_null(), ERR_FILE_CANT_WRITE, "Failed to open plugin version static cache file for writing: " + output_path);
+	// No indenting to keep the file size small
+	String json = JSON::stringify(data, "", false, true);
+	if (!file->store_string(json)) {
+		return ERR_FILE_CANT_WRITE;
+	}
+	file->flush();
+	file->close();
+	return OK;
+}
+
 void PluginManager::_bind_methods() {
 	// ClassDB::bind_method(D_METHOD("get_plugin_version", "plugin_name", "version"), &PluginManager::get_plugin_version);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_plugin_info", "plugin_name", "hashes"), &PluginManager::get_plugin_info);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("load_cache"), &PluginManager::load_cache);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("save_cache"), &PluginManager::save_cache);
-	ClassDB::bind_static_method(get_class_static(), D_METHOD("prepop_cache", "plugin_names"), &PluginManager::prepop_cache);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("prepop_cache", "plugin_names", "output_path"), &PluginManager::prepop_cache);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("register_source", "name", "source"), &PluginManager::register_source);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("unregister_source", "name"), &PluginManager::unregister_source);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("print_plugin_cache"), &PluginManager::print_plugin_cache);

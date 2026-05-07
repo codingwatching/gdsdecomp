@@ -27,6 +27,7 @@ private:
 	static void load_plugin_version_cache_file(const String &cache_file, bool prepop = false);
 	static void load_plugin_version_cache();
 	static void save_plugin_version_cache();
+	static Error save_plugin_version_static_cache(const String &output_path);
 	static Error populate_plugin_version_hashes(PluginVersion &plugin_version);
 
 	static PluginVersion _get_plugin_version_for_current_release_info(const ReleaseInfo &release_info, Error &r_error);
@@ -41,7 +42,7 @@ public:
 	static Dictionary get_plugin_info(const String &plugin_name, const Vector<String> &hashes);
 	static void load_cache();
 	static void save_cache();
-	static Error prepop_cache(const Vector<String> &plugin_names);
+	static Error prepop_cache(const Vector<String> &plugin_names, const String &output_path);
 	static bool is_prepopping();
 	// PluginVersion cache management
 	static PluginVersion get_cached_plugin_version(const String &cache_key);

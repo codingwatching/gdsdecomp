@@ -3,7 +3,7 @@
 #include "core/variant/variant.h"
 #include "utility/godotver.h"
 
-static constexpr int CACHE_VERSION = 5;
+static constexpr int CACHE_VERSION = 6;
 
 struct PluginBin {
 	String name;
@@ -45,6 +45,7 @@ struct ReleaseInfo {
 	bool operator!=(const ReleaseInfo &other) const;
 
 	String get_cache_key() const;
+	String get_download_file() const;
 };
 
 struct PluginVersion {
@@ -55,6 +56,7 @@ struct PluginVersion {
 	String max_godot_version;
 	String base_folder;
 	int64_t size = 0;
+	String archive_sha256;
 	Vector<GDExtInfo> gdexts;
 	// non-serialized field
 	bool is_static_cached = false;

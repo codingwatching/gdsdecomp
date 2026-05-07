@@ -1,4 +1,5 @@
 #include "plugin_info.h"
+#include "utility/common.h"
 
 Dictionary PluginBin::to_json() const {
 	Dictionary d;
@@ -100,6 +101,10 @@ String ReleaseInfo::get_cache_key() const {
 	return plugin_source + "-" + itos(primary_id) + "-" + itos(secondary_id);
 }
 
+String ReleaseInfo::get_download_file() const {
+	return gdre::remove_url_query_params(download_url).get_file();
+}
+
 PluginVersion PluginVersion::invalid() {
 	PluginVersion version;
 	version.cache_version = -1;
@@ -148,6 +153,7 @@ Dictionary PluginVersion::to_json() const {
 	d["max_godot_version"] = max_godot_version;
 	d["base_folder"] = base_folder;
 	d["size"] = size;
+	d["archive_sha256"] = archive_sha256;
 	Array gdexts_arr;
 	for (const auto &gdext : gdexts) {
 		gdexts_arr.push_back(gdext.to_json());
@@ -165,6 +171,7 @@ PluginVersion PluginVersion::from_json(Dictionary d) {
 	version.max_godot_version = d.get("max_godot_version", "");
 	version.base_folder = d.get("base_folder", "");
 	version.size = d.get("size", 0);
+	version.archive_sha256 = d.get("archive_sha256", "");
 	Array gdexts_arr = d.get("gdexts", {});
 	for (int i = 0; i < gdexts_arr.size(); i++) {
 		version.gdexts.push_back(GDExtInfo::from_json(gdexts_arr[i]));
