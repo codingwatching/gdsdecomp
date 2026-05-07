@@ -437,6 +437,10 @@ void TaskManager::cancel_main_thread_dispatch_queue() {
 	}
 }
 
+TaskManager::DownloadTaskID TaskManager::add_fake_download_task(const String &p_download_url, const String &p_save_path) {
+	return download_thread.add_fake_download_task(p_download_url, p_save_path);
+}
+
 TaskManager::DownloadTaskID TaskManager::add_download_task(const String &p_download_url, const String &p_save_path, bool silent) {
 	return download_thread.add_download_task(p_download_url, p_save_path, silent);
 }
@@ -534,8 +538,8 @@ void TaskManager::DownloadTaskData::start_internal() {
 	}
 }
 
-TaskManager::DownloadTaskData::DownloadTaskData(const String &p_download_url, const String &p_save_path, bool p_silent) :
-		download_url(p_download_url), save_path(p_save_path), silent(p_silent) {
+TaskManager::DownloadTaskData::DownloadTaskData(const String &p_download_url, const String &p_save_path, bool p_silent, bool p_fake) :
+		download_url(p_download_url), save_path(p_save_path), silent(p_silent), fake(p_fake) {
 	not_in_main_queue = true;
 	auto_start = false;
 }
@@ -583,6 +587,14 @@ void TaskManager::DownloadQueueThread::main_loop() {
 	}
 }
 
+TaskManager::DownloadTaskID TaskManager::DownloadQueueThread::add_fake_download_task(const String &p_download_url, const String &p_save_path) {
+	MutexLock lock(write_mutex);
+	DownloadTaskID task_id = ++current_task_id;
+	tasks.try_emplace(task_id, std::make_shared<DownloadTaskData>(p_download_url, p_save_path, true, true));
+	// Don't add it to the queue; it will never be actually run
+	return task_id;
+}
+
 TaskManager::DownloadTaskID TaskManager::DownloadQueueThread::add_download_task(const String &p_download_url, const String &p_save_path, bool silent) {
 	MutexLock lock(write_mutex);
 
@@ -597,15 +609,24 @@ Error TaskManager::DownloadQueueThread::wait_for_task_completion(DownloadTaskID 
 	std::shared_ptr<DownloadTaskData> task;
 	bool already_waiting = false;
 	bool is_main_thread = Thread::is_main_thread();
+	bool is_fake = false;
 	bool found = tasks.modify_if(p_task_id, [&](auto &v) {
 		task = v.second;
 		already_waiting = task->is_waiting;
+		is_fake = task->fake;
 		task->is_waiting = true; // is_main_thread;
 	});
 	if (!task || !found) {
+		waiting = false;
 		return ERR_INVALID_PARAMETER;
 	} else if (already_waiting) {
+		waiting = false;
 		return ERR_ALREADY_IN_USE;
+	}
+	if (is_fake) {
+		tasks.erase(p_task_id);
+		waiting = false;
+		return OK;
 	}
 	Error err = OK;
 	while (!task->is_started()) {
@@ -626,6 +647,7 @@ Error TaskManager::DownloadQueueThread::wait_for_task_completion(DownloadTaskID 
 		}
 	}
 	if (err) {
+		waiting = false;
 		return err;
 	}
 	if (task->wait_for_completion()) {

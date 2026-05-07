@@ -14,6 +14,7 @@
 #include "exporters/scene_exporter.h"
 #include "exporters/translation_exporter.h"
 #include "gdre_logger.h"
+#include "plugin_manager/plugin_manager.h"
 #include "utility/common.h"
 #include "utility/gdre_config.h"
 #include "utility/gdre_settings.h"
@@ -718,7 +719,9 @@ Error ImportExporter::unzip_and_copy_addon(const Ref<ImportInfoGDExt> &iinfo, co
 		ERR_CONTINUE(DirAccess::copy_absolute(tmp_dir.path_join(file), output.path_join(file)) != OK);
 	}
 	gdre::rimraf(parent_tmp_dir);
-	da->remove(zip_path);
+	if (!zip_path.begins_with(PluginManager::get_plugin_download_cache_path())) {
+		da->remove(zip_path);
+	}
 	return OK;
 }
 

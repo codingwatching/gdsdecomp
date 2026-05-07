@@ -467,7 +467,8 @@ public:
 		virtual void wait_for_task_completion_internal() override;
 
 	public:
-		DownloadTaskData(const String &p_download_url, const String &p_save_path, bool p_silent = false);
+		bool fake = false;
+		DownloadTaskData(const String &p_download_url, const String &p_save_path, bool p_silent = false, bool p_fake = false);
 
 		virtual void run_on_current_thread() override;
 		virtual int get_current_task_step_value() override;
@@ -499,6 +500,7 @@ public:
 		static void worker_thread_func(void *p_userdata);
 
 	public:
+		DownloadTaskID add_fake_download_task(const String &p_download_url, const String &p_save_path);
 		DownloadTaskID add_download_task(const String &p_download_url, const String &p_save_path, bool silent = false);
 		Error wait_for_task_completion(DownloadTaskID p_task_id);
 		DownloadQueueThread();
@@ -677,6 +679,7 @@ public:
 		}
 	}
 
+	DownloadTaskID add_fake_download_task(const String &p_download_url, const String &p_save_path);
 	DownloadTaskID add_download_task(const String &p_download_url, const String &p_save_path, bool silent = false);
 	Error wait_for_download_task_completion(DownloadTaskID p_task_id);
 	Error wait_for_task_completion(TaskManagerID p_task_id, uint64_t timeout_s_no_progress = 0);
