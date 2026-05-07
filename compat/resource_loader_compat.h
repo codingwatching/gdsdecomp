@@ -21,6 +21,7 @@ class ResourceCompatLoader {
 	static int converter_count;
 	static bool doing_gltf_load;
 	static bool globally_available;
+	static bool initialized;
 
 protected:
 	static Ref<Resource> _load_for_text_conversion(const String &p_path, const String &original_path = "", Error *r_error = nullptr);
@@ -61,6 +62,14 @@ public:
 
 	static void get_base_extensions_for_type(const String &p_type, List<String> *p_extensions);
 	static void get_base_extensions(List<String> *p_extensions, int ver_major = 0);
+	static void get_type_for_extension(const String &p_extension, List<String> *p_types, int ver_major = 0);
+
+	static void _init();
+
+#ifdef TESTS_ENABLED
+	// NOTE: ONLY tests should call this
+	static void _deinit();
+#endif
 
 	// only supports resource text and binary formats, not texture formats
 	static Error save_custom(const Ref<Resource> &p_resource, const String &p_path, int ver_major, int ver_minor);

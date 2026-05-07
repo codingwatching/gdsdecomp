@@ -6,6 +6,7 @@
 #include "core/error/error_macros.h"
 #include "core/io/resource_loader.h"
 #include "core/object/class_db.h"
+#include "core/version_generated.gen.h"
 #include "utility/common.h"
 #include "utility/file_access_buffer.h"
 #include "utility/gdre_settings.h"
@@ -17,6 +18,7 @@ int ResourceCompatLoader::loader_count = 0;
 int ResourceCompatLoader::converter_count = 0;
 bool ResourceCompatLoader::doing_gltf_load = false;
 bool ResourceCompatLoader::globally_available = false;
+bool ResourceCompatLoader::initialized = false;
 
 #define FAIL_LOADER_NOT_FOUND(loader)                                                                                                                        \
 	if (loader.is_null()) {                                                                                                                                  \
@@ -83,28 +85,33 @@ static Vector<Pair<String, Vector<String>>> core_recognized_extensions_v2 = {
 	{ "res", { "Resource", "Curve2D", "RectangleShape2D", "RayShape", "AudioStreamMPC", "AudioStream", "World2D", "FixedMaterial", "GDScript", "Animation", "MeshLibrary", "AudioStreamSpeex", "VideoStream", "VideoStreamTheora", "AtlasTexture", "Shape2D", "World", "RoomBounds", "StyleBoxImageMask", "StyleBoxEmpty", "EventStreamChibi", "Mesh", "EventStream", "ConcavePolygonShape2D", "LineShape2D", "ColorRamp", "BakedLight", "Translation", "Shape", "CapsuleShape2D", "ImageTexture", "BitmapFont", "Script", "Environment", "DynamicFontData", "Object", "Font", "ConcavePolygonShape", "MultiMesh", "RenderTargetTexture", "SegmentShape2D", "BoxShape", "CanvasItemMaterial", "DynamicFont", "LargeTexture", "ShortCut", "Curve3D", "BitMap", "CubeMap", "NavigationMesh", "CapsuleShape", "StyleBoxFlat", "PlaneShape", "ConvexPolygonShape2D", "Sample", "CanvasItemShader", "PHashTranslation", "AudioStreamOpus", "PackedDataContainer", "MaterialShader", "ShaderMaterial", "Resource", "ShaderGraph", "StyleBoxTexture", "ConvexPolygonShape", "PolygonPathFinder", "Reference", "OccluderPolygon2D", "Material", "AudioStreamOGGVorbis", "Texture", "RayShape2D", "Theme", "CanvasItemShaderGraph", "SpriteFrames", "PackedScene", "SampleLibrary", "Shader", "EditorSettings", "NavigationPolygon", "SphereShape", "MaterialShaderGraph", "CircleShape2D", "StyleBox", "TileSet" } },
 };
 
-HashMap<String, HashSet<String>> _init_ext_to_types() {
+static inline HashMap<String, HashSet<String>> _init_v3_ext_to_types() {
 	HashMap<String, HashSet<String>> map;
 	for (const auto &pair : core_recognized_extensions_v3) {
 		if (!map.has(pair.first)) {
 			map[pair.first] = HashSet<String>();
 		}
 		for (const String &type : pair.second) {
-			map[pair.first].insert(type);
-		}
-	}
-	for (const auto &pair : core_recognized_extensions_v2) {
-		if (!map.has(pair.first)) {
-			map[pair.first] = HashSet<String>();
-		}
-		for (const String &type : pair.second) {
-			map[pair.first].insert(type);
+			map[type].insert(pair.first);
 		}
 	}
 	return map;
 }
 
-HashMap<String, HashSet<String>> _init_type_to_exts() {
+static inline HashMap<String, HashSet<String>> _init_v2_ext_to_types() {
+	HashMap<String, HashSet<String>> map;
+	for (const auto &pair : core_recognized_extensions_v2) {
+		if (!map.has(pair.first)) {
+			map[pair.first] = HashSet<String>();
+		}
+		for (const String &type : pair.second) {
+			map[type].insert(pair.first);
+		}
+	}
+	return map;
+}
+
+static inline HashMap<String, HashSet<String>> _init_type_to_exts() {
 	HashMap<String, HashSet<String>> map;
 	for (const auto &pair : core_recognized_extensions_v3) {
 		if (!map.has(pair.first)) {
@@ -125,8 +132,30 @@ HashMap<String, HashSet<String>> _init_type_to_exts() {
 	return map;
 }
 
-static HashMap<String, HashSet<String>> ext_to_types = _init_ext_to_types();
+static HashMap<String, HashSet<String>> _init_v4_ext_to_types() {
+	LocalVector<StringName> types;
+	ClassDB::get_class_list(types);
+	HashMap<String, HashSet<String>> map;
+	for (const StringName &type : types) {
+		List<String> extensions;
+		ClassDB::get_extensions_for_type(type, &extensions);
+		for (const String &extension : extensions) {
+			if (!map.has(extension)) {
+				map[extension] = HashSet<String>();
+			}
+			map[extension].insert(type);
+		}
+	}
+	return map;
+}
+
 static HashMap<String, HashSet<String>> type_to_exts = _init_type_to_exts();
+static HashMap<String, HashSet<String>> ext_to_v2_types = _init_v2_ext_to_types();
+static HashMap<String, HashSet<String>> ext_to_v3_types = _init_v3_ext_to_types();
+
+// NOTE: this has to be initialized at the END of the engine's initialization, so we can't do it here statically;
+// _init() has to be called after all the modules have been initialized.
+static HashMap<String, HashSet<String>> ext_to_v4_types;
 //	static void get_base_extensions(List<String> *p_extensions);
 
 void ResourceCompatLoader::get_base_extensions(List<String> *p_extensions, int ver_major) {
@@ -156,7 +185,13 @@ void ResourceCompatLoader::get_base_extensions(List<String> *p_extensions, int v
 	for (const String &ext : *p_extensions) {
 		unique_extensions.insert(ext);
 	}
-	for (const auto &pair : ext_to_types) {
+	for (const auto &pair : ext_to_v3_types) {
+		if (!unique_extensions.has(pair.key)) {
+			unique_extensions.insert(pair.key);
+			p_extensions->push_back(pair.key);
+		}
+	}
+	for (const auto &pair : ext_to_v2_types) {
 		if (!unique_extensions.has(pair.key)) {
 			unique_extensions.insert(pair.key);
 			p_extensions->push_back(pair.key);
@@ -180,6 +215,28 @@ void ResourceCompatLoader::get_base_extensions_for_type(const String &p_type, Li
 	}
 	for (const String &ext : unique_extensions) {
 		p_extensions->push_back(ext);
+	}
+}
+
+static inline void add_types_from_ext_to_types(const HashMap<String, HashSet<String>> &ext_to_types, const String &p_extension, HashSet<String> &unique_types) {
+	if (ext_to_types.has(p_extension)) {
+		const HashSet<String> &types = ext_to_types.get(p_extension);
+		for (const String &type : types) {
+			unique_types.insert(type);
+		}
+	}
+}
+
+void ResourceCompatLoader::get_type_for_extension(const String &p_extension, List<String> *p_types, int ver_major) {
+	HashSet<String> unique_types;
+	if (ver_major <= 2) {
+		add_types_from_ext_to_types(ext_to_v2_types, p_extension, unique_types);
+	}
+	if (ver_major == 3 || ver_major <= 0) {
+		add_types_from_ext_to_types(ext_to_v3_types, p_extension, unique_types);
+	}
+	if (ver_major == GODOT_VERSION_MAJOR || ver_major <= 0) {
+		add_types_from_ext_to_types(ext_to_v4_types, p_extension, unique_types);
 	}
 }
 
@@ -665,6 +722,26 @@ String ResourceCompatConverter::get_resource_name(const Ref<MissingResource> &re
 	}
 	return name;
 }
+
+void ResourceCompatLoader::_init() {
+	if (ResourceCompatLoader::initialized) {
+		return;
+	}
+	ext_to_v4_types = _init_v4_ext_to_types();
+	initialized = true;
+	return;
+}
+
+#ifdef TESTS_ENABLED
+void ResourceCompatLoader::_deinit() {
+	if (!ResourceCompatLoader::initialized) {
+		return;
+	}
+	ext_to_v4_types.clear();
+	initialized = false;
+}
+#endif
+
 namespace CoreBind {
 
 Vector<String> ResourceCompatLoader::_get_dependencies(const String &p_path, bool p_add_types) {

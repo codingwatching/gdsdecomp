@@ -28,6 +28,8 @@
 #include "platform/ios/os_ios.h"
 #define PLATFORM_OS OS_IOS
 #endif
+
+#include "compat/resource_loader_compat.h"
 class GDRETestOS : public PLATFORM_OS {
 	static_assert(std::is_base_of<OS, PLATFORM_OS>::value, "T must derive from OS");
 
@@ -58,6 +60,7 @@ public:
 	}
 
 	void test_case_start(const doctest::TestCaseData &p_in) override {
+		ResourceCompatLoader::_init();
 		String name = String(p_in.m_name);
 		String suite_name = String(p_in.m_test_suite);
 
@@ -102,6 +105,7 @@ public:
 			AudioServer::get_singleton()->finish();
 			memdelete(AudioServer::get_singleton());
 		}
+		ResourceCompatLoader::_deinit();
 	}
 
 	void test_run_start() override {

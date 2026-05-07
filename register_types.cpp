@@ -82,11 +82,16 @@
 #include "utility/task_manager.h"
 
 #ifdef TOOLS_ENABLED
+void second_gdsdecomp_init_callback() {
+	ResourceCompatLoader::_init();
+}
 void gdsdecomp_init_callback() {
 	EditorNode *editor = EditorNode::get_singleton();
 	editor->add_child(memnew(GodotREEditor(editor)));
 	editor->add_child(memnew(GDREAudioStreamPreviewGeneratorNode));
 	editor->add_child(memnew(GDREProgressDialog));
+	// This ensures that the second callback is called after all the modules have been initialized, so we can initialize the resource loader compat
+	editor->add_init_callback(&second_gdsdecomp_init_callback);
 }
 #endif
 
