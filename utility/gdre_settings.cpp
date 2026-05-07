@@ -830,6 +830,7 @@ Error GDRESettings::_project_post_load(bool initial_load, const String &csharp_a
 	}
 	_ensure_script_cache_complete();
 
+	ResourceCompatLoader::make_globally_available();
 	_set_shader_globals();
 
 	// Log the project info for bug reporting
@@ -1216,6 +1217,7 @@ Error GDRESettings::unload_project(bool p_no_reset_ephemeral) {
 		custom_decryptor = nullptr;
 	}
 	v2_remap_setting = "remap/all";
+	ResourceCompatLoader::unmake_globally_available();
 	if (!is_pack_loaded()) {
 		return ERR_DOES_NOT_EXIST;
 	}

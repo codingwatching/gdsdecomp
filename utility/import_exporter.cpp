@@ -986,8 +986,11 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 		return OK;
 	}
 
-	ResourceCompatLoader::make_globally_available();
-	ResourceCompatLoader::set_default_gltf_load(false);
+	bool resource_compat_loader_was_available = ResourceCompatLoader::is_globally_available();
+	if (!resource_compat_loader_was_available) {
+		WARN_PRINT("WARNING: ResourceCompatLoader is not globally available! Making it available...");
+		ResourceCompatLoader::make_globally_available();
+	}
 
 	bool partial_export = (_files_to_export.size() > 0 && _files_to_export.size() != get_settings()->get_file_info_list({}).size());
 	size_t export_files_count = partial_export ? _files_to_export.size() : _files.size();
@@ -1024,8 +1027,9 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 		if (cancelled) {
 			print_line("Export cancelled!");
 		}
-		ResourceCompatLoader::unmake_globally_available();
-		ResourceCompatLoader::set_default_gltf_load(false);
+		if (!resource_compat_loader_was_available) {
+			ResourceCompatLoader::unmake_globally_available();
+		}
 		check_process_done(cancelled);
 	};
 
