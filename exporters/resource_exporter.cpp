@@ -185,7 +185,11 @@ Ref<ExportReport> Exporter::export_resource(const String &output_dir, Ref<Import
 		report->set_error(ERR_UNAVAILABLE);
 		return report;
 	}
-	return exporter->export_resource(output_dir, import_infos);
+	auto report = exporter->export_resource(output_dir, import_infos);
+	if (report.is_valid() && report->get_exporter().is_empty()) {
+		report->set_exporter(exporter->get_name());
+	}
+	return report;
 }
 
 Error Exporter::export_file(const String &out_path, const String &res_path) {

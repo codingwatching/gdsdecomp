@@ -6,6 +6,8 @@
 #include "compat/fake_script.h"
 #include "core/io/image_loader.h"
 #include "core/object/class_db.h"
+#include "exporters/dialogue_exporter.h"
+#include "exporters/func_godot_exporter.h"
 #include "gui/gdre_audio_stream_preview.h"
 #include "gui/gdre_progress.h"
 #include "gui/gdre_standalone.h"
@@ -122,6 +124,9 @@ static Ref<VisualShaderConverterCompat> visual_shader_converter = nullptr;
 static Ref<AutoConvertedExporter> auto_converted_exporter = nullptr;
 static Ref<CSharpExporter> csharp_exporter = nullptr;
 static Ref<DialogueExporter> dialogue_exporter = nullptr;
+static Ref<FuncGodotLmpExporter> func_godot_lmp_exporter = nullptr;
+static Ref<FuncGodotMapExporter> func_godot_map_exporter = nullptr;
+static Ref<FuncGodotWADExporter> func_godot_wad_exporter = nullptr;
 static Ref<FontFileExporter> fontfile_exporter = nullptr;
 static Ref<GDExtensionExporter> gdextension_exporter = nullptr;
 static Ref<GDScriptExporter> gdscript_exporter = nullptr;
@@ -209,6 +214,9 @@ void init_exporters() {
 	scene_exporter = memnew(SceneExporter);
 	auto_converted_exporter = memnew(AutoConvertedExporter);
 	dialogue_exporter = memnew(DialogueExporter);
+	func_godot_lmp_exporter = memnew(FuncGodotLmpExporter);
+	func_godot_map_exporter = memnew(FuncGodotMapExporter);
+	func_godot_wad_exporter = memnew(FuncGodotWADExporter);
 	gdscript_exporter = memnew(GDScriptExporter);
 	csharp_exporter = memnew(CSharpExporter);
 	gdextension_exporter = memnew(GDExtensionExporter);
@@ -222,7 +230,9 @@ void init_exporters() {
 	Exporter::add_exporter(texture_exporter);
 	Exporter::add_exporter(obj_exporter);
 	Exporter::add_exporter(dialogue_exporter);
-
+	Exporter::add_exporter(func_godot_lmp_exporter);
+	Exporter::add_exporter(func_godot_map_exporter);
+	Exporter::add_exporter(func_godot_wad_exporter);
 	Exporter::add_exporter(translation_exporter);
 	Exporter::add_exporter(scene_exporter);
 	Exporter::add_exporter(gdscript_exporter);
@@ -310,6 +320,15 @@ void deinit_exporters() {
 	if (dialogue_exporter.is_valid()) {
 		Exporter::remove_exporter(dialogue_exporter);
 	}
+	if (func_godot_lmp_exporter.is_valid()) {
+		Exporter::remove_exporter(func_godot_lmp_exporter);
+	}
+	if (func_godot_map_exporter.is_valid()) {
+		Exporter::remove_exporter(func_godot_map_exporter);
+	}
+	if (func_godot_wad_exporter.is_valid()) {
+		Exporter::remove_exporter(func_godot_wad_exporter);
+	}
 	auto_converted_exporter = nullptr;
 	fontfile_exporter = nullptr;
 	gdextension_exporter = nullptr;
@@ -325,6 +344,9 @@ void deinit_exporters() {
 	csharp_exporter = nullptr;
 	spine_atlas_exporter = nullptr;
 	spine_skeleton_exporter = nullptr;
+	func_godot_lmp_exporter = nullptr;
+	func_godot_map_exporter = nullptr;
+	func_godot_wad_exporter = nullptr;
 }
 
 void deinit_loaders() {
