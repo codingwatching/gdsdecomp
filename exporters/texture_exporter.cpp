@@ -986,19 +986,26 @@ Error TextureExporter::_convert_layered_2d(const String &p_path, const String &d
 	return OK;
 }
 
-Error TextureExporter::_convert_svg(const String &p_path, const String &dest_path, Ref<ExportReport> report) {
+Error TextureExporter::_convert_svg(const String &p_path, const String &dest_path, bool lossy, Ref<ExportReport> report) {
 	Error err;
 	Ref<DPITexture> tex = ResourceCompatLoader::non_global_load(p_path, "", &err);
 	if (err == ERR_UNAVAILABLE) {
 		print_line("Did not convert deprecated SVG resource " + p_path);
 		return err;
 	}
-	String source = tex->get_source();
-	ERR_FAIL_COND_V_MSG(source.is_empty(), ERR_FILE_CORRUPT, "SVG source is empty: " + p_path);
-	auto fa = FileAccess::open(dest_path, FileAccess::WRITE);
-	ERR_FAIL_COND_V_MSG(fa.is_null(), ERR_FILE_CANT_WRITE, "Cannot write to file: " + dest_path);
-	fa->store_string(source);
-	fa->close();
+	if (dest_path.has_extension("svg") || !ImageSaver::is_supported_extension(dest_path.get_extension())) {
+		String source = tex->get_source();
+		ERR_FAIL_COND_V_MSG(source.is_empty(), ERR_FILE_CORRUPT, "SVG source is empty: " + p_path);
+		auto fa = FileAccess::open(dest_path, FileAccess::WRITE);
+		ERR_FAIL_COND_V_MSG(fa.is_null(), ERR_FILE_CANT_WRITE, "Cannot write to file: " + dest_path);
+		fa->store_string(source);
+		fa->close();
+	} else {
+		Ref<Image> img = tex->get_image();
+		err = ImageSaver::save_image(dest_path, img, lossy, 1.0, false);
+		ERR_FAIL_COND_V_MSG(err != OK, err, "Failed to save image: " + dest_path);
+	}
+
 	if (report.is_valid() && report->get_import_info().is_valid() && report->get_import_info()->get_ver_major() >= 4) {
 		Dictionary params;
 		Ref<ResourceInfo> res_info = ResourceInfo::get_info_from_resource(tex);
@@ -1148,7 +1155,7 @@ Ref<ExportReport> TextureExporter::export_resource(const String &output_dir, Ref
 	} else if (importer == "texture" || importer == "texture_2d") {
 		err = _convert_tex(path, dest_path, lossy, img_format, report);
 	} else if (importer == "svg") {
-		err = _convert_svg(path, dest_path, report);
+		err = _convert_svg(path, dest_path, lossy, report);
 	} else {
 		report->set_error(ERR_UNAVAILABLE);
 		report->set_message("Unsupported texture importer: " + importer);
