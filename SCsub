@@ -113,6 +113,7 @@ common_sources = [
     "crypto/*.cpp",
     "exporters/*.cpp",
     "gui/*.cpp",
+    "main/*.cpp",
     "plugin_manager/*.cpp",
     "utility/*.cpp",
     "external/tga/*.cpp",

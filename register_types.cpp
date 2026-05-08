@@ -64,6 +64,7 @@
 #include "gui/gui_icons.h"
 #include "gui/mesh_previewer.h"
 #include "gui/scene_previewer.h"
+#include "main/gdre_main_loop.h"
 #include "plugin_manager/asset_library_source.h"
 #include "plugin_manager/codeberg_source.h"
 #include "plugin_manager/github_source.h"
@@ -82,19 +83,16 @@
 #include "utility/task_manager.h"
 
 #ifdef TOOLS_ENABLED
-void second_gdsdecomp_init_callback() {
-	ResourceCompatLoader::_init();
-}
 void gdsdecomp_init_callback() {
 	EditorNode *editor = EditorNode::get_singleton();
 	editor->add_child(memnew(GodotREEditor(editor)));
 	editor->add_child(memnew(GDREAudioStreamPreviewGeneratorNode));
 	editor->add_child(memnew(GDREProgressDialog));
-	// This ensures that the second callback is called after all the modules have been initialized, so we can initialize the resource loader compat
-	editor->add_init_callback(&second_gdsdecomp_init_callback);
+	GDREMainLoopNode::setup();
 }
 #endif
 
+static GDREMainLoop *gdre_main_loop = nullptr;
 static GDRESettings *gdre_singleton = nullptr;
 static GDREAudioStreamPreviewGenerator *audio_stream_preview_generator = nullptr;
 static TaskManager *task_manager = nullptr;
@@ -561,8 +559,11 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<ImageSaver>();
 
 	ClassDB::register_class<ConfigFileCompat>();
+	ClassDB::register_class<GDRESceneTree>();
 
 	gui_icons = memnew(GDREGuiIcons);
+	gdre_main_loop = memnew(GDREMainLoop);
+	Engine::get_singleton()->add_singleton(Engine::Singleton("GDREMainLoop", GDREMainLoop::get_singleton()));
 
 	init_plugin_manager_sources();
 	gdre_singleton = memnew(GDRESettings);
@@ -612,6 +613,10 @@ void uninitialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	}
 	deinit_plugin_manager_sources();
 	free_ver_regex();
+	if (gdre_main_loop) {
+		memdelete(gdre_main_loop);
+		gdre_main_loop = nullptr;
+	}
 	if (gui_icons) {
 		memdelete(gui_icons);
 		gui_icons = nullptr;

@@ -1,6 +1,5 @@
 #include "gdre_standalone.h"
 
-#include "compat/resource_loader_compat.h"
 #include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
 #include "gdre_audio_stream_preview.h"
@@ -110,9 +109,6 @@ void GodotREEditorStandalone::progress_end_task(const String &p_task) {
 
 void GodotREEditorStandalone::_notification(int p_notification) {
 	if (p_notification == NOTIFICATION_ENTER_TREE) {
-		// TODO: find a better place to put this; we can't do it during register_types because all the modules haven't been initialized yet, so we don't have all the types
-		// Would probably be better to make our own SceneTree and call it during `SceneTree::initialize()`
-		ResourceCompatLoader::_init();
 		auto parent_window = get_parent_window();
 		if (parent_window) {
 			// progress_dialog->reparent(parent_window);
