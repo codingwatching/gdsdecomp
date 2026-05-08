@@ -9,6 +9,12 @@
 class GDREMainLoop : public Object {
 	GDCLASS(GDREMainLoop, Object);
 	static GDREMainLoop *singleton;
+
+	double last_physics_process_time;
+	double last_process_time;
+
+	bool _wait_until_next_frame(int64_t p_time_usec, bool called_from_process);
+
 public:
 	static GDREMainLoop *get_singleton();
 	void initialize();
@@ -17,6 +23,8 @@ public:
 	void iteration_end();
 	bool process(double p_time);
 	void finalize();
+
+	bool wait_until_next_frame(int64_t p_time_usec);
 
 	GDREMainLoop();
 	~GDREMainLoop();

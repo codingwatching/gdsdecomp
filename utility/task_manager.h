@@ -24,6 +24,8 @@ struct TaskRunnerStruct {
 	virtual bool auto_close_progress_bar() { return false; }
 };
 
+class GDREMainLoop;
+
 class TaskManager : public Object {
 	GDCLASS(TaskManager, Object);
 
@@ -518,6 +520,7 @@ protected:
 	LocalVector<Thread::ID> thread_index_to_thread_id;
 	LocalVector<TaskManagerID> thread_index_to_task_ids;
 
+	friend class GDREMainLoop;
 	bool updating_bg = false;
 
 	void _set_thread_name_task(uint32_t i, void *p_userdata);

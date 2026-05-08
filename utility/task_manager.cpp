@@ -1,6 +1,7 @@
 #include "task_manager.h"
 #include "core/object/message_queue.h"
 #include "gui/gdre_progress.h"
+#include "main/gdre_main_loop.h"
 #include "main/main.h"
 #include "servers/rendering/rendering_server.h"
 #include "utility/common.h"
@@ -294,37 +295,7 @@ Error TaskManager::wait_for_task_completion(TaskManagerID p_group_id, uint64_t t
 }
 
 bool TaskManager::wait_until_next_frame(int64_t p_time_usec) {
-	uint64_t curr_time = OS::get_singleton()->get_ticks_usec();
-	if (!Thread::is_main_thread()) {
-		OS::get_singleton()->delay_usec(p_time_usec);
-		return is_current_task_canceled();
-	}
-	process_main_thread_dispatch_queue_for(p_time_usec);
-	bool did_redraw = false;
-	if (update_progress_bg(true, false, &did_redraw)) {
-		cancel_main_thread_dispatch_queue();
-		return true;
-	}
-	if (!did_redraw) {
-		GDRESettings::main_iteration();
-	}
-	int64_t elapsed_time = OS::get_singleton()->get_ticks_usec() - curr_time;
-	constexpr int64_t SYNC_WAIT_TIME_US = 1000;
-	if (elapsed_time < p_time_usec) {
-		while (elapsed_time < p_time_usec) {
-			RS::get_singleton()->sync();
-			elapsed_time = OS::get_singleton()->get_ticks_usec() - curr_time;
-			if (p_time_usec - elapsed_time > SYNC_WAIT_TIME_US) {
-				OS::get_singleton()->delay_usec(SYNC_WAIT_TIME_US);
-			} else {
-				if (p_time_usec - elapsed_time > 0) {
-					OS::get_singleton()->delay_usec(p_time_usec - elapsed_time);
-				}
-				break;
-			}
-		}
-	}
-	return false;
+	return GDREMainLoop::wait_until_next_frame(p_time_usec);
 }
 
 bool TaskManager::update_progress_bg(bool p_force_refresh, bool called_from_process, bool *r_did_redraw) {

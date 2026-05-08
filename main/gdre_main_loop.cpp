@@ -1,6 +1,13 @@
 #include "gdre_main_loop.h"
-#include "scene/main/node.h"
+
 #include "compat/resource_loader_compat.h"
+#include "core/object/object.h"
+#include "core/os/os.h"
+#include "scene/main/node.h"
+#include "servers/rendering/rendering_server.h"
+#include "utility/gdre_settings.h"
+#include "utility/task_manager.h"
+
 GDREMainLoop *GDREMainLoop::singleton = nullptr;
 
 GDREMainLoop::GDREMainLoop() {
@@ -23,6 +30,7 @@ void GDREMainLoop::iteration_prepare() {
 }
 
 bool GDREMainLoop::physics_process(double p_time) {
+	last_physics_process_time = p_time;
 	return false;
 }
 
@@ -30,13 +38,51 @@ void GDREMainLoop::iteration_end() {
 }
 
 bool GDREMainLoop::process(double p_time) {
+	last_process_time = p_time;
 	return false;
 }
 
 void GDREMainLoop::finalize() {
 }
 
+bool GDREMainLoop::wait_until_next_frame(int64_t p_time_usec) {
+	return _wait_until_next_frame(p_time_usec, false);
+}
 
+bool GDREMainLoop::_wait_until_next_frame(int64_t input_time_usec, bool called_from_process) {
+	int64_t p_time_usec = MAX(1, input_time_usec - last_process_time + last_physics_process_time);
+	uint64_t curr_time = OS::get_singleton()->get_ticks_usec();
+	if (!Thread::is_main_thread()) {
+		OS::get_singleton()->delay_usec(p_time_usec);
+		return TaskManager::get_singleton()->is_current_task_canceled();
+	}
+	TaskManager::get_singleton()->process_main_thread_dispatch_queue_for(p_time_usec);
+	bool did_redraw = false;
+	if (TaskManager::get_singleton()->update_progress_bg(true, called_from_process, &did_redraw)) {
+		TaskManager::get_singleton()->cancel_main_thread_dispatch_queue();
+		return true;
+	}
+	if (!called_from_process) {
+		GDRESettings::main_iteration();
+	}
+	int64_t elapsed_time = OS::get_singleton()->get_ticks_usec() - curr_time;
+	constexpr int64_t SYNC_WAIT_TIME_US = 1000;
+	if (elapsed_time < p_time_usec) {
+		while (elapsed_time < p_time_usec) {
+			RS::get_singleton()->sync();
+			elapsed_time = OS::get_singleton()->get_ticks_usec() - curr_time;
+			if (p_time_usec - elapsed_time > SYNC_WAIT_TIME_US) {
+				OS::get_singleton()->delay_usec(SYNC_WAIT_TIME_US);
+			} else {
+				if (p_time_usec - elapsed_time > 0) {
+					OS::get_singleton()->delay_usec(p_time_usec - elapsed_time);
+				}
+				break;
+			}
+		}
+	}
+	return false;
+}
 
 // *** Scene Tree ***
 
