@@ -2815,7 +2815,7 @@ Error ImportExporter::test_exported_project(const String &p_original_project_dir
 	original_project_dir = p_original_project_dir;
 	Error _ret_err = OK;
 #if TESTS_ENABLED
-	const bool is_unit_testing = GDRESettings::is_testing();
+	const bool is_unit_testing = GDREMainLoop::is_testing();
 #else
 	const bool is_unit_testing = false;
 #endif

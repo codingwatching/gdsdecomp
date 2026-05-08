@@ -9,9 +9,11 @@
 class GDREMainLoop : public Object {
 	GDCLASS(GDREMainLoop, Object);
 	static GDREMainLoop *singleton;
+	static bool testing;
 
 	double last_physics_process_time;
 	double last_process_time;
+	bool waiting;
 
 	bool _wait_until_next_frame(int64_t p_time_usec, bool called_from_process);
 
@@ -24,7 +26,13 @@ public:
 	bool process(double p_time);
 	void finalize();
 
-	bool wait_until_next_frame(int64_t p_time_usec);
+	static bool iteration(bool p_no_delay = true);
+	static bool wait_until_next_frame(int64_t p_time_usec);
+
+#ifdef TESTS_ENABLED
+	static bool is_testing();
+	static void set_is_testing(bool p_is_testing);
+#endif
 
 	GDREMainLoop();
 	~GDREMainLoop();

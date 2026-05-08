@@ -3,12 +3,14 @@
 #include "compat/resource_loader_compat.h"
 #include "core/object/object.h"
 #include "core/os/os.h"
+#include "main/main.h"
 #include "scene/main/node.h"
 #include "servers/rendering/rendering_server.h"
 #include "utility/gdre_settings.h"
 #include "utility/task_manager.h"
 
 GDREMainLoop *GDREMainLoop::singleton = nullptr;
+bool GDREMainLoop::testing = false;
 
 GDREMainLoop::GDREMainLoop() {
 	singleton = this;
@@ -46,11 +48,14 @@ void GDREMainLoop::finalize() {
 }
 
 bool GDREMainLoop::wait_until_next_frame(int64_t p_time_usec) {
-	return _wait_until_next_frame(p_time_usec, false);
+	if (!singleton) {
+		GDREMainLoop::iteration(false);
+	}
+	return singleton->_wait_until_next_frame(p_time_usec, false);
 }
 
 bool GDREMainLoop::_wait_until_next_frame(int64_t input_time_usec, bool called_from_process) {
-	int64_t p_time_usec = MAX(1, input_time_usec - last_process_time + last_physics_process_time);
+	int64_t p_time_usec = MAX(1, input_time_usec);
 	uint64_t curr_time = OS::get_singleton()->get_ticks_usec();
 	if (!Thread::is_main_thread()) {
 		OS::get_singleton()->delay_usec(p_time_usec);
@@ -63,7 +68,7 @@ bool GDREMainLoop::_wait_until_next_frame(int64_t input_time_usec, bool called_f
 		return true;
 	}
 	if (!called_from_process) {
-		GDRESettings::main_iteration();
+		iteration(true);
 	}
 	int64_t elapsed_time = OS::get_singleton()->get_ticks_usec() - curr_time;
 	constexpr int64_t SYNC_WAIT_TIME_US = 1000;
@@ -82,6 +87,42 @@ bool GDREMainLoop::_wait_until_next_frame(int64_t input_time_usec, bool called_f
 		}
 	}
 	return false;
+}
+
+#ifdef TESTS_ENABLED
+void GDREMainLoop::set_is_testing(bool p_is_testing) {
+	testing = p_is_testing;
+}
+
+bool GDREMainLoop::is_testing() {
+	return testing;
+}
+#endif
+
+bool GDREMainLoop::iteration(bool p_no_delay) {
+	// For testing, we can't call Main::iteration() because Main hasn't been set up.
+	// We only attempt to sync the renderingserver to flush the messages queue during testing.
+#ifdef TESTS_ENABLED
+	if (testing) {
+		if (RenderingServer::get_singleton()) {
+			RenderingServer::get_singleton()->sync();
+			if (MessageQueue::get_singleton() && !MessageQueue::get_singleton()->is_flushing()) {
+				MessageQueue::get_singleton()->flush();
+			}
+		}
+		return false;
+	}
+#endif
+
+	int64_t time_delay = Engine::get_singleton()->get_frame_delay();
+	if (p_no_delay) {
+		Engine::get_singleton()->set_frame_delay(0);
+	}
+	bool result = Main::iteration();
+	if (p_no_delay) {
+		Engine::get_singleton()->set_frame_delay(time_delay);
+	}
+	return result;
 }
 
 // *** Scene Tree ***

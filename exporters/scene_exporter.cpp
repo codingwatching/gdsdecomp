@@ -38,6 +38,7 @@
 #include "core/error/error_list.h"
 #include "core/error/error_macros.h"
 #include "core/object/class_db.h"
+#include "main/gdre_main_loop.h"
 #include "main/main.h"
 #include "scene/resources/compressed_texture.h"
 #include "scene/resources/packed_scene.h"
@@ -3342,11 +3343,11 @@ struct BatchExportToken : public TaskRunnerStruct {
 		if (Thread::is_main_thread() && _scene.is_valid()) {
 			// We have to flush the message queue after the scene is loaded;
 			// Certain resources like NoiseTexture2D can queue up deferred calls that will cause crashes if not flushed before the scene is manipulated or freed
-			GDRESettings::main_iteration();
+			GDREMainLoop::iteration(true);
 		} else {
 			// We have to wait for at least one main iteration regardless of whether we're on the main thread or not
 			if (!TaskManager::get_singleton()->dispatch_to_main_thread((std::function<void()>)[]() {
-												 GDRESettings::main_iteration();
+												 GDREMainLoop::iteration(true);
 											 })
 							.has_value()) {
 				err = ERR_SKIP;

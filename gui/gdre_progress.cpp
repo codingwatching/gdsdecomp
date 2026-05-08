@@ -36,10 +36,12 @@
 #include "scene/gui/file_dialog.h"
 #include "scene/main/scene_tree.h"
 #include "servers/display/display_server.h"
-#include "utility/gdre_logger.h"
 
+#include "main/gdre_main_loop.h"
+#include "utility/gdre_logger.h"
 #include <utility/gd_parallel_queue.h>
 #include <utility/gdre_settings.h>
+
 #ifdef TOOLS_ENABLED
 #include "editor/editor_interface.h"
 #include "editor/editor_node.h"
@@ -137,7 +139,7 @@ void GDREProgressDialog::_update_ui() {
 	// Run main loop for two frames.
 	if (is_inside_tree()) {
 		DisplayServer::get_singleton()->process_events();
-		GDRESettings::main_iteration();
+		GDREMainLoop::iteration();
 	}
 }
 

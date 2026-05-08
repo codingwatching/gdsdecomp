@@ -1,5 +1,6 @@
 #include "test_common.h"
 #include "core/os/main_loop.h"
+#include "main/gdre_main_loop.h"
 #include "servers/audio/audio_server.h"
 #ifndef XR_DISABLED
 #include "servers/xr/xr_server.h"
@@ -63,30 +64,26 @@ public:
 		ResourceCompatLoader::_init();
 		String name = String(p_in.m_name);
 		String suite_name = String(p_in.m_test_suite);
-
-		GDRESettings::set_is_testing(true);
-		if (name.contains("[ProjectRecovery]") || name.contains("[ResourceExport]")) {
-			int dummy_idx = AudioDriverManager::get_driver_count() - 1;
-			AudioDriverManager::initialize(dummy_idx);
-			AudioServer *audio_server = memnew(AudioServer);
-			audio_server->init();
-			return;
-		}
 		if (name.contains("[ProjectRecovery]")) {
 #ifndef XR_DISABLED
 			xr_server = memnew(XRServer);
 			CHECK(xr_server != nullptr);
 			CHECK(xr_server->get_xr_mode() == XRServer::XRMODE_OFF);
 #endif // XR_DISABLED
-
+		}
+		if (name.contains("[ProjectRecovery]") || name.contains("[ResourceExport]")) {
 			main_loop = memnew(MainLoop);
-
 			set_main_loop(main_loop);
+			GDREMainLoop::set_is_testing(true);
+			int dummy_idx = AudioDriverManager::get_driver_count() - 1;
+			AudioDriverManager::initialize(dummy_idx);
+			AudioServer *audio_server = memnew(AudioServer);
+			audio_server->init();
+			return;
 		}
 	}
 
 	void test_case_end(const doctest::CurrentTestCaseStats &) override {
-		GDRESettings::set_is_testing(false);
 #ifndef XR_DISABLED
 		if (XRServer::get_singleton() && XRServer::get_singleton() == xr_server) {
 			memdelete(xr_server);

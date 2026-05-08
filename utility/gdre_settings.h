@@ -487,13 +487,6 @@ public:
 
 	bool requires_double_precision() const;
 
-	static bool main_iteration();
-#ifdef TESTS_ENABLED
-
-	static bool testing;
-	static void set_is_testing(bool p_is_testing);
-	static bool is_testing();
-#endif
 	GDRESettings();
 	~GDRESettings();
 };
