@@ -92,7 +92,7 @@ static inline HashMap<String, HashSet<String>> _init_v3_ext_to_types() {
 			map[pair.first] = HashSet<String>();
 		}
 		for (const String &type : pair.second) {
-			map[type].insert(pair.first);
+			map[pair.first].insert(type);
 		}
 	}
 	return map;
@@ -105,7 +105,7 @@ static inline HashMap<String, HashSet<String>> _init_v2_ext_to_types() {
 			map[pair.first] = HashSet<String>();
 		}
 		for (const String &type : pair.second) {
-			map[type].insert(pair.first);
+			map[pair.first].insert(type);
 		}
 	}
 	return map;
