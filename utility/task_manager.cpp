@@ -378,6 +378,10 @@ void TaskManager::process_main_thread_dispatch_queue_for(int64_t time_usec) {
 	if (!Thread::is_main_thread()) {
 		return;
 	}
+	if (processing_main_thread_dispatch_queue) {
+		return;
+	}
+	processing_main_thread_dispatch_queue = true;
 	int64_t start_time_usec = OS::get_singleton()->get_ticks_usec();
 	int64_t elapsed_time_usec = 0;
 	while (elapsed_time_usec < time_usec) {
@@ -394,6 +398,7 @@ void TaskManager::process_main_thread_dispatch_queue_for(int64_t time_usec) {
 		set_thread_task_id(previous_main_thread_task_id);
 		elapsed_time_usec = OS::get_singleton()->get_ticks_usec() - start_time_usec;
 	}
+	processing_main_thread_dispatch_queue = false;
 }
 
 void TaskManager::cancel_main_thread_dispatch_queue() {

@@ -519,6 +519,7 @@ protected:
 	TaskManagerID main_thread_task_id = -1;
 	LocalVector<Thread::ID> thread_index_to_thread_id;
 	LocalVector<TaskManagerID> thread_index_to_task_ids;
+	bool processing_main_thread_dispatch_queue = false;
 
 	friend class GDREMainLoop;
 	bool updating_bg = false;

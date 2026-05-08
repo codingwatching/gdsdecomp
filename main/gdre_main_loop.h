@@ -13,7 +13,7 @@ class GDREMainLoop : public Object {
 
 	double last_physics_process_time;
 	double last_process_time;
-	bool waiting;
+	bool processing;
 
 	bool _wait_until_next_frame(int64_t p_time_usec, bool called_from_process);
 
@@ -26,7 +26,7 @@ public:
 	bool process(double p_time);
 	void finalize();
 
-	static bool iteration(bool p_no_delay = true);
+	static bool iteration(bool p_no_delay = false);
 	static bool wait_until_next_frame(int64_t p_time_usec);
 
 #ifdef TESTS_ENABLED

@@ -41,6 +41,7 @@ void GDREMainLoop::iteration_end() {
 
 bool GDREMainLoop::process(double p_time) {
 	last_process_time = p_time;
+	_wait_until_next_frame(p_time * 1000000 / 2, true);
 	return false;
 }
 
@@ -61,10 +62,15 @@ bool GDREMainLoop::_wait_until_next_frame(int64_t input_time_usec, bool called_f
 		OS::get_singleton()->delay_usec(p_time_usec);
 		return TaskManager::get_singleton()->is_current_task_canceled();
 	}
+	if (processing) {
+		return false;
+	}
+	processing = true;
 	TaskManager::get_singleton()->process_main_thread_dispatch_queue_for(p_time_usec);
 	bool did_redraw = false;
-	if (TaskManager::get_singleton()->update_progress_bg(true, called_from_process, &did_redraw)) {
+	if (TaskManager::get_singleton()->update_progress_bg(!called_from_process, called_from_process, &did_redraw)) {
 		TaskManager::get_singleton()->cancel_main_thread_dispatch_queue();
+		processing = false;
 		return true;
 	}
 	if (!called_from_process) {
@@ -86,6 +92,7 @@ bool GDREMainLoop::_wait_until_next_frame(int64_t input_time_usec, bool called_f
 			}
 		}
 	}
+	processing = false;
 	return false;
 }
 
