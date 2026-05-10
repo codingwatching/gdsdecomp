@@ -149,7 +149,7 @@ void GDRESceneTree::iteration_prepare() {
 }
 
 bool GDRESceneTree::physics_process(double p_time) {
-	if (GDREMainLoop::get_singleton()->physics_process(p_time)){
+	if (GDREMainLoop::get_singleton()->physics_process(p_time)) {
 		return true;
 	}
 	return SceneTree::physics_process(p_time);
@@ -161,7 +161,7 @@ void GDRESceneTree::iteration_end() {
 }
 
 bool GDRESceneTree::process(double p_time) {
-	if (GDREMainLoop::get_singleton()->process(p_time)){
+	if (GDREMainLoop::get_singleton()->process(p_time)) {
 		return true;
 	}
 	return SceneTree::process(p_time);
@@ -177,11 +177,11 @@ void GDRESceneTree::finalize() {
 
 class GDRENodeEndIteration : public Node {
 	GDCLASS(GDRENodeEndIteration, Node);
+
 public:
 	void _notification(int p_what);
 	GDRENodeEndIteration();
 };
-
 
 void _init_callback() {
 	// the FRONT of the main node to ensure it runs at the start of the iteration
@@ -189,7 +189,6 @@ void _init_callback() {
 	// the BACK of the main node to ensure it runs at the end of the iteration
 	EditorNode::get_singleton()->add_child(memnew(GDRENodeEndIteration), false, Node::INTERNAL_MODE_BACK);
 	GDREMainLoop::get_singleton()->initialize();
-
 }
 
 GDREMainLoopNode::GDREMainLoopNode() {

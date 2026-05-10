@@ -7,14 +7,15 @@
 
 class VisualShaderCompat : public VisualShader {
 	GDSOFTCLASS(VisualShaderCompat, VisualShader);
+
 protected:
 	virtual void _update_shader() const override;
 	virtual void reset_state() override;
+
 public:
 	//get_mode()
 	virtual Mode get_mode() const override;
 	virtual bool is_text_shader() const override;
-
 };
 
 class VisualShaderConverterCompat : public ResourceCompatConverter {

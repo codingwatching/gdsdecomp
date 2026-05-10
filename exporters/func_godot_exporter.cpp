@@ -62,7 +62,6 @@ Vector<String> FuncGodotLmpExporter::get_export_extensions(const String &res_pat
 	return extensions;
 }
 
-
 String FuncGodotMapExporter::get_name() const {
 	return EXPORTER_NAME;
 }
@@ -378,7 +377,6 @@ Error _export_wad_file(const String &out_path, const String &res_path, const Ref
 	return OK;
 }
 } // namespace
-
 
 String FuncGodotWADExporter::get_name() const {
 	return EXPORTER_NAME;

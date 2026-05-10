@@ -31,8 +31,6 @@ public:
 	virtual Vector<String> get_export_extensions(const String &res_path) const override;
 };
 
-
-
 class FuncGodotWADExporter : public ResourceExporter {
 	GDCLASS(FuncGodotWADExporter, ResourceExporter);
 

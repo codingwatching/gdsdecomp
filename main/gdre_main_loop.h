@@ -1,6 +1,6 @@
 #pragma once
-#include "scene/main/scene_tree.h"
 #include "scene/main/node.h"
+#include "scene/main/scene_tree.h"
 
 // We have a SceneTree and a regular node class that call into our singleton because of the editor; normally we would be able to
 // just use the SceneTree class, but when running in editor mode, Main::start() always sets the main loop to the base SceneTree class and
@@ -41,6 +41,7 @@ public:
 
 class GDRESceneTree : public SceneTree {
 	GDCLASS(GDRESceneTree, SceneTree);
+
 public:
 	virtual void initialize() override;
 	virtual void iteration_prepare() override;
@@ -57,8 +58,8 @@ class GDREMainLoopNode : public Node {
 protected:
 	bool _init();
 	void _notification(int p_what);
-public:
 
+public:
 	static void setup();
 
 	GDREMainLoopNode();
