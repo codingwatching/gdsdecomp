@@ -291,8 +291,12 @@ Error TaskManager::wait_for_task_completion(TaskManagerID p_group_id, uint64_t t
 	return err;
 }
 
-bool TaskManager::update_progress_bg(bool p_force_refresh, bool called_from_process, bool *r_did_redraw) {
-	if (updating_bg || (group_id_to_description.empty() && !Thread::is_main_thread())) {
+bool TaskManager::update_progress_bg(bool p_force_refresh, bool called_from_process, bool *r_did_redraw, bool *r_has_tasks) {
+	bool has_tasks = !group_id_to_description.empty();
+	if (r_has_tasks) {
+		*r_has_tasks = has_tasks;
+	}
+	if (updating_bg || !has_tasks) {
 		if (r_did_redraw) {
 			*r_did_redraw = false;
 		}
@@ -324,14 +328,6 @@ bool TaskManager::update_progress_bg(bool p_force_refresh, bool called_from_proc
 		bool did_redraw = GDREProgressDialog::get_singleton()->main_thread_update();
 		if (r_did_redraw) {
 			*r_did_redraw = did_redraw;
-		}
-	}
-	// TODO: remove this, move it into main loop
-	// this should only be called if this wasn't called from `GodotREEditorStandalone::process()` and there are tasks in the queue and none of them have progress enabled
-	if (!called_from_process && !main_loop_iterating && Thread::is_main_thread() && !MessageQueue::get_singleton()->is_flushing() && group_id_to_description.size() > 0) {
-		GDREMainLoop::iteration(true);
-		if (r_did_redraw) {
-			*r_did_redraw = true;
 		}
 	}
 	updating_bg = false;

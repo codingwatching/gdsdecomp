@@ -690,7 +690,7 @@ public:
 	bool is_current_task_completed(TaskManagerID p_task_id) const;
 	bool is_current_task_canceled();
 	bool is_current_task_timed_out();
-	bool update_progress_bg(bool p_force_refresh = false, bool called_from_process = false, bool *r_did_redraw = nullptr);
+	bool update_progress_bg(bool p_force_refresh = false, bool called_from_process = false, bool *r_did_redraw = nullptr, bool *r_has_tasks = nullptr);
 	void set_thread_task_id(TaskManagerID p_task_manager_id);
 	TaskManagerID get_thread_task_id() const;
 	void cancel_all();

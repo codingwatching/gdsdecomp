@@ -68,7 +68,8 @@ bool GDREMainLoop::_wait_until_next_frame(int64_t input_time_usec, bool called_f
 	processing = true;
 	TaskManager::get_singleton()->process_main_thread_dispatch_queue_for(p_time_usec);
 	bool did_redraw = false;
-	if (TaskManager::get_singleton()->update_progress_bg(!called_from_process, called_from_process, &did_redraw)) {
+	bool has_tasks = false;
+	if (TaskManager::get_singleton()->update_progress_bg(!called_from_process, called_from_process, &did_redraw, &has_tasks)) {
 		TaskManager::get_singleton()->cancel_main_thread_dispatch_queue();
 		processing = false;
 		return true;
@@ -78,7 +79,7 @@ bool GDREMainLoop::_wait_until_next_frame(int64_t input_time_usec, bool called_f
 	}
 	int64_t elapsed_time = OS::get_singleton()->get_ticks_usec() - curr_time;
 	constexpr int64_t SYNC_WAIT_TIME_US = 1000;
-	if (elapsed_time < p_time_usec) {
+	if (has_tasks && elapsed_time < p_time_usec) {
 		while (elapsed_time < p_time_usec) {
 			RS::get_singleton()->sync();
 			elapsed_time = OS::get_singleton()->get_ticks_usec() - curr_time;
@@ -122,12 +123,15 @@ bool GDREMainLoop::iteration(bool p_no_delay) {
 #endif
 
 	int64_t time_delay = Engine::get_singleton()->get_frame_delay();
+	int64_t os_low_processor_usage_mode_sleep_usec = OS::get_singleton()->get_low_processor_usage_mode_sleep_usec();
 	if (p_no_delay) {
 		Engine::get_singleton()->set_frame_delay(0);
+		OS::get_singleton()->set_low_processor_usage_mode_sleep_usec(0);
 	}
 	bool result = Main::iteration();
 	if (p_no_delay) {
 		Engine::get_singleton()->set_frame_delay(time_delay);
+		OS::get_singleton()->set_low_processor_usage_mode_sleep_usec(os_low_processor_usage_mode_sleep_usec);
 	}
 	return result;
 }
