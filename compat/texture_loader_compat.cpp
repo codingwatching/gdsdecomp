@@ -1139,15 +1139,24 @@ Ref<Resource> ImageTextureConverterCompat::convert(const Ref<MissingResource> &r
 	ERR_FAIL_COND_V_MSG(type != "ImageTexture", res, "Unsupported type: " + type);
 	name = get_resource_name(res, ver_major);
 	image = convert_image(res->get("image"));
-	ERR_FAIL_COND_V_MSG(image.is_null(), res, "Cannot load image from ImageTexture resource '" + name + "'.");
+	if (image.is_null()) {
+		String path = res->get_path();
+		if (path.is_empty()) {
+			path = info->original_path;
+		}
+		WARN_PRINT("ImageTextureConverterCompat: image is null for resource '" + path + "'.");
+	}
 
 	size = res->get("size");
 	flags = res->get("flags");
-	bool mipmaps = flags & 1 || image->has_mipmaps();
+	bool mipmaps = flags & 1;
 
-	image->set_name(name);
-	tw = image->get_width();
-	th = image->get_height();
+	if (!image.is_null()) {
+		mipmaps = mipmaps || image->has_mipmaps();
+		image->set_name(name);
+		tw = image->get_width();
+		th = image->get_height();
+	}
 	if (size.width && tw != size.width) {
 		tw_custom = size.width;
 	}
@@ -1239,17 +1248,17 @@ Ref<ImageTexture> TextureLoaderCompat::create_image_texture(const String &p_path
 		texture.instantiate();
 	}
 	fakeimagetex *fake = reinterpret_cast<fakeimagetex *>(texture.ptr());
-	fake->image_stored = true;
+	fake->image_stored = image.is_valid();
 	fake->w = tw;
 	fake->h = th;
-	fake->format = image->get_format();
+	fake->format = image.is_valid() ? image->get_format() : Image::FORMAT_L8;
 	if (tw_custom || th_custom) {
 		fake->size_override = Size2(tw_custom, th_custom);
 	}
 	fake->mipmaps = mipmaps;
 	bool size_override = tw_custom || th_custom;
 	if (p_type == ResourceInfo::LoadType::REAL_LOAD) {
-		RID texture_rid = RS::get_singleton()->texture_2d_create(image);
+		RID texture_rid = image.is_valid() ? RS::get_singleton()->texture_2d_create(image) : RS::get_singleton()->texture_2d_placeholder_create();
 		fake->texture = texture_rid;
 		if (size_override) {
 			RS::get_singleton()->texture_set_size_override(texture_rid, tw_custom, th_custom);
@@ -1297,7 +1306,9 @@ Ref<Resource> LargeTextureConverterCompat::convert(const Ref<MissingResource> &r
 			image_texture = texture_res;
 		}
 		ERR_FAIL_COND_V_MSG(!image_texture.is_valid(), Ref<Resource>(), "LargeTextureConverterCompat: Failed to convert ImageTexture in array data of LargeTexture " + res->get_path());
-		auto image_size = image_texture->get_image()->get_size();
+		Ref<Image> image = image_texture->get_image();
+		ERR_FAIL_COND_V_MSG(image.is_null(), Ref<Resource>(), "Image is null for texture " + image_texture->get_path());
+		auto image_size = image->get_size();
 		max_piece_size.x = MAX(max_piece_size.x, image_size.x);
 		max_piece_size.y = MAX(max_piece_size.y, image_size.y);
 		pieces.push_back({ offset, image_texture });
@@ -1312,7 +1323,9 @@ Ref<Resource> LargeTextureConverterCompat::convert(const Ref<MissingResource> &r
 	auto pos = Point2(0, 0);
 
 	for (int i = 0; i < pieces.size(); i++) {
+		ERR_FAIL_COND_V_MSG(pieces[i].texture.is_null(), Ref<Resource>(), vformat("Texture is null for piece %d of LargeTexture %s", i, info->original_path));
 		auto image = pieces[i].texture->get_image();
+		ERR_FAIL_COND_V_MSG(image.is_null(), Ref<Resource>(), "Image is null for texture " + pieces[i].texture->get_path());
 		pos = pieces[i].offset;
 		while (pos.x != expected_x || pos.y != expected_y) {
 			Size2i gap_size = max_piece_size;

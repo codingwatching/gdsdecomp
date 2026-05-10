@@ -1002,6 +1002,7 @@ Error TextureExporter::_convert_svg(const String &p_path, const String &dest_pat
 		fa->close();
 	} else {
 		Ref<Image> img = tex->get_image();
+		ERR_FAIL_COND_V_MSG(img.is_null(), ERR_FILE_CORRUPT, "Image is null for texture " + tex->get_path());
 		err = ImageSaver::save_image(dest_path, img, lossy, 1.0, false);
 		ERR_FAIL_COND_V_MSG(err != OK, err, "Failed to save image: " + dest_path);
 	}

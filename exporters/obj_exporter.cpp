@@ -375,7 +375,9 @@ Error ObjExporter::write_materials_to_mtl(const HashMap<String, Ref<Material>> &
 					name = filebasename + "_" + suffix + ".png";
 				}
 				gdre::ensure_dir(base_dir);
-				tex->get_image()->save_png(base_dir.path_join(name));
+				Ref<Image> img = tex->get_image();
+				ERR_FAIL_COND_V_MSG(img.is_null(), String(), "Image is null for texture " + tex->get_path());
+				img->save_png(base_dir.path_join(name));
 				path = name;
 			}
 			return path;

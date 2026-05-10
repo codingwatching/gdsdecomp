@@ -49,6 +49,7 @@ bool is_supported_format_for_exr(Image::Format p_format) {
 }
 
 Error ImageSaver::save_image(const String &dest_path, const Ref<Image> &p_img, bool lossy, float quality, bool duplicate) {
+	ERR_FAIL_COND_V_MSG(p_img.is_null(), ERR_FILE_CORRUPT, "Image is null for texture " + dest_path);
 	Ref<Image> img = duplicate ? (Ref<Image>)p_img->duplicate() : p_img;
 	ERR_FAIL_COND_V_MSG(img->is_empty(), ERR_FILE_EOF, "Image data is empty for texture " + dest_path + ", not saving");
 	Error err = gdre::ensure_dir(dest_path.get_base_dir());
