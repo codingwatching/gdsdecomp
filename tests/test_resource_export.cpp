@@ -192,6 +192,10 @@ Error test_export_bmfont(const String &version) {
 }
 
 void test_import_options() {
+// this only works in editor builds
+#ifndef TOOLS_ENABLED
+	return;
+#else
 	StringName resource_importer_class_name = "ResourceImporter";
 	// query the classdb for all the classes that derive from ResourceImporter
 	LocalVector<StringName> classes;
@@ -214,6 +218,7 @@ void test_import_options() {
 			CHECK(option.option.name != "");
 		}
 	}
+#endif
 }
 
 } // namespace TestResourceExport
