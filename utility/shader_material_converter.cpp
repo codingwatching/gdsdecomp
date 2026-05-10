@@ -14,6 +14,7 @@
 
 #include "utility/common.h"
 #include "utility/gdre_settings.h"
+#include "utility/task_manager.h"
 
 using SL = ShaderLanguage;
 
@@ -518,6 +519,18 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 	bool has_orm = false;
 	HashSet<String> shader_uniforms;
 	ShaderMaterialConverter::ShaderInfo shader_info = parse_shader_info(shader);
+
+	std::function<void()> ensure_shader_params = [&]() {
+		for (auto &E : shader_info.uniforms) {
+			auto &info = E.value;
+			if (p_shader_material->get_shader_parameter(info.name).get_type() == Variant::NIL) {
+				p_shader_material->set_shader_parameter(info.name, info.default_value);
+			}
+		}
+	};
+	// run this on the main thread to avoid race conditions with the shader material's `get_property_list()`, which sets the shader parameter cache
+	TaskManager::get_singleton()->dispatch_to_main_thread(ensure_shader_params);
+
 	for (auto &E : shader_info.uniforms) {
 		auto &info = E.value;
 		shader_uniforms.insert(info.name);
