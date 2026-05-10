@@ -3340,12 +3340,9 @@ struct BatchExportToken : public TaskRunnerStruct {
 	}
 
 	void after_preload() {
-		if (Thread::is_main_thread() && _scene.is_valid()) {
+		if (_scene.is_valid()) {
 			// We have to flush the message queue after the scene is loaded;
 			// Certain resources like NoiseTexture2D can queue up deferred calls that will cause crashes if not flushed before the scene is manipulated or freed
-			GDREMainLoop::iteration(true);
-		} else {
-			// We have to wait for at least one main iteration regardless of whether we're on the main thread or not
 			if (!TaskManager::get_singleton()->dispatch_to_main_thread((std::function<void()>)[]() {
 												 GDREMainLoop::iteration(true);
 											 })
