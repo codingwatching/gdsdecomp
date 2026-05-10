@@ -150,6 +150,7 @@ public:
 		Ref<ResourceInfo> compat;
 		compat.instantiate();
 		compat->uid = uid;
+		compat->original_path = path;
 		compat->type = type;
 		compat->cached_id = scene_id;
 		compat->topology_type = ResourceInfo::UNLOADED_EXTERNAL_RESOURCE;
@@ -162,6 +163,7 @@ public:
 		Ref<ResourceInfo> compat;
 		compat.instantiate();
 		compat->uid = uid;
+		compat->original_path = path;
 		compat->type = type;
 		compat->topology_type = ResourceInfo::MAIN_RESOURCE;
 		compat->set_on_resource(res);
@@ -173,6 +175,8 @@ public:
 		Ref<ResourceInfo> compat;
 		compat.instantiate();
 		compat->uid = ResourceUID::INVALID_ID;
+		compat->original_path = path;
+		compat->cached_id = scene_id;
 		compat->type = type;
 		compat->topology_type = ResourceInfo::INTERNAL_RESOURCE;
 		compat->set_on_resource(res);
