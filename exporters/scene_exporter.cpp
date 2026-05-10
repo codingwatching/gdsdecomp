@@ -1340,6 +1340,7 @@ Dictionary get_node_options(Node *p_node, Node *original_node = nullptr) {
 		if (original_node) {
 			if (auto area_3d = Object::cast_to<Area3D>(original_node); area_3d) {
 				mesh_physics_mode = SceneExporterEnums::MESH_PHYSICS_AREA_ONLY;
+				body_type = SceneExporterEnums::BODY_TYPE_AREA;
 			} else {
 				if (auto navigation_region = Object::cast_to<NavigationRegion3D>(original_node); navigation_region) {
 					navmesh_mode = SceneExporterEnums::NAVMESH_NAVMESH_ONLY;
@@ -2758,7 +2759,10 @@ void GLBExporterInstance::_update_import_params(const String &p_dest_path) {
 		for (auto &E : node_options) {
 			// If we're not removing physics bodies, we don't want the editor to re-generate them when re-importing.
 			if (!remove_physics_bodies && E.value.get("generate/physics", false)) {
-				E.value["generate/physics"] = false;
+				SceneExporterEnums::BodyType body_type = (SceneExporterEnums::BodyType)E.value.get("physics/body_type", (int)SceneExporterEnums::BODY_TYPE_STATIC);
+				if (body_type != SceneExporterEnums::BODY_TYPE_AREA) {
+					E.value["generate/physics"] = false;
+				}
 			}
 			if (E.value.has("physics/physics_material_override")) {
 				Ref<Resource> physics_material_override = E.value["physics/physics_material_override"];
