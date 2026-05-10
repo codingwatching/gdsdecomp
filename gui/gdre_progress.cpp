@@ -350,6 +350,7 @@ void GDREProgressDialog::_reparent_and_show() {
 
 void GDREProgressDialog::_hide() {
 	hide();
+	_update_ui();
 	// 	if (GodotREEditorStandalone::get_singleton()) {
 	// 		GodotREEditorStandalone::get_singleton()->set_process_input(false);
 	// 	}
