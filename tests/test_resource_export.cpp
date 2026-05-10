@@ -1,15 +1,16 @@
 #include "test_resource_export.h"
 
+#include "core/io/resource_importer.h"
 #include "modules/vorbis/audio_stream_ogg_vorbis.h"
 #include "test_common.h"
 #include "tests/test_macros.h"
 #include <compat/resource_compat_text.h>
 #include <compat/resource_loader_compat.h>
+#include <core/object/class_db.h>
 #include <exporters/fontfile_exporter.h>
 #include <modules/gdsdecomp/exporters/resource_exporter.h>
 #include <scene/resources/audio_stream_wav.h>
 #include <scene/resources/font.h>
-
 namespace TestResourceExport {
 
 String get_resource_type_dir(const String &version, const String &resource_type) {
@@ -188,6 +189,31 @@ Error test_export_bmfont(const String &version) {
 	}
 	GDRESettings::get_singleton()->set_project_path(previous_resource_dir);
 	return OK;
+}
+
+void test_import_options() {
+	StringName resource_importer_class_name = "ResourceImporter";
+	// query the classdb for all the classes that derive from ResourceImporter
+	LocalVector<StringName> classes;
+	// ClassDB::get_class_list(classes);
+	ClassDB::get_inheriters_from_class(resource_importer_class_name, classes);
+	for (const StringName &class_name : classes) {
+		Engine::get_singleton()->set_editor_hint(true);
+		Object *obj = ClassDB::instantiate(class_name);
+		Engine::get_singleton()->set_editor_hint(false);
+		REQUIRE(obj != nullptr);
+		Ref<ResourceImporter> importer = Object::cast_to<ResourceImporter>(obj);
+		REQUIRE(importer.is_valid());
+		List<ResourceImporter::ImportOption> options;
+		String importer_name = importer->get_importer_name();
+		Ref<ResourceExporter> exporter = Exporter::get_exporter(importer_name, "");
+
+		importer->get_import_options("", &options);
+		for (const ResourceImporter::ImportOption &option : options) {
+			// TODO: make the exporters output the import options for the current version major/minor so we can check them.
+			CHECK(option.option.name != "");
+		}
+	}
 }
 
 } // namespace TestResourceExport
