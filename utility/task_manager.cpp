@@ -2,7 +2,6 @@
 #include "core/object/message_queue.h"
 #include "gui/gdre_progress.h"
 #include "main/gdre_main_loop.h"
-#include "servers/rendering/rendering_server.h"
 #include "utility/common.h"
 
 static constexpr int64_t ONE_GB = 1024LL * 1024LL * 1024LL;
@@ -100,7 +99,7 @@ bool TaskManager::BaseTemplateTaskData::wait_update_progress(bool p_force_refres
 		update_progress(false);
 	}
 	if (Thread::is_main_thread()) {
-		bg_ret = TaskManager::get_singleton()->wait_until_next_frame();
+		bg_ret = GDREMainLoop::wait_until_next_frame();
 	} else {
 		bg_ret = TaskManager::get_singleton()->is_current_task_canceled();
 		if (!bg_ret) {
@@ -182,7 +181,7 @@ bool TaskManager::BaseTemplateTaskData::wait_for_completion(uint64_t timeout_s_n
 		} else {
 			while (!started && !is_canceled()) {
 				if (is_main_thread) {
-					if (TaskManager::get_singleton()->wait_until_next_frame()) {
+					if (GDREMainLoop::wait_until_next_frame()) {
 						break;
 					}
 				} else {
@@ -290,10 +289,6 @@ Error TaskManager::wait_for_task_completion(TaskManagerID p_group_id, uint64_t t
 		group_id_to_description.erase(p_group_id);
 	}
 	return err;
-}
-
-bool TaskManager::wait_until_next_frame(int64_t p_time_usec) {
-	return GDREMainLoop::wait_until_next_frame(p_time_usec);
 }
 
 bool TaskManager::update_progress_bg(bool p_force_refresh, bool called_from_process, bool *r_did_redraw) {
@@ -605,7 +600,7 @@ Error TaskManager::DownloadQueueThread::wait_for_task_completion(DownloadTaskID 
 	Error err = OK;
 	while (!task->is_started()) {
 		if (is_main_thread) {
-			if (TaskManager::get_singleton()->wait_until_next_frame()) {
+			if (GDREMainLoop::wait_until_next_frame()) {
 				err = ERR_SKIP;
 				break;
 			}

@@ -18,6 +18,7 @@ class GDREMainLoop : public Object {
 	bool _wait_until_next_frame(int64_t p_time_usec, bool called_from_process);
 
 public:
+	static constexpr int64_t FRAME_TIME_US = 10000;
 	static GDREMainLoop *get_singleton();
 	void initialize();
 	void iteration_prepare();
@@ -27,7 +28,7 @@ public:
 	void finalize();
 
 	static bool iteration(bool p_no_delay = false);
-	static bool wait_until_next_frame(int64_t p_time_usec);
+	static bool wait_until_next_frame(int64_t p_time_usec = FRAME_TIME_US);
 
 #ifdef TESTS_ENABLED
 	static bool is_testing();

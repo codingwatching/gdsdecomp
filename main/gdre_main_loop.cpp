@@ -73,7 +73,7 @@ bool GDREMainLoop::_wait_until_next_frame(int64_t input_time_usec, bool called_f
 		processing = false;
 		return true;
 	}
-	if (!called_from_process) {
+	if (!called_from_process && !did_redraw) {
 		iteration(true);
 	}
 	int64_t elapsed_time = OS::get_singleton()->get_ticks_usec() - curr_time;
