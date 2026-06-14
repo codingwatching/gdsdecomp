@@ -5,6 +5,7 @@
 #include "bytecode/gdscript_tokenizer_compat.h"
 #include "core/io/image.h"
 #include "core/math/quaternion.h"
+#include "modules/gdscript/gdscript.h"
 #include "modules/gdscript/gdscript_tokenizer.h"
 #include "test_common.h"
 #include "tests/test_macros.h"
@@ -167,6 +168,14 @@ inline void debug_output(const String &script_name, const String &helper_script_
 
 inline String strip_script_text(const String &script_text) {
 	return remove_comments(script_text).replace("\"\"\"", "\"").replace("'", "\"");
+}
+
+Vector<PropertyInfo> list_to_vector(const List<PropertyInfo> &list) {
+	Vector<PropertyInfo> vector;
+	for (auto &E : list) {
+		vector.push_back(E);
+	}
+	return vector;
 }
 
 inline void test_script_binary(const String &script_name, const Vector<uint8_t> &bytecode, const String &helper_script_text, int revision, bool helper_script, bool no_text_equality_check, bool compare_whitespace = false) {

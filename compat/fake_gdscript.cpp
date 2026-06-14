@@ -1,4 +1,6 @@
 #include "fake_gdscript.h"
+#include "bytecode/bytecode_base.h"
+#include "bytecode/gdscript_tokenizer_compat.h"
 #include "fake_script.h"
 
 #include "compat/resource_loader_compat.h"
@@ -8,6 +10,7 @@
 #include "core/object/object.h"
 #include "core/string/ustring.h"
 #include "modules/gdscript/gdscript.h"
+#include "modules/gdscript/gdscript_tokenizer_buffer.h"
 #include "utility/resource_info.h"
 #include <utility/gdre_settings.h>
 
@@ -346,22 +349,121 @@ void FakeGDScript::ensure_base_and_local_name() {
 		// local_name = global_name;
 	}
 }
+namespace {
+bool is_whitespace_or_ignorable(GDScriptDecomp::GlobalToken p_token) {
+	switch (p_token) {
+		case GDScriptDecomp::G_TK_INDENT:
+		case GDScriptDecomp::G_TK_DEDENT:
+		case GDScriptDecomp::G_TK_NEWLINE:
+		case GDScriptDecomp::G_TK_CURSOR:
+			return true;
+		default:
+			return false;
+	}
+}
+
+// TODO: move this to the GDScriptDecomp class
+int get_func_arg_count_and_params(int curr_pos, const Vector<GDScriptTokenizerCompat::Token> &tokens, Vector<Vector<int>> &r_arguments) {
+	if (curr_pos + 2 >= tokens.size()) {
+		return -1;
+	}
+	using GT = GDScriptDecomp::GlobalToken;
+	GDScriptDecomp::GlobalToken t = tokens[curr_pos + 1].type;
+	if (t != GT::G_TK_PARENTHESIS_OPEN) {
+		return -1;
+	}
+	int bracket_open = 0;
+	// we should be just past the open parenthesis
+	int pos = curr_pos + 2;
+
+	Vector<int> curr_arg;
+	// count the commas
+	// at least in 3.x and below, the only time commas are allowed in function args are other expressions
+	// This test is not applicable to GDScript 2.0 versions, as there are no bytecode-specific built-in functions.
+	for (; pos < tokens.size(); pos++) {
+		t = tokens[pos].type;
+		switch (t) {
+			case GT::G_TK_BRACKET_OPEN:
+			case GT::G_TK_CURLY_BRACKET_OPEN:
+			case GT::G_TK_PARENTHESIS_OPEN:
+				bracket_open++;
+				break;
+			case GT::G_TK_BRACKET_CLOSE:
+			case GT::G_TK_CURLY_BRACKET_CLOSE:
+			case GT::G_TK_PARENTHESIS_CLOSE:
+				bracket_open--;
+				break;
+			case GT::G_TK_COMMA:
+				if (bracket_open == 0) {
+					r_arguments.push_back(curr_arg);
+					curr_arg.clear();
+					continue;
+				}
+				break;
+			default:
+				break;
+		}
+		if (bracket_open == -1) {
+			if (curr_arg.size() > 0) {
+				r_arguments.push_back(curr_arg);
+				curr_arg.clear();
+			}
+			break;
+		}
+		if (!is_whitespace_or_ignorable(t)) {
+			curr_arg.push_back(pos);
+		}
+	}
+	// trailing commas are not allowed after the last argument
+	if (pos == tokens.size() || t != GT::G_TK_PARENTHESIS_CLOSE) {
+		r_arguments.clear();
+		// error_message = "Did not find close parenthesis before EOF";
+		return -1;
+	}
+	return r_arguments.size();
+}
+} //namespace
 
 Error FakeGDScript::parse_script() {
 	using GT = GlobalToken;
 
+	using Token = GDScriptTokenizerCompat::Token;
 	FAKEGDSCRIPT_FAIL_COND_V_MSG(script_state.bytecode_version == -1, ERR_INVALID_DATA, "Bytecode version is invalid");
-	Vector<StringName> &identifiers = script_state.identifiers;
-	Vector<Variant> &constants = script_state.constants;
-	Vector<uint32_t> &tokens = script_state.tokens;
 	int variant_ver_major = decomp->get_variant_ver_major();
+
+	Ref<GDScriptTokenizerCompat> tokenizer = GDScriptTokenizerCompat::create_buffer_tokenizer(decomp.ptr(), binary_buffer);
+	if (tokenizer.is_null()) {
+		ERR_FAIL_V_MSG(ERR_INVALID_DATA, "Failed to create tokenizer");
+	}
+	// newlines are a hinderence here.
+	tokenizer->set_multiline_mode(true);
+	Vector<Token> tokens;
+	Token token = tokenizer->scan();
+	while (token.type != GT::G_TK_EOF) {
+		tokens.push_back(token);
+		token = tokenizer->scan();
+	}
+	auto is_token_func_call = [&](int p_pos) {
+		if (p_pos > 0 && tokens[p_pos - 1].type == GT::G_TK_PR_FUNCTION) {
+			return false;
+		}
+		// Godot 3.x's parser was VERY DUMB and emitted built-in function tokens for any identifier that shared
+		// the same name as a built-in function, so we have to check if the next token is a parenthesis open
+		if (p_pos + 1 >= tokens.size() || tokens[p_pos + 1].type != GT::G_TK_PARENTHESIS_OPEN) {
+			return false;
+		}
+		return true;
+	};
+
+#define CHECK_PREV_TOKEN(i, tk_type) (i > 0 && tokens[i - 1].type == tk_type)
+#define CHECK_NEXT_TOKEN(i, tk_type) (i + 1 < tokens.size() && tokens[i + 1].type == tk_type)
 
 	// reserved words can be used as class members in GDScript. Hooray.
 	auto is_not_actually_reserved_word = [&](int i) {
-		return (decomp->check_prev_token(i, tokens, GT::G_TK_PERIOD) ||
+		return (CHECK_PREV_TOKEN(i, GT::G_TK_PERIOD) ||
 				(script_state.bytecode_version < GDScriptDecomp::GDSCRIPT_2_0_VERSION &&
-						(decomp->check_prev_token(i, tokens, GT::G_TK_PR_FUNCTION) ||
-								(decomp->get_global_token(tokens[i]) != GT::G_TK_PR_EXPORT && decomp->is_token_func_call(i, tokens)))));
+						(CHECK_PREV_TOKEN(i, GT::G_TK_PR_FUNCTION) ||
+								(tokens[i].type != GT::G_TK_PR_EXPORT && is_token_func_call(i)))));
 	};
 	bool func_used = false;
 	bool class_used = false;
@@ -370,11 +472,7 @@ Error FakeGDScript::parse_script() {
 	bool extends_used = false;
 	bool class_name_used = false;
 	export_vars.clear();
-	int indent = 0;
 	uint32_t prev_line = 1;
-	uint32_t prev_line_start_column = 1;
-	GT prev_token = GT::G_TK_NEWLINE;
-	int tab_size = 1;
 
 	// We should only fail when there's something that the decompiler should have already caught; otherwise we'll just warn.
 #define FAKEGDSCRIPT_PARSE_FAIL_COND_V_MSG(cond, msg)                                   \
@@ -384,56 +482,35 @@ Error FakeGDScript::parse_script() {
 	}
 
 	auto handle_newline = [&](int i, GlobalToken curr_token) {
-		auto curr_line = script_state.get_token_line(i);
-		auto curr_column = script_state.get_token_column(i);
+		int curr_line = tokens[i].end_line;
 		if (curr_line <= prev_line) {
 			curr_line = prev_line + 1; // force new line
 		}
-		while (curr_line > prev_line) {
-			prev_line++;
-		}
-		if (curr_token == GT::G_TK_NEWLINE) {
-			indent = tokens[i] >> GDScriptDecomp::TOKEN_BITS;
-		} else if (script_state.bytecode_version >= GDScriptDecomp::GDSCRIPT_2_0_VERSION) {
-			prev_token = GT::G_TK_NEWLINE;
-			int col_diff = (int)curr_column - (int)prev_line_start_column;
-			if (col_diff != 0) {
-				int tabs = col_diff / tab_size;
-				if (tabs == 0) {
-					indent += (col_diff > 0 ? 1 : -1);
-				} else {
-					indent += tabs;
-				}
-			}
-			prev_line_start_column = curr_column;
-		}
-		prev_token = GT::G_TK_NEWLINE;
+		prev_line = curr_line;
 	};
 
 	auto get_export_var = [&](int i) {
-		while (!decomp->check_next_token(i, tokens, GT::G_TK_PR_VAR) && i < tokens.size()) {
+		while (!CHECK_NEXT_TOKEN(i, GT::G_TK_PR_VAR) && i < tokens.size()) {
 			i++;
 		}
 		if (i >= tokens.size()) {
 			WARN_PRINT(vformat("Line %d: Unexpected end of file while parsing @export", prev_line));
 			return OK;
 		}
-		if (decomp->check_next_token(i, tokens, GT::G_TK_PR_VAR) && decomp->check_next_token(i + 1, tokens, GT::G_TK_IDENTIFIER)) {
-			uint32_t identifier = tokens[i + 2] >> GDScriptDecomp::TOKEN_BITS;
-			FAKEGDSCRIPT_PARSE_FAIL_COND_V_MSG(identifier >= (uint32_t)identifiers.size(), "Invalid identifier index");
-			export_vars.push_back(identifiers[identifier]);
+		if (CHECK_NEXT_TOKEN(i, GT::G_TK_PR_VAR) && CHECK_NEXT_TOKEN(i + 1, GT::G_TK_IDENTIFIER)) {
+			export_vars.push_back(tokens[i + 2].literal);
 		}
 		return OK;
 	};
 
 	auto set_abstract = [&](int i) {
 		// has to be before the script body and not annotating an inner class
-		if (!class_name_used && !extends_used && !func_used && !var_used && !const_used && !decomp->check_next_token(i, tokens, GT::G_TK_PR_CLASS)) {
+		if (!class_name_used && !extends_used && !func_used && !var_used && !const_used && !CHECK_NEXT_TOKEN(i, GT::G_TK_PR_CLASS)) {
 			abstract = true;
 		}
 	};
 	auto check_new_line = [&](int i) {
-		auto ln = script_state.get_token_line(i);
+		auto ln = tokens[i].end_line;
 		if (ln != prev_line && ln != 0) {
 			return true;
 		}
@@ -441,8 +518,7 @@ Error FakeGDScript::parse_script() {
 	};
 
 	for (int i = 0; i < tokens.size(); i++) {
-		uint32_t local_token = tokens[i] & GDScriptDecomp::TOKEN_MASK;
-		GlobalToken curr_token = decomp->get_global_token(local_token);
+		GlobalToken curr_token = tokens[i].type;
 		if (curr_token != GT::G_TK_NEWLINE && check_new_line(i)) {
 			handle_newline(i, curr_token);
 		}
@@ -453,10 +529,7 @@ Error FakeGDScript::parse_script() {
 			case GT::G_TK_ANNOTATION: {
 				// in GDScript 2.0, the "@tool" annotation has to be the first expression in the file
 				// (i.e. before the class body and 'extends' or 'class_name' keywords)
-				uint32_t a_id = tokens[i] >> GDScriptDecomp::TOKEN_BITS;
-				FAKEGDSCRIPT_PARSE_FAIL_COND_V_MSG(a_id >= (uint32_t)identifiers.size(), "Invalid annotation index");
-
-				const StringName &annotation = identifiers[a_id];
+				const StringName &annotation = tokens[i].literal;
 				const String annostr = annotation.get_data();
 				bool nothing_used = !func_used && !class_used && !var_used && !const_used && !extends_used && !class_name_used;
 
@@ -464,11 +537,9 @@ Error FakeGDScript::parse_script() {
 					tool = true;
 				} else if (nothing_used && annostr == "@icon") {
 					// @icon("res://path/to/icon.svg")
-					if (decomp->check_next_token(i, tokens, GT::G_TK_PARENTHESIS_OPEN) &&
-							decomp->check_next_token(i + 1, tokens, GT::G_TK_CONSTANT)) {
-						uint32_t string_id = tokens[i + 2] >> GDScriptDecomp::TOKEN_BITS;
-						FAKEGDSCRIPT_PARSE_FAIL_COND_V_MSG(string_id >= (uint32_t)constants.size(), "Invalid string index");
-						icon_path = constants[string_id];
+					if (CHECK_NEXT_TOKEN(i, GT::G_TK_PARENTHESIS_OPEN) &&
+							CHECK_NEXT_TOKEN(i + 1, GT::G_TK_CONSTANT)) {
+						icon_path = tokens[i + 2].literal;
 						if (icon_path.is_relative_path()) {
 							icon_path = script_path.get_base_dir().path_join(icon_path);
 						}
@@ -485,15 +556,13 @@ Error FakeGDScript::parse_script() {
 			} break;
 			case GT::G_TK_PR_SIGNAL: {
 				// only signals at the top level
-				if (indent == 0) {
-					if (decomp->check_next_token(i, tokens, GT::G_TK_IDENTIFIER)) {
-						uint32_t identifier = tokens[i + 1] >> GDScriptDecomp::TOKEN_BITS;
-						FAKEGDSCRIPT_PARSE_FAIL_COND_V_MSG(identifier >= (uint32_t)identifiers.size(), "After signal: Invalid identifier index");
-						const StringName &signal_name = identifiers[identifier];
+				if (tokens[i].start_column == 1) {
+					if (CHECK_NEXT_TOKEN(i, GT::G_TK_IDENTIFIER)) {
+						const StringName &signal_name = tokens[i + 1].literal;
 						int arg_count = 0;
-						if (decomp->check_next_token(i + 1, tokens, GT::G_TK_PARENTHESIS_OPEN)) {
-							Vector<Vector<uint32_t>> args;
-							arg_count = decomp->get_func_arg_count_and_params(i + 1, tokens, args);
+						Vector<Vector<int>> args;
+						if (CHECK_NEXT_TOKEN(i + 1, GT::G_TK_PARENTHESIS_OPEN)) {
+							arg_count = get_func_arg_count_and_params(i + 1, tokens, args);
 						}
 						if (arg_count >= 0) {
 							MethodInfo mi = MethodInfo(signal_name);
@@ -517,9 +586,9 @@ Error FakeGDScript::parse_script() {
 					func_used = true;
 
 					// only methods at the top level
-					if (indent == 0) {
+					if (tokens[i].start_column == 1) {
 						StringName method_name;
-						if (i + 1 < tokens.size() && (script_state.bytecode_version < GDScriptDecomp::GDSCRIPT_2_0_VERSION || (GDScriptDecomp::token_is_valid_v2_func_id(decomp->get_global_token(tokens[i + 1]))))) {
+						if (i + 1 < tokens.size() && (script_state.bytecode_version < GDScriptDecomp::GDSCRIPT_2_0_VERSION || tokens[i + 1].is_identifier())) {
 							String method = decomp->get_token_text(script_state, i + 1);
 							if (method.is_empty() || method.begins_with("ERROR:")) {
 								WARN_PRINT(vformat("Line %d: Failed to parse method:%s", prev_line, method.trim_prefix("ERROR:")));
@@ -528,20 +597,18 @@ Error FakeGDScript::parse_script() {
 							method_name = method;
 						} else {
 							// Only warn if this isn't a lambda
-							if (!decomp->check_next_token(i, tokens, GT::G_TK_PARENTHESIS_OPEN)) {
+							if (!CHECK_NEXT_TOKEN(i, GT::G_TK_PARENTHESIS_OPEN)) {
 								WARN_PRINT(vformat("Line %d: Failed to parse method name", prev_line));
 							}
 							continue;
 						}
-						bool is_static = decomp->check_prev_token(i, tokens, GT::G_TK_PR_STATIC);
+						bool is_static = CHECK_PREV_TOKEN(i, GT::G_TK_PR_STATIC);
 						bool is_abstract = false;
 						if (!is_static && script_state.bytecode_version >= GDScriptDecomp::GDSCRIPT_2_0_VERSION) {
 							int j = i;
 							while (j < tokens.size() && j > 0) {
-								if (decomp->check_prev_token(j, tokens, GT::G_TK_ANNOTATION)) {
-									uint32_t a_id = tokens[j - 1] >> GDScriptDecomp::TOKEN_BITS;
-									FAKEGDSCRIPT_PARSE_FAIL_COND_V_MSG(a_id >= (uint32_t)identifiers.size(), "Invalid annotation index");
-									const StringName &annotation = identifiers[a_id];
+								if (CHECK_PREV_TOKEN(j, GT::G_TK_ANNOTATION)) {
+									const StringName &annotation = tokens[j - 1].literal;
 									if (annotation == "@abstract") {
 										is_abstract = true;
 										break;
@@ -554,12 +621,12 @@ Error FakeGDScript::parse_script() {
 						}
 						int arg_count = 0;
 						bool is_var_arg = false;
-						if (decomp->check_next_token(i + 1, tokens, GT::G_TK_PARENTHESIS_OPEN)) {
-							Vector<Vector<uint32_t>> args;
-							arg_count = decomp->get_func_arg_count_and_params(i + 1, tokens, args);
+						if (CHECK_NEXT_TOKEN(i + 1, GT::G_TK_PARENTHESIS_OPEN)) {
+							Vector<Vector<int>> args;
+							arg_count = get_func_arg_count_and_params(i + 1, tokens, args);
 							if (!args.is_empty() && args[args.size() - 1].size() > 0) {
-								uint32_t first_last_arg_token = args[args.size() - 1].get(0);
-								if (decomp->get_global_token(first_last_arg_token) == GT::G_TK_PERIOD_PERIOD_PERIOD) {
+								int first_last_arg_token = args[args.size() - 1].get(0);
+								if (tokens[first_last_arg_token].type == GT::G_TK_PERIOD_PERIOD_PERIOD) {
 									is_var_arg = true;
 								}
 							}
@@ -597,7 +664,7 @@ Error FakeGDScript::parse_script() {
 				}
 			} break;
 			case GT::G_TK_PR_EXPORT: {
-				if (!is_not_actually_reserved_word(i) && indent == 0) {
+				if (!is_not_actually_reserved_word(i) && tokens[i].start_column == 1) {
 					Error err = get_export_var(i);
 					if (err) {
 						return err;
@@ -614,7 +681,7 @@ Error FakeGDScript::parse_script() {
 				if (!is_not_actually_reserved_word(i)) {
 					class_used = true;
 				}
-				// if (decomp->check_next_token(i, tokens, GT::G_TK_IDENTIFIER)) {
+				// if (CHECK_NEXT_TOKEN(i, GT::G_TK_IDENTIFIER)) {
 				// 	curr_class = get_identifier_func(i + 1);
 				// 	curr_class_indent = indent;
 				// 	curr_class_start_idx = i;
@@ -626,10 +693,9 @@ Error FakeGDScript::parse_script() {
 					break;
 				}
 				// "class_name" can be used literally anywhere in GDScript 1, so we only check it if it's actually a reserved word
-				if (global_name.is_empty() && decomp->check_next_token(i, tokens, GT::G_TK_IDENTIFIER)) {
-					uint32_t identifier = tokens[i + 1] >> GDScriptDecomp::TOKEN_BITS;
-					FAKEGDSCRIPT_PARSE_FAIL_COND_V_MSG(identifier >= (uint32_t)identifiers.size(), "After class_name: Invalid identifier index");
-					global_name = identifiers[identifier];
+				if (global_name.is_empty() && CHECK_NEXT_TOKEN(i, GT::G_TK_IDENTIFIER)) {
+					const StringName &identifier = tokens[i + 1].literal;
+					global_name = identifier;
 					local_name = global_name;
 					globally_available = true;
 				}
@@ -639,18 +705,14 @@ Error FakeGDScript::parse_script() {
 				// "extends" is only valid for the global class if it's not in the body (class_name and tool can be used before it)
 				// This applies to all versions of GDScript
 				if (base_type.is_empty() && !func_used && !class_used && !var_used && !const_used && !extends_used && !is_not_actually_reserved_word(i)) {
-					if (decomp->check_next_token(i, tokens, GT::G_TK_CONSTANT)) {
-						uint32_t constant = tokens[i + 1] >> GDScriptDecomp::TOKEN_BITS;
-						FAKEGDSCRIPT_PARSE_FAIL_COND_V_MSG(constant >= (uint32_t)constants.size(), "After extends: Invalid constant index");
-						base_type = constants[constant];
-					} else if (decomp->check_next_token(i, tokens, GT::G_TK_IDENTIFIER)) {
-						uint32_t identifier = tokens[i + 1] >> GDScriptDecomp::TOKEN_BITS;
-						FAKEGDSCRIPT_PARSE_FAIL_COND_V_MSG(identifier >= (uint32_t)identifiers.size(), "After extends: Invalid identifier index");
-						base_type = identifiers[identifier];
-					} else if (decomp->check_next_token(i, tokens, GT::G_TK_BUILT_IN_TYPE)) {
-						base_type = VariantDecoderCompat::get_variant_type_name(tokens[i + 1] >> GDScriptDecomp::TOKEN_BITS, variant_ver_major);
+					if (CHECK_NEXT_TOKEN(i, GT::G_TK_CONSTANT)) {
+						base_type = tokens[i + 1].literal;
+					} else if (CHECK_NEXT_TOKEN(i, GT::G_TK_IDENTIFIER)) {
+						base_type = tokens[i + 1].literal;
+					} else if (CHECK_NEXT_TOKEN(i, GT::G_TK_BUILT_IN_TYPE)) {
+						base_type = VariantDecoderCompat::get_variant_type_name(tokens[i + 1].literal, variant_ver_major);
 					} else {
-						String next_token_name = i + 1 < tokens.size() ? decomp->get_global_token_name(decomp->get_global_token(tokens[i + 1])) : "end of file";
+						String next_token_name = i + 1 < tokens.size() ? tokens[i + 1].get_debug_name() : "end of file";
 						WARN_PRINT(vformat("Line %d: Invalid extends keyword, next token is %s", prev_line, next_token_name));
 					}
 				}
