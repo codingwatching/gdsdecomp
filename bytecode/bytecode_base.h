@@ -220,7 +220,6 @@ public:
 	static Vector<String> get_bytecode_versions();
 
 	virtual Error decompile_buffer(Vector<uint8_t> p_buffer);
-	Error decompile_buffer_2(Vector<uint8_t> p_buffer);
 	virtual BytecodeTestResult _test_bytecode(Vector<uint8_t> p_buffer, int &p_token_max, int &p_func_max, bool print_verbose = false);
 	BytecodeTestResult test_bytecode(Vector<uint8_t> p_buffer, bool print_verbose = false);
 
