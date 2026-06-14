@@ -425,7 +425,7 @@ bool APKArchive::try_open_pack(const String &p_path, bool p_replace_files, uint6
 
 	Ref<GDRESettings::PackInfo> pckinfo;
 	pckinfo.instantiate();
-	pckinfo->init(pack_path, godot_ver, fmt_ver, 0, 0, asset_count, is_apk ? GDRESettings::PackInfo::APK : GDRESettings::PackInfo::ZIP);
+	pckinfo->init(pack_path, godot_ver, fmt_ver, 0, 0, asset_count, is_apk ? GDRESettings::PackInfo::APK : GDRESettings::PackInfo::ZIP, false, false, "", manifest_info.app_version_name);
 	GDRESettings::get_singleton()->add_pack_info(pckinfo);
 
 	return true;

@@ -48,10 +48,11 @@ public:
 		bool encrypted = false;
 		bool suspect_version = false;
 		String non_standard_header;
+		String app_version;
 
 	public:
 		void init(
-				String f, Ref<GodotVer> godot_ver, uint32_t fver, uint32_t flags, uint64_t base, uint32_t count, PackType tp, bool p_encrypted = false, bool p_suspect_version = false, String p_non_standard_header = {}) {
+				String f, Ref<GodotVer> godot_ver, uint32_t fver, uint32_t flags, uint64_t base, uint32_t count, PackType tp, bool p_encrypted = false, bool p_suspect_version = false, String p_non_standard_header = {}, String p_application_version = {}) {
 			pack_file = f;
 			// copy the version, or set it to null if it's invalid
 			if (godot_ver.is_valid() && godot_ver->is_valid_semver()) {
@@ -66,6 +67,7 @@ public:
 			encrypted = p_encrypted;
 			suspect_version = p_suspect_version;
 			non_standard_header = p_non_standard_header;
+			app_version = p_application_version;
 		}
 		bool has_unknown_version() {
 			return !version.is_valid() || !version->is_valid_semver();
@@ -113,6 +115,7 @@ public:
 
 	public:
 		Ref<GodotVer> version;
+		String app_version;
 		Ref<ProjectConfigLoader> pcfg;
 		HashSet<String> resource_strings; // For translation key recovery
 		bool loaded_resource_strings = false;

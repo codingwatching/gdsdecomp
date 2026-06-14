@@ -1245,7 +1245,11 @@ void GDRESettings::add_pack_info(Ref<PackInfo> packinfo) {
 		current_project->type = packinfo->type;
 		current_project->suspect_version = packinfo->suspect_version;
 		current_project->non_standard_header = packinfo->non_standard_header;
+		current_project->app_version = packinfo->app_version;
 	} else {
+		if (current_project->app_version.is_empty() && !packinfo->app_version.is_empty()) {
+			current_project->app_version = packinfo->app_version;
+		}
 		if (!current_project->version->eq(packinfo->version)) {
 			if ((!current_project->version->is_valid_semver() || current_project->version->get_major() == 0) &&
 					packinfo->version->is_valid_semver() && packinfo->version->get_major() != 0) {
@@ -2103,11 +2107,14 @@ String GDRESettings::get_game_name() const {
 }
 
 String GDRESettings::get_game_app_version() const {
+	if (!is_pack_loaded()) {
+		return "";
+	}
 	if (is_project_config_loaded()) {
 		const char *version_setting = get_ver_major() <= 3 ? "application/version" : "application/config/version";
-		return current_project->pcfg->get_setting(version_setting, "");
+		return current_project->pcfg->get_setting(version_setting, current_project->app_version);
 	}
-	return "";
+	return current_project->app_version;
 }
 
 Error GDRESettings::load_pack_gdscript_cache(bool p_reset) {
