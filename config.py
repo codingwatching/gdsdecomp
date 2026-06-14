@@ -50,23 +50,6 @@ def monkey_patch_sort_module_list():
     methods.sort_module_list = sort_module_list
 
 
-# def monkey_patch_tests():
-#     import tests.test_builders  # pyright: ignore[reportMissingImports]
-
-#     old_force_link_builder = tests.test_builders.force_link_builder
-
-#     def force_link_builder(target, source, env):
-#         print("HI!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-#         from SCons.Script import Glob  # pyright: ignore[reportMissingImports, reportAttributeAccessIssue]
-
-#         old_source_list: list[str] = source[0].read()
-#         new_source_list: list[str] = old_source_list + Glob("#modules/gdsdecomp/tests/*.cpp")
-#         print(f"new_source_list: {new_source_list}")
-#         return old_force_link_builder(target, env.Value(new_source_list), env)
-
-#     tests.test_builders.force_link_builder = force_link_builder
-
-
 def configure(env):
     _apply_core_patches(env)
     if not env.editor_build:
@@ -86,8 +69,6 @@ def configure(env):
         env.Append(LINKFLAGS=[min_version_flag])
         env.Append(CXXFLAGS=[min_version_flag])
         env.Append(ASFLAGS=[min_version_flag])
-    # if env["tests"]:
-    #     monkey_patch_tests()
 
 
 def get_opts(platform):
