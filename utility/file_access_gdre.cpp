@@ -199,7 +199,7 @@ void GDREPackedData::add_path(const String &p_pkg_path, const String &p_path, ui
 	// Get the fixed path if this is from a PCK source
 	String path = p_pck_src ? pf_info->get_path() : abs_path.simplify_path();
 
-	PathMD5 pmd5(path.trim_prefix("res://").md5_buffer());
+	PathMD5 pmd5(path.simplify_path().trim_prefix("res://").md5_buffer());
 
 	bool exists = files.has(pmd5);
 
