@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   static-check-clang-format:
-    runs-on: "ubuntu-24.04"
+    runs-on: "ubuntu-26.04"
     name: Static checks (clang-format)
     steps:
     - name: checkout-gdsdecomp
@@ -28,7 +28,7 @@ jobs:
     - name: Install Linux deps
       run: |
         sudo apt-get update
-        sudo apt-get install clang-format-18
-        sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-18 100
+        sudo apt-get install clang-format-21
+        sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-21 100
     - name: check clang_format
       run: bash ./.scripts/clang_format.sh
