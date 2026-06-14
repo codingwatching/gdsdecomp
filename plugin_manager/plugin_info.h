@@ -3,7 +3,7 @@
 #include "core/variant/variant.h"
 #include "utility/godotver.h"
 
-static constexpr int CACHE_VERSION = 6;
+static constexpr int CACHE_VERSION = 7;
 
 struct PluginBin {
 	String name;
@@ -11,6 +11,7 @@ struct PluginBin {
 	bool exists = false;
 	String sha256;
 	String verbatim_sha256;
+	String bin_ver;
 
 	Dictionary to_json() const;
 	static PluginBin from_json(Dictionary d);
@@ -35,6 +36,7 @@ struct ReleaseInfo {
 	String release_date;
 	String download_url;
 	String repository_url;
+	String sha256_sum;
 
 	bool is_valid() const;
 

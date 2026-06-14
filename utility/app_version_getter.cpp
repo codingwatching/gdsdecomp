@@ -3,6 +3,8 @@
 #include "core/io/xml_parser.h"
 #include "core/object/class_db.h"
 
+#include "utility/glob.h"
+
 #define SKIP_UNTIL_NODE_TYPE(type) {while (parser->get_node_type() != type && parser->read() != ERR_FILE_EOF) { }; if (parser->get_node_type() != type) { break; }}
 #define SKIP_UNTIL_NODE_NAME(name) {while (!(parser->get_node_type() == XMLParser::NODE_ELEMENT && parser->get_node_name() == name) && parser->read() != ERR_FILE_EOF) { }; if (!(parser->get_node_type() == XMLParser::NODE_ELEMENT && parser->get_node_name() == name)) { break; }}
 String AppVersionGetter::get_version_from_info_plist(const String &p_path) {
@@ -43,6 +45,21 @@ String AppVersionGetter::get_version_from_info_plist(const String &p_path) {
 		version = short_version_string;
 	}
 	return version;
+}
+
+String AppVersionGetter::get_version_from_app_or_framework(const String &p_path) {
+	// just search for a plist
+	Vector<String> paths = Glob::rglob(p_path.path_join("**/Info.plist"));
+	if (paths.is_empty()) {
+		return "";
+	}
+	for (const String &path : paths) {
+		String version = get_version_from_info_plist(path);
+		if (!version.is_empty()) {
+			return version;
+		}
+	}
+	return "";
 }
 
 #ifdef TOOLS_ENABLED

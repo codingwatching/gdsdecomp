@@ -62,6 +62,11 @@ TaskManager::DownloadTaskID PluginManager::start_download_plugin_to_cache(const 
 	r_error = gdre::ensure_dir(save_path.get_base_dir());
 	ERR_FAIL_COND_V_MSG(r_error != OK, -1, "Failed to ensure directory exists: " + save_path.get_base_dir());
 	r_save_path = save_path;
+	if (is_prepopping()) {
+		Error err = HTTPRequester::download_file_sync(p_release_info.download_url, save_path);
+		ERR_FAIL_COND_V_MSG(err != OK, -1, "Failed to download plugin to cache: " + p_release_info.download_url);
+		return TaskManager::get_singleton()->add_fake_download_task(p_release_info.download_url, save_path);
+	}
 	return TaskManager::get_singleton()->add_download_task(p_release_info.download_url, save_path);
 }
 
@@ -402,6 +407,7 @@ PluginVersion PluginManager::populate_plugin_version_from_release(const ReleaseI
 	version.min_godot_version = "";
 	version.max_godot_version = "";
 	version.base_folder = "";
+	version.archive_sha256 = release_info.sha256_sum;
 
 	// Download and analyze the plugin using the new method
 	r_error = populate_plugin_version_hashes(version);
@@ -420,14 +426,9 @@ Error PluginManager::populate_plugin_version_hashes(PluginVersion &plugin_versio
 	print_line("Downloading plugin to populate cache: " + url);
 
 	Error err = OK;
-	if (!is_prepopping()) {
-		auto task_id = start_download_plugin_to_cache(plugin_version.release_info, plugin_version.archive_sha256, zip_path, err);
-		ERR_FAIL_COND_V_MSG(err || task_id == -1, err, "Failed to start download task for plugin " + plugin_version.release_info.download_url);
-		err = TaskManager::get_singleton()->wait_for_download_task_completion(task_id);
-	} else {
-		zip_path = get_download_path_for_release(plugin_version.release_info);
-		err = HTTPRequester::download_file_sync(url, zip_path);
-	}
+	auto task_id = start_download_plugin_to_cache(plugin_version.release_info, plugin_version.archive_sha256, zip_path, err);
+	ERR_FAIL_COND_V_MSG(err || task_id == -1, err, "Failed to start download task for plugin " + plugin_version.release_info.download_url);
+	err = TaskManager::get_singleton()->wait_for_download_task_completion(task_id);
 
 	if (err) {
 		if (err == ERR_FILE_NOT_FOUND) {
@@ -456,7 +457,10 @@ Error PluginManager::populate_plugin_version_hashes(PluginVersion &plugin_versio
 		return err;
 	}
 
-	plugin_version.archive_sha256 = gdre::get_sha256(zip_path);
+	String archive_sha256 = gdre::get_sha256(zip_path);
+	if (!plugin_version.archive_sha256.is_empty() && archive_sha256 != plugin_version.archive_sha256) {
+		WARN_PRINT("Archive SHA-256 mismatch: " + plugin_version.archive_sha256 + " != " + archive_sha256);
+	}
 
 	auto files = gdre::get_recursive_dir_list(unzupped_path, {}, false, true);
 	for (int64_t i = files.size() - 1; i >= 0; i--) {

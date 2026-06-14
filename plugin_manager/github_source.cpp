@@ -333,6 +333,13 @@ ReleaseInfo GitHubSource::get_release_info(const String &plugin_name, int64_t pr
 					release_info.release_date = normalize_release_date(release_info.release_date);
 					// Time:: doesn't parse the timezone offset, so we need to parse it manually
 				}
+				String sha256_sum = asset.get("digest", "");
+				if (sha256_sum.begins_with("sha256:")) {
+					sha256_sum = sha256_sum.trim_prefix("sha256:");
+				} else {
+					sha256_sum = "";
+				}
+				release_info.sha256_sum = sha256_sum;
 
 				release_info.download_url = download_url;
 				release_info.repository_url = get_repo_url(plugin_name);

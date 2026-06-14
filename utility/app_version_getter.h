@@ -9,5 +9,6 @@ protected:
 
 public:
 	static String get_version_from_info_plist(const String &p_path);
+	static String get_version_from_app_or_framework(const String &p_path);
 	static String get_version_from_windows_exe_versioninfo(const String &p_path);
 };
