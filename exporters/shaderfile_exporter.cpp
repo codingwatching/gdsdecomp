@@ -3,12 +3,12 @@
 #include "thirdparty/spirv-cross/spirv_parser.hpp"
 
 #include "shaderfile_exporter.h"
+
 #include "compat/resource_loader_compat.h"
 #include "core/error/error_list.h"
 #include "core/io/file_access.h"
 #include "core/object/property_info.h"
 #include "core/variant/variant.h"
-
 #include "utility/common.h"
 #include "utility/gdre_settings.h"
 
