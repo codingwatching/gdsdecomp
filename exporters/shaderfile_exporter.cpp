@@ -8,30 +8,10 @@
 #include "utility/common.h"
 #include "utility/gdre_settings.h"
 
-// struct PLSArg
-// {
-// 	spirv_cross::PlsFormat format;
-// 	std::string name;
-// };
-
-// struct Remap
-// {
-// 	std::string src_name;
-// 	std::string dst_name;
-// 	unsigned components;
-// };
-
 struct VariableTypeRemap {
 	std::string variable_name;
 	std::string new_variable_type;
 };
-
-// struct InterfaceVariableRename
-// {
-// 	spv::StorageClass storageClass;
-// 	uint32_t location;
-// 	std::string variable_name;
-// };
 
 struct SPIRVCrossOptions {
 	const char *input = nullptr;
@@ -64,24 +44,11 @@ struct SPIRVCrossOptions {
 	bool force_zero_initialized_variables = false;
 	bool relax_nan_checks = false;
 	uint32_t force_recompile_max_debug_iterations = 3;
-	// std::vector<PLSArg> pls_in;
-	// std::vector<PLSArg> pls_out;
-	// std::vector<Remap> remaps;
 	std::vector<std::string> extensions;
 	std::vector<VariableTypeRemap> variable_type_remaps;
-	// std::vector<InterfaceVariableRename> interface_variable_renames;
 	std::vector<std::pair<uint32_t, uint32_t>> masked_stage_outputs;
-	// std::vector<spv::BuiltIn> masked_stage_builtins;
 	std::string entry;
 	std::string entry_stage;
-
-	// struct Rename
-	// {
-	// 	std::string old_name;
-	// 	std::string new_name;
-	// 	spv::ExecutionModel execution_model;
-	// };
-	// std::vector<Rename> entry_point_rename;
 
 	uint32_t iterations = 1;
 	bool cpp = false;
@@ -126,11 +93,11 @@ Error ShaderFileExporter::export_file(const String &out_path, const String &res_
 	args.vulkan_semantics = false;
 	if (info->get_ver_major() >= 4 && GDRESettings::get_singleton()->is_project_config_loaded() && GDRESettings::get_singleton()->has_project_setting("application/config/features")) {
 		PackedStringArray features = GDRESettings::get_singleton()->get_project_setting(res_path, "application/config/features");
-		if (features.has("GL Compatibility")) {
-			args.vulkan_semantics = false;
-		} else {
+		if (!features.has("GL Compatibility")) {
 			args.vulkan_semantics = true;
 			args.glsl_emit_ubo_as_plain_uniforms = false;
+		} else {
+			args.vulkan_semantics = false;
 		}
 	}
 
