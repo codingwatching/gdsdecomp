@@ -2,6 +2,7 @@
 
 #include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
+#include "core/os/os.h"
 #include "gdre_audio_stream_preview.h"
 #include "gui/gdre_window.h"
 #include "scene/gui/dialogs.h"
@@ -9,7 +10,6 @@
 #include "scene/main/node.h"
 #include "utility/gdre_logger.h"
 #include "utility/gdre_version.gen.h"
-#include "utility/task_manager.h"
 
 GodotREEditorStandalone *GodotREEditorStandalone::singleton = nullptr;
 
@@ -27,7 +27,7 @@ void GodotREEditorStandalone::write_log_message(const String &p_message) {
 		GDRELogger::stdout_print("ERROR: Failed to push log message to buffer");
 	}
 	// if it's been less than 200ms since the last log message, add it to the buffer
-	if (!Thread::is_main_thread() || current_time - OS::get_singleton()->get_ticks_msec() < LOG_MESSAGE_THRESHOLD_MS) {
+	if (!Thread::is_main_thread() || last_log_message_time - current_time < LOG_MESSAGE_THRESHOLD_MS) {
 		return;
 	}
 
