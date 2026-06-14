@@ -9,8 +9,10 @@
 #include "exporters/dialogue_exporter.h"
 #include "exporters/func_godot_exporter.h"
 #include "gui/gdre_audio_stream_preview.h"
+#include "gui/gdre_color_channel_selector.h"
 #include "gui/gdre_progress.h"
 #include "gui/gdre_standalone.h"
+#include "gui/texture_layered_previewer.h"
 #include "modules/regex/regex.h"
 #include "utility/app_version_getter.h"
 #include "utility/file_access_gdre.h"
@@ -552,6 +554,8 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<ScenePreviewer3D>();
 	ClassDB::register_class<ScenePreviewer2D>();
 	ClassDB::register_class<ScenePreviewer>();
+	ClassDB::register_class<GDREColorChannelSelector>();
+	ClassDB::register_class<TextureLayeredPreviewer>();
 	ClassDB::register_class<GDREFindReplaceBar>();
 	ClassDB::register_class<GDREXMLHighlighter>();
 	ClassDB::register_class<GodotMonoDecompWrapper>();
@@ -585,12 +589,14 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	// Register ICO image loader
 	ico_loader.instantiate();
 	ImageLoader::add_image_format_loader(ico_loader);
+	TextureLayeredPreviewer::init_shaders();
 }
 
 void uninitialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
 	}
+	TextureLayeredPreviewer::finish_shaders();
 	if (ico_loader.is_valid()) {
 		ImageLoader::remove_image_format_loader(ico_loader);
 		ico_loader.unref();

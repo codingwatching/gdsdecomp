@@ -70,6 +70,7 @@ func _make_all_views_invisible():
 	%TextureView.visible = false
 	%MeshPreviewer.visible = false
 	%ScenePreviewer3D.visible = false
+	%TextureLayeredPreviewer.visible = false
 
 func _reset():
 	current_resource_path = ""
@@ -82,6 +83,7 @@ func _reset():
 	%ResourceInfo.text = ""
 	%MeshPreviewer.reset()
 	%ScenePreviewer3D.reset()
+	%TextureLayeredPreviewer.reset()
 
 
 var previous_res_info_size = Vector2(0, 0)
@@ -108,6 +110,14 @@ func load_texture(path):
 
 	%TextureInfo.text = info_text
 	%TextureView.visible = true
+	return true
+
+func load_layered_texture(path):
+	var res = ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP)
+	if not res:
+		return false
+	%TextureLayeredPreviewer.edit(res)
+	%TextureLayeredPreviewer.visible = true
 	return true
 
 func pop_resource_info(path: String, info: Dictionary):
@@ -246,6 +256,8 @@ func load_resource(path: String) -> void:
 		error_opening = not load_mesh(path)
 	elif (GDREConfig.get_setting("Preview/use_scene_view_by_default", false) and is_scene(ext, current_resource_type) and can_preview_scene()):
 		error_opening = not load_scene(path)
+	elif (is_layered_texture(ext)):
+		error_opening = not load_layered_texture(path)
 	else:
 		var type = %TextView.recognize(path)
 		if type == -1:
@@ -339,6 +351,11 @@ func is_image(ext, p_type = ""):
 		return true
 	return false
 
+func is_layered_texture(ext, p_type = ""):
+	if (ext == "ctexarray" || ext == "ccube" || ext == "ccubearray" || ext == "texarr" || ext == "ctex3d" || ext == "tex3d"):
+		return true
+	return false
+
 func get_currently_visible_view() -> Control:
 	if %TextView.visible:
 		return %TextView
@@ -350,6 +367,8 @@ func get_currently_visible_view() -> Control:
 		return %MeshPreviewer
 	elif %ScenePreviewer3D.visible:
 		return %ScenePreviewer3D
+	elif %TextureLayeredPreviewer.visible:
+		return %TextureLayeredPreviewer
 	return null
 
 
