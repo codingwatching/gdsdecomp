@@ -86,9 +86,8 @@ bool GDREMainLoop::wait_until_next_frame(int64_t p_time_usec) {
 	return singleton->_wait_until_next_frame(p_time_usec, false);
 }
 
-bool GDREMainLoop::_wait_until_next_frame(int64_t input_time_usec, bool called_from_process) {
-	int64_t p_time_usec = MAX(1, input_time_usec);
-	uint64_t curr_time = OS::get_singleton()->get_ticks_usec();
+bool GDREMainLoop::_wait_until_next_frame(int64_t p_time_usec, bool called_from_process) {
+	p_time_usec = MAX(1, p_time_usec);
 	if (!Thread::is_main_thread()) {
 		OS::get_singleton()->delay_usec(p_time_usec);
 		return TaskManager::get_singleton()->is_current_task_canceled();
@@ -96,6 +95,7 @@ bool GDREMainLoop::_wait_until_next_frame(int64_t input_time_usec, bool called_f
 	if (processing) {
 		return false;
 	}
+	uint64_t curr_time = OS::get_singleton()->get_ticks_usec();
 	processing = true;
 	TaskManager::get_singleton()->process_main_thread_dispatch_queue_for(p_time_usec);
 	bool did_redraw = false;
