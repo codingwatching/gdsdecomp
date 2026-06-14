@@ -4,6 +4,13 @@ import shutil
 from subprocess import STDOUT, CalledProcessError, check_output
 
 from .common import get_cmd_env, is_dev_build, get_sources, add_libs_to_env
+from .paths import (
+    get_module_dir,
+    get_build_dir,
+    get_godot_mono_decomp_dir,
+    GODOT_MONO_DECOMP_PARENT,
+    GODOT_MONO_DECOMP_LIBS,
+)
 
 from typing import TYPE_CHECKING, LiteralString
 
@@ -253,13 +260,14 @@ def build_godot_mono_decomp(
     env: SConsEnvironment,
     env_gdsdecomp: SConsEnvironment,
     module_obj,
-    module_dir: str,
-    build_dir: str,
-    godot_mono_decomp_parent: str,
-    godot_mono_decomp_dir: str,
-    godot_mono_decomp_libs: list[str],
 ):
     from SCons.Defaults import Copy
+    module_dir: str = get_module_dir(env)
+    build_dir: str = get_build_dir(env)
+    godot_mono_decomp_parent: str = GODOT_MONO_DECOMP_PARENT
+    godot_mono_decomp_dir: str = get_godot_mono_decomp_dir(env)
+    godot_mono_decomp_libs: list[str] = GODOT_MONO_DECOMP_LIBS
+
     lib_path = get_godot_mono_decomp_lib_dir(
         godot_mono_decomp_dir, env["platform"], env["arch"], env.get("dev_build", False)
     )

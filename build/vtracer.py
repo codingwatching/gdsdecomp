@@ -10,6 +10,8 @@ if TYPE_CHECKING:
     from SCons.Node.FS import File as SConsFile
     from ....misc.utility.scons_hints import *
 
+from .paths import VTRACER_LIBS, VTRACER_PREFIX, get_module_dir, get_vtracer_build_dir, get_vtracer_dir
+
 
 def get_cargo_arch(build_env):
     if build_env["arch"] == "x86_32":
@@ -165,13 +167,13 @@ def build_vtracer(
     root_env: SConsEnvironment,
     env_gdsdecomp: SConsEnvironment,
     module_obj,
-    module_dir,
-    external_dir,
-    vtracer_prefix,
-    vtracer_dir,
-    vtracer_build_dir,
-    vtracer_libs,
 ):
+    module_dir = get_module_dir(root_env)
+    vtracer_prefix = VTRACER_PREFIX
+    vtracer_dir = get_vtracer_dir(root_env)
+    vtracer_build_dir = get_vtracer_build_dir(root_env)
+    vtracer_libs = VTRACER_LIBS
+
     root_env.Append(LIBPATH=[get_vtracer_lib_dir(root_env, vtracer_build_dir)])
     source_suffixes = ["*.h", "*.cpp", "*.rs", "*.txt", "cargo.toml"]
     libs = get_vtracer_lib_paths(root_env, vtracer_build_dir, vtracer_libs)

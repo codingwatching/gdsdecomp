@@ -22,10 +22,6 @@ Import("env_modules")
 
 MODULE_DIR = get_module_dir(env)
 BUILD_DIR = get_build_dir(env)
-EXTERNAL_DIR = get_external_dir(MODULE_DIR)
-VTRACER_DIR = get_vtracer_dir(MODULE_DIR)
-VTRACER_BUILD_DIR = get_vtracer_build_dir(MODULE_DIR)
-GODOT_MONO_DECOMP_DIR = get_godot_mono_decomp_dir(MODULE_DIR)
 
 INCLUDE_DIRS = [
     VTRACER_INCLUDE_DIR,
@@ -144,32 +140,13 @@ if env["target"] == "editor":
 if env["tests"]:
     add_source_groups(env_gdsdecomp, module_obj, ["tests/*.cpp"])
 
-build_vtracer(
-    root_env=env,
-    env_gdsdecomp=env_gdsdecomp,
-    module_obj=module_obj,
-    module_dir=MODULE_DIR,
-    external_dir=EXTERNAL_DIR,
-    vtracer_prefix=VTRACER_PREFIX,
-    vtracer_dir=VTRACER_DIR,
-    vtracer_build_dir=VTRACER_BUILD_DIR,
-    vtracer_libs=VTRACER_LIBS,
-)
+build_vtracer(root_env=env, env_gdsdecomp=env_gdsdecomp, module_obj=module_obj)
 
 if "disable_gifski" in env and env["disable_gifski"]:
     env_gdsdecomp.Append(CPPDEFINES=["GIFSKI_DISABLED"])
 if "disable_godot_mono_decomp" in env and env["disable_godot_mono_decomp"]:
     env_gdsdecomp.Append(CPPDEFINES=["GODOT_MONO_DECOMP_DISABLED"])
 else:
-    build_godot_mono_decomp(
-        env=env,
-        env_gdsdecomp=env_gdsdecomp,
-        module_obj=module_obj,
-        module_dir=MODULE_DIR,
-        build_dir=BUILD_DIR,
-        godot_mono_decomp_parent=GODOT_MONO_DECOMP_PARENT,
-        godot_mono_decomp_dir=GODOT_MONO_DECOMP_DIR,
-        godot_mono_decomp_libs=GODOT_MONO_DECOMP_LIBS,
-    )
+    build_godot_mono_decomp(env=env, env_gdsdecomp=env_gdsdecomp, module_obj=module_obj)
 
 env.modules_sources += module_obj  # pyright: ignore[reportAttributeAccessIssue]

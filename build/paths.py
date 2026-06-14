@@ -37,18 +37,17 @@ def get_build_dir(env):
     return env.Dir("#bin").abspath
 
 
-def get_external_dir(module_dir):
-    return os.path.join(module_dir, EXTERNAL_STEM)
+def get_external_dir(env):
+    return os.path.join(get_module_dir(env), EXTERNAL_STEM)
 
 
-def get_vtracer_dir(module_dir):
-    return os.path.join(module_dir, VTRACER_PREFIX)
+def get_vtracer_dir(env):
+    return os.path.join(get_module_dir(env), VTRACER_PREFIX)
 
 
-def get_vtracer_build_dir(module_dir):
-    return os.path.join(get_vtracer_dir(module_dir), "target")
+def get_vtracer_build_dir(env):
+    return os.path.join(get_vtracer_dir(env), "target")
 
 
-def get_godot_mono_decomp_dir(module_dir):
-    return os.path.join(module_dir, GODOT_MONO_DECOMP_PREFIX)
-
+def get_godot_mono_decomp_dir(env):
+    return os.path.join(get_module_dir(env), GODOT_MONO_DECOMP_PREFIX)
