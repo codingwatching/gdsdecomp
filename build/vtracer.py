@@ -50,19 +50,14 @@ def get_cargo_target(build_env):
 def write_cargo_config_toml_file(build_env, module_dir, vtracer_prefix):
     is_windows = platform.system().lower().startswith("win")
     llvm_prebuild_path = find_llvm_prebuild_path(build_env).replace("\\", "/")
-    ar = llvm_prebuild_path + "/llvm-ar"
+    ar_suffix = ".exe" if is_windows else ""
+    linker_suffix = ".cmd" if is_windows else ""
+    ar = llvm_prebuild_path + "/llvm-ar" + ar_suffix
     min_sdk_ver = build_env["ndk_platform"].split("-")[1]
-    arm64_linker = llvm_prebuild_path + f"/aarch64-linux-android{min_sdk_ver}-clang"
-    arm_linker = llvm_prebuild_path + f"/arm7a-linux-android{min_sdk_ver}-clang"
-    x86_linker = llvm_prebuild_path + f"/i686-linux-android{min_sdk_ver}-clang"
-    x86_64_linker = llvm_prebuild_path + f"/x86_64-linux-android{min_sdk_ver}-clang"
-
-    if is_windows:
-        ar += ".exe"
-        arm64_linker += ".cmd"
-        arm_linker += ".cmd"
-        x86_linker += ".cmd"
-        x86_64_linker += ".cmd"
+    arm64_linker = llvm_prebuild_path + f"/aarch64-linux-android{min_sdk_ver}-clang{linker_suffix}"
+    arm_linker = llvm_prebuild_path + f"/arm7a-linux-android{min_sdk_ver}-clang{linker_suffix}"
+    x86_linker = llvm_prebuild_path + f"/i686-linux-android{min_sdk_ver}-clang{linker_suffix}"
+    x86_64_linker = llvm_prebuild_path + f"/x86_64-linux-android{min_sdk_ver}-clang{linker_suffix}"
 
     text = f"""
 [target.aarch64-linux-android]
@@ -177,8 +172,7 @@ def build_vtracer(
     vtracer_build_dir,
     vtracer_libs,
 ):
-    from SCons.Script import Action, Builder  # pyright: ignore[reportMissingImports]
-
+    root_env.Append(LIBPATH=[get_vtracer_lib_dir(root_env, vtracer_build_dir)])
     source_suffixes = ["*.h", "*.cpp", "*.rs", "*.txt", "cargo.toml"]
     libs = get_vtracer_lib_paths(root_env, vtracer_build_dir, vtracer_libs)
     lib_suffix = ".lib" if root_env.msvc else ".a"

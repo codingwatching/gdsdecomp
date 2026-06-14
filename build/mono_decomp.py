@@ -152,7 +152,6 @@ def godot_mono_builder(
         build_env, mono_native_lib_type, build_env["arch"], godot_mono_decomp_dir
     )
 
-    lib_dir = get_godot_mono_decomp_lib_dir(godot_mono_decomp_dir, build_env["platform"], build_env["arch"], dev_build)
     print("DOTNET PUBLISH CMD", " ".join(dotnet_publish_cmd))
     try:
         dotnet_publish_output = check_output(dotnet_publish_cmd, cwd=godot_mono_decomp_dir, stderr=STDOUT, env=cmd_env)
@@ -166,11 +165,9 @@ def godot_mono_builder(
         raise
 
     print("DOTNET PUBLISH OUTPUT", dotnet_publish_output.decode("utf-8"))
-    other_lib_dir = ""
     if build_env["platform"] == "macos" and mono_native_lib_type == "Shared":
         new_arch = "x86_64" if build_env["arch"] == "arm64" else "arm64"
         dotnet_publish_cmd = get_dotnet_publish_cmd(build_env, mono_native_lib_type, new_arch, godot_mono_decomp_dir)
-        other_lib_dir = get_godot_mono_decomp_lib_dir(godot_mono_decomp_dir, build_env["platform"], new_arch, dev_build)
         print("DOTNET PUBLISH CMD", dotnet_publish_cmd)
         dotnet_publish_output = check_output(dotnet_publish_cmd, cwd=godot_mono_decomp_dir)
         print("DOTNET PUBLISH OUTPUT", dotnet_publish_output.decode("utf-8"))
@@ -262,8 +259,12 @@ def build_godot_mono_decomp(
     godot_mono_decomp_dir: str,
     godot_mono_decomp_libs: list[str],
 ):
-    from SCons.Script import Action, Builder
     from SCons.Defaults import Copy
+    lib_path = get_godot_mono_decomp_lib_dir(
+        godot_mono_decomp_dir, env["platform"], env["arch"], env.get("dev_build", False)
+    )
+    env.Append(LIBPATH=[lib_path])
+
     mono_native_lib_type = "Static" if env["use_static_godot_mono_decomp"] else "Shared"
     libs = get_godot_mono_decomp_lib_paths(env, godot_mono_decomp_dir, godot_mono_decomp_libs, mono_native_lib_type)
     if mono_native_lib_type == "Static":

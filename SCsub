@@ -118,13 +118,7 @@ env_gdsdecomp.Prepend(CPPPATH=[MMP3_THIRDPARTY_DIR])
 if env["builtin_libwebp"]:
     env_gdsdecomp.Prepend(CPPPATH=[WEBP_THIRDPARTY_DIR, WEBP_THIRDPARTY_DIR + "src/"])
 
-env.Append(LIBPATH=[get_vtracer_lib_dir(env, VTRACER_BUILD_DIR)])
 env.Append(LIBPATH=[BUILD_DIR])
-env.Append(
-    LIBPATH=[
-        get_godot_mono_decomp_lib_dir(GODOT_MONO_DECOMP_DIR, env["platform"], env["arch"], env.get("dev_build", False))
-    ]
-)
 
 module_obj = []
 common_sources = [
