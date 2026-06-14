@@ -446,16 +446,6 @@ func _on_setenc_key_ok_pressed():
 	# get the current text in the line edit
 	var keytextbox = $SetEncryptionKeyWindow/VBoxContainer/KeyText
 	var key:String = keytextbox.text
-	if key.length() == 0:
-		GDRESettings.reset_encryption_key()
-	# set the key
-	else:
-		var err:int = GDRESettings.set_encryption_key_string(key)
-		if (err != OK):
-			keytextbox.text = ""
-			# pop up an accept dialog
-			$SetEncryptionKeyWindow.popup_error_box("Invalid key!\nKey must be a hex string with 64 characters", "Error")
-			return
 
 	if %EncryptionScriptPathText.text.length() > 0:
 		GDRESettings.get_recent_error_string()
@@ -465,6 +455,18 @@ func _on_setenc_key_ok_pressed():
 			return
 	else:
 		GDRESettings.reset_custom_decryptor()
+
+	if key.length() == 0:
+		GDRESettings.reset_encryption_key()
+	# set the key
+	else:
+		var err:int = GDRESettings.set_encryption_key_string(key)
+		if (err != OK):
+			keytextbox.text = ""
+			# pop up an accept dialog
+			$SetEncryptionKeyWindow.popup_error_box("Invalid key!\nKey must be a hex string with " + str(GDRESettings.get_required_key_size_in_bytes() * 2) + " characters", "Error")
+			return
+
 	# close the window
 	$SetEncryptionKeyWindow.hide()
 

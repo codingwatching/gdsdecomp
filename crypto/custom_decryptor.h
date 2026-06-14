@@ -13,6 +13,7 @@ protected:
 public:
 	virtual Dictionary parse_and_decrypt(Ref<FileAccess> p_file, const Vector<uint8_t> &p_key, bool p_non_pack_file);
 	virtual bool is_file_nonpck_encrypted(Ref<FileAccess> p_file);
+	virtual int get_required_key_size_in_bytes() const;
 	virtual ~CustomDecryptor() {}
 	// Dictionary result must have the following keys:
 	// - error: Error
@@ -20,4 +21,5 @@ public:
 	// - data: PackedByteArray
 	GDVIRTUAL3R(Dictionary, _parse_and_decrypt, Ref<FileAccess>, const Vector<uint8_t> &, bool);
 	GDVIRTUAL1R(bool, _is_file_nonpck_encrypted, Ref<FileAccess>);
+	GDVIRTUAL0RC(int, _get_required_key_size_in_bytes);
 };

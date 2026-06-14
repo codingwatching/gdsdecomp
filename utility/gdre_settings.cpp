@@ -1325,8 +1325,16 @@ String GDRESettings::get_encryption_key_string() {
 	return String::hex_encode_buffer(enc_key.ptr(), enc_key.size());
 }
 
+int GDRESettings::get_required_key_size_in_bytes() const {
+	int result = 32;
+	if (custom_decryptor.is_valid()) {
+		result = custom_decryptor->get_required_key_size_in_bytes();
+	}
+	return result;
+}
+
 Error GDRESettings::set_encryption_key(Vector<uint8_t> key) {
-	if (key.size() != 32) {
+	if (key.size() != get_required_key_size_in_bytes()) {
 		return ERR_INVALID_PARAMETER;
 	}
 	enc_key = key;
@@ -1338,8 +1346,9 @@ Error GDRESettings::set_encryption_key_string(const String &key_str) {
 	ERR_FAIL_COND_V_MSG(!skey.is_valid_hex_number(false) || skey.size() < 64, ERR_INVALID_PARAMETER, "not a valid key");
 
 	Vector<uint8_t> key;
-	key.resize(32);
-	for (int i = 0; i < 32; i++) {
+	int key_size = get_required_key_size_in_bytes();
+	key.resize(key_size);
+	for (int i = 0; i < key_size; i++) {
 		int v = 0;
 		if (i * 2 < skey.length()) {
 			char32_t ct = skey.to_lower()[i * 2];
@@ -2360,7 +2369,7 @@ Error GDRESettings::load_import_files() {
 		}
 		if (tokens[i].info->get_iitype() == ImportInfo::REMAP) {
 			if (tokens[i].err == ERR_FILE_MISSING_DEPENDENCIES) {
-				WARN_PRINT(vformat("Remapped path does not exist: %s -> %s", tokens[i].info->get_source_file(), tokens[i].info->get_path()));
+				print_line(vformat("WARNING: Remapped path does not exist: %s -> %s", tokens[i].info->get_source_file(), tokens[i].info->get_path()));
 			} else if (tokens[i].err) {
 #ifdef DEBUG_ENABLED
 				// WARN_PRINT("Can't load remap file: " + resource_files[i] + " (" + itos(tokens[i].err) + ")");
@@ -3007,6 +3016,7 @@ void GDRESettings::_bind_methods() {
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_gdre_tmp_path"), &GDRESettings::get_gdre_tmp_path);
 	ClassDB::bind_method(D_METHOD("get_encryption_key"), &GDRESettings::get_encryption_key);
 	ClassDB::bind_method(D_METHOD("get_encryption_key_string"), &GDRESettings::get_encryption_key_string);
+	ClassDB::bind_method(D_METHOD("get_required_key_size_in_bytes"), &GDRESettings::get_required_key_size_in_bytes);
 	ClassDB::bind_method(D_METHOD("is_pack_loaded"), &GDRESettings::is_pack_loaded);
 	ClassDB::bind_method(D_METHOD("_set_error_encryption", "is_encryption_error"), &GDRESettings::_set_error_encryption);
 	ClassDB::bind_method(D_METHOD("set_encryption_key_string", "key"), &GDRESettings::set_encryption_key_string);

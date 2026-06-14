@@ -298,6 +298,8 @@ public:
 	Vector<uint8_t> get_encryption_key();
 	// Returns the encryption key as a string
 	String get_encryption_key_string();
+	// Returns the required key size in bytes (default 32 bytes)
+	int get_required_key_size_in_bytes() const;
 	// PackedSource doesn't pass back useful error information when loading packs,
 	// this is a hack so that we can tell if it was an encryption error.
 	void _set_error_encryption(bool is_encryption_error);

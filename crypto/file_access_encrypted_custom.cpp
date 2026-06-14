@@ -33,10 +33,6 @@
 #include "core/error/error_list.h"
 #include "core/variant/variant.h"
 
-#include <mbedtls/camellia.h>
-
-#include "crypto/crypto_core_gdre.h"
-
 CryptoCore::RandomGenerator *FileAccessEncryptedCustom::_fae_static_rng = nullptr;
 
 void FileAccessEncryptedCustom::deinitialize() {
@@ -47,8 +43,9 @@ void FileAccessEncryptedCustom::deinitialize() {
 }
 
 Error FileAccessEncryptedCustom::open_and_parse(Ref<FileAccess> p_base, const Vector<uint8_t> &p_key, Mode p_mode, bool p_with_magic, const Vector<uint8_t> &p_iv) {
+	ERR_FAIL_NULL_V_MSG(decryptor, ERR_UNCONFIGURED, "Decryptor is not set.");
 	ERR_FAIL_COND_V_MSG(file.is_valid(), ERR_ALREADY_IN_USE, vformat("Can't open file while another file from path '%s' is open.", file->get_path_absolute()));
-	ERR_FAIL_COND_V(p_key.size() != 32, ERR_INVALID_PARAMETER);
+	ERR_FAIL_COND_V(p_key.size() != decryptor->get_required_key_size_in_bytes(), ERR_INVALID_PARAMETER);
 
 	pos = 0;
 	eofed = false;
@@ -57,7 +54,6 @@ Error FileAccessEncryptedCustom::open_and_parse(Ref<FileAccess> p_base, const Ve
 	if (p_mode == MODE_WRITE_CUSTOM) {
 		ERR_FAIL_V_MSG(ERR_UNAVAILABLE, "Writing to a custom encrypted file is not supported.");
 	} else if (p_mode == MODE_READ) {
-		ERR_FAIL_NULL_V(decryptor, ERR_UNCONFIGURED);
 		writing = false;
 		key = p_key;
 		Dictionary result = decryptor->parse_and_decrypt(p_base, key, use_magic);
