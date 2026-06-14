@@ -82,10 +82,6 @@ if not "metal" in env or not env["metal"]:
 
 if env["tests"]:
     env_gdsdecomp.Append(CPPDEFINES=["TESTS_ENABLED"])
-    append_cpppaths(
-        env,
-        INCLUDE_DIRS,
-    )
 
 append_cpppaths(
     env_gdsdecomp,
