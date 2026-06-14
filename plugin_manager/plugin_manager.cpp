@@ -414,7 +414,7 @@ PluginVersion PluginManager::populate_plugin_version_from_release(const ReleaseI
 Error PluginManager::populate_plugin_version_hashes(PluginVersion &plugin_version) {
 	auto temp_folder = GDRESettings::get_singleton()->get_gdre_tmp_path();
 	String url = plugin_version.release_info.download_url;
-	String new_temp_foldr = temp_folder.path_join(plugin_version.release_info.plugin_source + "_" + itos(plugin_version.release_info.primary_id) + "_" + itos(plugin_version.release_info.secondary_id));
+	String new_temp_foldr = temp_folder.path_join(plugin_version.release_info.get_cache_key());
 	String zip_path;
 	print_line("Downloading plugin to populate cache: " + url);
 
@@ -441,10 +441,13 @@ Error PluginManager::populate_plugin_version_hashes(PluginVersion &plugin_versio
 	ERR_FAIL_COND_V_MSG(!gdre::is_path_archive(zip_path), ERR_FILE_CORRUPT, "File is not an archive: " + zip_path);
 
 	auto close_and_remove_zip = [&]() {
-		gdre::rimraf(zip_path);
+		if (zip_path.is_empty() && zip_path.begins_with(get_plugin_download_cache_path())) {
+			gdre::rimraf(zip_path);
+		}
+		gdre::rimraf(new_temp_foldr);
 	};
 
-	// just unzup the files to the
+	// just unzip the files to the folder
 	String unzupped_path = new_temp_foldr.path_join("unzipped");
 	err = gdre::unzip_file_to_dir(zip_path, unzupped_path);
 	if (err) {
