@@ -45,9 +45,10 @@ void GDREMainLoop::_process_next_process_calls() {
 	}
 	running_process_calls = true;
 	Vector<Callable> calls;
-	Callable callable;
-	while (next_process_calls.try_pop(callable)) {
-		calls.push_back(callable);
+	{
+		MutexLock lock(next_process_calls_mutex);
+		calls = next_process_calls;
+		next_process_calls.clear();
 	}
 	for (auto &callable : calls) {
 		callable.call();
@@ -63,6 +64,19 @@ bool GDREMainLoop::process(double p_time) {
 }
 
 void GDREMainLoop::finalize() {
+	if (running_process_calls) {
+		WARN_PRINT("Finalize called while running process calls!!");
+		running_process_calls = false;
+	}
+	size_t size;
+	{
+		MutexLock lock(next_process_calls_mutex);
+		size = next_process_calls.size();
+	}
+	if (size > 0) {
+		WARN_PRINT("Finalize called while we still have process calls!!");
+		_process_next_process_calls();
+	}
 }
 
 bool GDREMainLoop::wait_until_next_frame(int64_t p_time_usec) {
@@ -155,8 +169,9 @@ bool GDREMainLoop::iteration(bool p_no_delay) {
 
 bool GDREMainLoop::call_on_next_process(const Callable &p_callable) {
 	ERR_FAIL_COND_V_MSG(!singleton, true, "GDREMainLoop singleton not initialized");
-	if (!singleton->next_process_calls.try_push(p_callable)) {
-		ERR_FAIL_V_MSG(true, "Failed to push callable to next_process_calls");
+	{
+		MutexLock lock(singleton->next_process_calls_mutex);
+		singleton->next_process_calls.push_back(p_callable);
 	}
 	return false;
 }

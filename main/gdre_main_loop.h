@@ -16,7 +16,8 @@ class GDREMainLoop : public Object {
 	double last_process_time;
 	bool processing;
 	bool running_process_calls;
-	StaticParallelQueue<Callable, 64> next_process_calls;
+	Mutex next_process_calls_mutex;
+	Vector<Callable> next_process_calls;
 
 	bool _wait_until_next_frame(int64_t p_time_usec, bool called_from_process);
 	void _process_next_process_calls();
