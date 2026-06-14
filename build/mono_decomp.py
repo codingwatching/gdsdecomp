@@ -175,36 +175,6 @@ def godot_mono_builder(
         dotnet_publish_output = check_output(dotnet_publish_cmd, cwd=godot_mono_decomp_dir)
         print("DOTNET PUBLISH OUTPUT", dotnet_publish_output.decode("utf-8"))
 
-    if mono_native_lib_type == "Static":
-        return
-
-    if not os.path.exists(build_dir):
-        os.makedirs(build_dir)
-
-    for lib in libs:
-        if build_env["platform"] == "android":
-            dest_dir = get_android_lib_dest(build_env)
-        else:
-            dest_dir = build_dir
-        if build_env.msvc:
-            lib = lib.replace(".lib", ".dll")
-        copy_path = os.path.abspath(os.path.join(dest_dir, os.path.basename(lib)))
-        print("LIB PATH", lib)
-        print("COPY PATH", copy_path)
-        if build_env["platform"] == "macos":
-            lipo_cmd = [
-                "lipo",
-                "-create",
-                lib,
-                os.path.join(other_lib_dir, os.path.basename(lib)),
-                "-output",
-                copy_path,
-            ]
-            print("LIPOING LIB TO ", copy_path)
-            check_output(lipo_cmd, cwd=lib_dir)
-        else:
-            shutil.copy(lib, copy_path)
-
 
 def get_godot_mono_static_linker_args_from_json(json_output):
     json_blob = json.loads(json_output)
@@ -222,6 +192,16 @@ def get_godot_mono_static_linker_args_from_json(json_output):
         elif line.startswith("-framework"):
             framework_args.append(line.removeprefix("-framework").strip())
     return linker_args, library_args, framework_args
+
+
+def get_macos_template_lib_dest(env) -> str:
+    templ = ""
+    if env.editor_build:
+        templ = env.Dir("#misc/dist/macos_tools.app").abspath
+    else:
+        templ = env.Dir("#misc/dist/macos_template.app").abspath
+    frameworks_dir = os.path.join(templ, "Contents/Frameworks")
+    return frameworks_dir
 
 
 def get_android_lib_dest(build_env) -> str:
@@ -251,6 +231,25 @@ def get_android_lib_dest(build_env) -> str:
     jni_libs_dir = "#platform/android/java/lib/libs/" + lib_tools_dir + lib_type_dir + "/"
     out_dir = jni_libs_dir + lib_arch_dir
     return build_env.Dir(out_dir).abspath
+
+
+def lipo_libs(target: list[SConsFile], source: list[SConsFile], env: SConsEnvironment):
+    if len(target) != 1:
+        raise Exception("Lipo command requires exactly 1 target file")
+    if len(source) != 2:
+        raise Exception("Lipo command requires exactly 2 source files")
+    output_path = str(target[0].get_abspath())
+
+    lipo_cmd = [
+        "lipo",
+        "-create",
+        str(source[0].get_abspath()),
+        str(source[1].get_abspath()),
+        "-output",
+        output_path,
+    ]
+    print("LIPOING LIBS TO ", output_path)
+    return check_output(lipo_cmd)
 
 
 def build_godot_mono_decomp(
@@ -313,6 +312,7 @@ def build_godot_mono_decomp(
         src_suffixes,
         exclude_filters,
     )
+    copy_commands = []
     if mono_native_lib_type == "Shared":
         if env["platform"] == "macos":
             new_arch = "x86_64" if env["arch"] == "arm64" else "arm64"
@@ -326,23 +326,45 @@ def build_godot_mono_decomp(
                 mono_native_lib_type,
             )
             all_libs += other_libs
-        for lib in libs:
-            if env["platform"] == "android":
-                dest_dir = get_android_lib_dest(env)
-            else:
-                dest_dir = build_dir
-            copied_lib = os.path.join(dest_dir, os.path.basename(lib))
-            if env.msvc:
-                copied_lib = copied_lib.replace(".lib", ".dll")
-            all_libs.append(copied_lib)
+            copy_commands.append(
+                env_gdsdecomp.CommandNoCache(
+                    os.path.join(build_dir, os.path.basename(libs[0])), all_libs, env_gdsdecomp.Run(lipo_libs)
+                )
+            )
+        elif env["platform"] != "android":
+            for lib in libs:
+                copied_lib = os.path.join(build_dir, os.path.basename(lib))
+                if env.msvc:
+                    copied_lib = copied_lib.replace(".lib", ".dll")
+                copy_commands.append(env_gdsdecomp.CommandNoCache(copied_lib, lib, Copy("$TARGET", "$SOURCE")))
 
     godot_mono_decomp_obj = [env_gdsdecomp.godotMonoDecompBuilder(all_libs, mono_sources)]
     env_gdsdecomp.Alias("GodotMonoDecomp", godot_mono_decomp_obj)
+    env_gdsdecomp.Requires(module_obj, godot_mono_decomp_obj)
+    if len(copy_commands) > 0:
+        env_gdsdecomp.Requires(copy_commands, godot_mono_decomp_obj)
+        env_gdsdecomp.Requires(module_obj, prerequisite=copy_commands)
+
+    if mono_native_lib_type == "Shared":
+        if env["platform"] == "macos" and env["generate_bundle"]:
+            bundle_commands = []
+            for lib in libs:
+                lipo_path = os.path.join(build_dir, os.path.basename(lib))
+                dest_path = os.path.join(get_macos_template_lib_dest(env), os.path.basename(lib))
+                bundle_commands.append(env_gdsdecomp.CommandNoCache(dest_path, lipo_path, Copy("$TARGET", "$SOURCE")))
+            env.Requires(bundle_commands, copy_commands)
+            env.Requires("platform/macos/generate_bundle", prerequisite=bundle_commands)
+        elif env["platform"] == "android" and env["generate_android_binaries"]:
+            bundle_commands = []
+            for lib in libs:
+                dest_path = os.path.join(get_android_lib_dest(env), os.path.basename(lib))
+                bundle_commands.append(env_gdsdecomp.CommandNoCache(dest_path, lib, Copy("$TARGET", "$SOURCE")))
+            env.Requires(bundle_commands, godot_mono_decomp_obj)
+            env.Requires("platform/android/generate_android_binaries", prerequisite=bundle_commands)
 
     add_libs_to_env(env, libs)
-    env_gdsdecomp.Requires(module_obj, godot_mono_decomp_obj)
-    # env.Depends(module_obj, depends_libs)
 
+    print(env["CXX"])
     if env["platform"] == "linuxbsd" and mono_native_lib_type == "Shared":
         env.Append(LINKFLAGS=["-z", "origin"])
         env.Append(RPATH=env.Literal("\\$$ORIGIN"))
@@ -351,7 +373,7 @@ def build_godot_mono_decomp(
         # TODO: Keep static-linking path intact until dotnet static issues are resolved.
         if env.msvc:
             env.Append(LINKFLAGS=["/FORCE:MULTIPLE"])
-        else:
+        elif env["platform"] != "macos" and not env["CXX"].lower().endswith("clang++"):
             env.Append(LINKFLAGS=["-Wl,--allow-multiple-definition"])
 
         cmd_env = get_cmd_env(env)
