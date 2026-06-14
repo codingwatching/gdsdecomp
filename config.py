@@ -68,14 +68,13 @@ def monkey_patch_sort_module_list():
 
 
 def configure(env):
-    print("configure!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     _apply_core_patches(env)
     if not env.editor_build:
         monkey_patch_sort_module_list()
     if not "use_static_godot_mono_decomp" in env:
         env["use_static_godot_mono_decomp"] = False
 
-    if env["use_static_godot_mono_decomp"] and env["platform"] == "android" or env["platform"] == "macos":
+    if env["use_static_godot_mono_decomp"] and (env["platform"] == "android" or env["platform"] == "macos"):
         print(f"Using shared Mono for {env['platform']} because static Mono is not supported for this platform")
         env["use_static_godot_mono_decomp"] = False
 

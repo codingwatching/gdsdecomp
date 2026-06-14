@@ -372,7 +372,6 @@ def build_godot_mono_decomp(
 
     add_libs_to_env(env, libs)
 
-    print(env["CXX"])
     if env["platform"] == "linuxbsd" and mono_native_lib_type == "Shared":
         env.Append(LINKFLAGS=["-z", "origin"])
         env.Append(RPATH=env.Literal("\\$$ORIGIN"))
