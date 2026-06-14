@@ -104,6 +104,17 @@ func foo():
 	return bar
 )";
 
+static constexpr const char *test_multiline_string = R"(
+static func find_or_null(arr: Array[Node], index: int = 0) -> Node:
+	if (arr.is_empty()):
+		push_error("""Node that is needed for Script-IDE not found.
+Plugin will not work correctly.
+This might be due to some other plugins or changes in the Engine.
+Please report this to Script-IDE, so we can figure out a fix.""")
+		return null
+	return arr[index]
+)";
+
 // should pass on all versions of GDScript
 static constexpr const char *test_reserved_word_as_accessor_name = R"(
 extends Object
@@ -228,6 +239,46 @@ inline void test_script_binary(const String &script_name, const Vector<uint8_t> 
 		if (!no_text_equality_check) {
 			CHECK_MESSAGE(gdre::remove_whitespace(decompiled_ref_stripped) == gdre::remove_whitespace(helper_script_text_stripped), (String("No whitespace text diff failed: \n") + TextDiff::get_diff_with_header(script_name, script_name, decompiled_ref_stripped, helper_script_text_stripped)));
 		}
+		auto recompiled_ref = GDScriptTokenizerBuffer::parse_code_string(decompiled_ref, GDScriptTokenizerBuffer::CompressMode::COMPRESS_ZSTD);
+		CHECK(decomp->get_error_message() == "");
+		CHECK(recompiled_ref.size() > 0);
+		err = decomp->test_bytecode_match(reference_result, recompiled_ref, true, false);
+		CHECK(decomp->get_error_message() == "");
+		CHECK(err == OK);
+		if (script_name != "super") {
+			auto buffer = GDScriptTokenizerBuffer();
+			err = buffer.set_code_buffer(bytecode);
+			REQUIRE(err == OK);
+			auto recompiled_buffer = GDScriptTokenizerBuffer();
+			err = recompiled_buffer.set_code_buffer(recompiled_ref);
+			REQUIRE(err == OK);
+			auto token = buffer.scan();
+			auto recompiled_token = recompiled_buffer.scan();
+			CHECK(token.type == recompiled_token.type);
+			while (token.type != GDScriptTokenizer::Token::TK_EOF) {
+				token = buffer.scan();
+				recompiled_token = recompiled_buffer.scan();
+				if (token.type != recompiled_token.type) {
+					debug_output(script_name, helper_script_text_stripped, decompiled_ref_stripped);
+				}
+				CHECK(token.type == recompiled_token.type);
+			}
+		}
+	}
+
+	{
+		auto buffer = GDScriptTokenizerCompat::create_buffer_tokenizer(decomp.ptr(), bytecode);
+		REQUIRE(buffer.is_valid());
+		auto recompiled_buffer = GDScriptTokenizerCompat::create_buffer_tokenizer(decomp.ptr(), recompiled_bytecode);
+		REQUIRE(recompiled_buffer.is_valid());
+		auto token = buffer->scan();
+		auto recompiled_token = recompiled_buffer->scan();
+		CHECK(token.type == recompiled_token.type);
+		while (token.type != GDScriptDecomp::G_TK_EOF) {
+			token = buffer->scan();
+			recompiled_token = recompiled_buffer->scan();
+			CHECK(token.type == recompiled_token.type);
+		}
 	}
 
 	CHECK(err == OK);
@@ -337,6 +388,10 @@ TEST_CASE("[GDSDecomp][Bytecode][GDScript2.0] Compiling GDScript Tests") {
 
 TEST_CASE("[GDSDecomp][Bytecode][GDScript2.0] Test indenting") {
 	test_script_text("test_indent_current", test_indent_current, GDScriptDecompVersion::LATEST_GDSCRIPT_COMMIT, false, false, true);
+}
+
+TEST_CASE("[GDSDecomp][Bytecode][GDScript2.0] Test multi-line strings") {
+	test_script_text("test_multiline_string", test_multiline_string, GDScriptDecompVersion::LATEST_GDSCRIPT_COMMIT, false, false, true);
 }
 
 TEST_CASE("[GDSDecomp][Bytecode] Test indenting") {
