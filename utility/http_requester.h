@@ -32,7 +32,6 @@
 
 #include "core/io/http_client.h"
 #include "core/templates/safe_refcount.h"
-#include "scene/main/node.h"
 
 class Thread;
 class Timer;
@@ -57,6 +56,7 @@ public:
 		RESULT_DOWNLOAD_FILE_CANT_OPEN,
 		RESULT_DOWNLOAD_FILE_WRITE_ERROR,
 		RESULT_REDIRECT_LIMIT_REACHED,
+		RESULT_REQUEST_TIMEOUT,
 		RESULT_TIMEOUT,
 		RESULT_CANCELLED
 
@@ -98,12 +98,16 @@ private:
 
 	int redirections = 0;
 
+	HTTPClient::Status previous_status = HTTPClient::STATUS_DISCONNECTED;
+
 	bool _update_connection();
 
 	int max_redirects = 8;
 
-	double timeout = 0;
+	double time_limit = 0;
+	double request_timeout = 0;
 	double start_time = 0;
+	double current_status_start_time = 0;
 
 	SafeNumeric<Result> result_status;
 
@@ -131,7 +135,7 @@ private:
 	static void _thread_func(void *p_userdata);
 	bool _check_timeout();
 	static Error _get_error_from_status(Result p_status, int p_code);
-	static Error _wait_for_request_completion(HTTPRequester *p_requester, double timeout, int p_retries, float *p_progress, bool *p_cancelled, int64_t *r_size);
+	static Error _wait_for_request_completion(HTTPRequester *p_requester, int p_retries, float *p_progress, bool *p_cancelled, int64_t *r_size);
 	void _reset();
 
 public:
@@ -158,10 +162,11 @@ public:
 	void set_max_redirects(int p_max);
 	int get_max_redirects() const;
 
-	void set_timeout(double p_timeout);
-	double get_timeout();
+	void set_time_limit(double p_time_limit);
+	double get_time_limit() const;
 
-	void _timeout();
+	void set_request_timeout(double p_request_timeout);
+	double get_request_timeout() const;
 
 	int get_downloaded_bytes() const;
 	int get_body_size() const;

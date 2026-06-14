@@ -125,9 +125,8 @@ Error HTTPRequester::start_request_raw(const String &p_url, const Vector<String>
 	ERR_FAIL_COND_V_MSG(requesting, ERR_BUSY, "HTTPRequester is processing a request. Wait for completion or cancel it before attempting a new one.");
 
 	_reset();
-	if (timeout > 0) {
-		start_time = OS::get_singleton()->get_unix_time();
-	}
+	start_time = OS::get_singleton()->get_unix_time();
+	current_status_start_time = start_time;
 
 	method = p_method;
 
@@ -161,6 +160,7 @@ Error HTTPRequester::start_request_raw(const String &p_url, const Vector<String>
 			_request_done(RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray());
 			return ERR_CANT_CONNECT;
 		}
+		previous_status = client->get_status();
 
 		// set_process_internal(true);
 	}
@@ -176,8 +176,9 @@ void HTTPRequester::_thread_func(void *p_userdata) {
 	if (err != OK) {
 		hr->_request_done(RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray());
 	} else {
+		hr->previous_status = hr->client->get_status();
 		while (!hr->thread_request_quit.is_set()) {
-			bool exit = hr->_update_connection();
+			bool exit = hr->poll();
 			if (exit) {
 				break;
 			}
@@ -341,7 +342,12 @@ bool HTTPRequester::_handle_response(bool *ret_value) {
 }
 
 bool HTTPRequester::_update_connection() {
-	switch (client->get_status()) {
+	auto current_status = client->get_status();
+	if (previous_status != current_status) {
+		current_status_start_time = OS::get_singleton()->get_unix_time();
+		previous_status = current_status;
+	}
+	switch (current_status) {
 		case HTTPClient::STATUS_DISCONNECTED: {
 			_request_done(RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray());
 			return true; // End it, since it's disconnected.
@@ -610,18 +616,22 @@ void HTTPRequester::set_https_proxy(const String &p_host, int p_port) {
 	client->set_https_proxy(p_host, p_port);
 }
 
-void HTTPRequester::set_timeout(double p_timeout) {
+void HTTPRequester::set_time_limit(double p_timeout) {
 	ERR_FAIL_COND(p_timeout < 0);
-	timeout = p_timeout;
+	time_limit = p_timeout;
 }
 
-double HTTPRequester::get_timeout() {
-	return timeout;
+double HTTPRequester::get_time_limit() const {
+	return time_limit;
 }
 
-void HTTPRequester::_timeout() {
-	cancel_request();
-	_request_done(RESULT_TIMEOUT, 0, PackedStringArray(), PackedByteArray());
+void HTTPRequester::set_request_timeout(double p_request_timeout) {
+	ERR_FAIL_COND(p_request_timeout < 0);
+	request_timeout = p_request_timeout;
+}
+
+double HTTPRequester::get_request_timeout() const {
+	return request_timeout;
 }
 
 void HTTPRequester::set_tls_options(const Ref<TLSOptions> &p_options) {
@@ -630,23 +640,27 @@ void HTTPRequester::set_tls_options(const Ref<TLSOptions> &p_options) {
 }
 
 HTTPRequester::HTTPRequester() {
+	_reset();
 	client = Ref<HTTPClient>(HTTPClient::create());
 	tls_options = TLSOptions::client();
 }
 
-bool HTTPRequester::_check_timeout() {
-	if (timeout > 0 && OS::get_singleton()->get_unix_time() - start_time > timeout) {
+bool HTTPRequester::poll() {
+	if (_update_connection()) {
+		return true;
+	}
+	auto current_time = OS::get_singleton()->get_unix_time();
+	if (previous_status < HTTPClient::STATUS_BODY && request_timeout > 0 && current_time - current_status_start_time > request_timeout) {
+		cancel_request();
+		_request_done(RESULT_REQUEST_TIMEOUT, 0, PackedStringArray(), PackedByteArray());
+		return true;
+	}
+	if (time_limit > 0 && current_time - start_time > time_limit) {
+		cancel_request();
+		_request_done(RESULT_TIMEOUT, 0, PackedStringArray(), PackedByteArray());
 		return true;
 	}
 	return false;
-}
-
-bool HTTPRequester::poll() {
-	if (_check_timeout()) {
-		_timeout();
-		return true;
-	}
-	return _update_connection();
 }
 
 double HTTPRequester::get_progress() const {
@@ -667,6 +681,8 @@ void HTTPRequester::_reset() {
 	request_sent = false;
 	download_complete = false;
 	start_time = 0;
+	current_status_start_time = 0;
+	result_status.set(RESULT_NOT_DONE);
 }
 
 Error HTTPRequester::_get_error_from_status(Result p_status, int p_code) {
@@ -701,6 +717,7 @@ Error HTTPRequester::_get_error_from_status(Result p_status, int p_code) {
 			break;
 	}
 	switch (p_status) {
+		case RESULT_REQUEST_TIMEOUT:
 		case RESULT_TIMEOUT:
 			return ERR_TIMEOUT;
 		case RESULT_CANT_RESOLVE:
@@ -715,8 +732,7 @@ Error HTTPRequester::_get_error_from_status(Result p_status, int p_code) {
 	return ERR_BUG;
 }
 
-Error HTTPRequester::_wait_for_request_completion(HTTPRequester *requester, double requesting_timeout, int max_retries, float *p_progress, bool *p_cancelled, int64_t *r_size) {
-	const int64_t requesting_timeout_in_ms = requesting_timeout * 1000;
+Error HTTPRequester::_wait_for_request_completion(HTTPRequester *requester, int max_retries, float *p_progress, bool *p_cancelled, int64_t *r_size) {
 	String url = requester->full_url;
 	Vector<uint8_t> request_data = requester->request_data;
 	Vector<String> headers = requester->headers;
@@ -725,7 +741,6 @@ Error HTTPRequester::_wait_for_request_completion(HTTPRequester *requester, doub
 	for (int retries = 0; retries < max_tries; retries++) {
 		ret = OK;
 		bool set_rsize = false;
-		int64_t requesting_start_time = 0;
 		// Poll until done
 		while (!(p_cancelled && *p_cancelled) && !requester->poll()) {
 			if (p_cancelled && *p_cancelled) {
@@ -743,30 +758,14 @@ Error HTTPRequester::_wait_for_request_completion(HTTPRequester *requester, doub
 					set_rsize = true;
 				}
 			}
-			auto status = requester->get_http_client_status();
-			if (status == HTTPClient::STATUS_REQUESTING) {
-				if (requesting_timeout_in_ms > 0) {
-					if (requesting_start_time == 0) {
-						requesting_start_time = OS::get_singleton()->get_ticks_msec();
-					}
-					if (OS::get_singleton()->get_ticks_msec() - requesting_start_time > requesting_timeout_in_ms) {
-						requester->cancel_request();
-						requester->result_status.set(RESULT_TIMEOUT);
-						ret = ERR_TIMEOUT;
-						break;
-					}
-				}
-			} else if (status > HTTPClient::STATUS_REQUESTING) {
-				requesting_start_time = 0;
-			}
 		}
 
 		// Done
 		ret = _get_error_from_status(requester->result_status.get(), requester->response_code);
-		if (ret != OK) {
+		if (ret != OK && retries + 1 < max_tries) {
 			int response_code = requester->response_code;
 			// Don't bother retrying if the file doesn't exist or we don't have access to it
-			if (response_code == 404 || response_code == 403 || response_code == 401 || retries - 1 < max_retries) {
+			if (response_code == 404 || response_code == 403 || response_code == 401) {
 				break;
 			}
 			if (ret == ERR_BUSY || ret == ERR_TIMEOUT) {
@@ -783,10 +782,11 @@ Error HTTPRequester::_wait_for_request_completion(HTTPRequester *requester, doub
 
 Error HTTPRequester::wget_sync(const String &p_url, Vector<uint8_t> &response, double timeout, int retries, const Vector<String> &extra_headers, float *p_progress, bool *p_cancelled) {
 	HTTPRequester requester;
-	requester.set_timeout(timeout);
+	requester.set_time_limit(timeout);
 	requester.start_request(p_url, extra_headers, HTTPClient::METHOD_GET);
 
-	Error err = _wait_for_request_completion(&requester, 15, retries, p_progress, p_cancelled, nullptr);
+	requester.set_request_timeout(MIN(15, timeout));
+	Error err = _wait_for_request_completion(&requester, retries, p_progress, p_cancelled, nullptr);
 	response = requester.body;
 	return err;
 }
@@ -798,9 +798,10 @@ Error HTTPRequester::download_file_sync(const String &p_url, const String &p_out
 	}
 
 	HTTPRequester requester;
-	requester.set_timeout(0);
+	requester.set_time_limit(0);
+	requester.set_request_timeout(15);
 	requester.set_download_file(p_output_path);
 	requester.start_request(p_url);
 
-	return _wait_for_request_completion(&requester, 15, 2, p_progress, p_cancelled, r_size);
+	return _wait_for_request_completion(&requester, 2, p_progress, p_cancelled, r_size);
 }
