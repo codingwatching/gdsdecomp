@@ -39,6 +39,8 @@ BRANCHES_TO_MERGE=(
 	gltf-fix-vertex-colors
 	ensure-bptc-textures
 	fix-v3-meshes
+	fix-clearcoat-gloss
+	fix-blend-export
 )
 
 # set fail on error
