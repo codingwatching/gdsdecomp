@@ -3,21 +3,19 @@
 import os
 from typing import TYPE_CHECKING
 
-from build import gdre_icon_builder
-from build.common import add_libs_to_env, add_source_groups, append_cpppaths, find_llvm_prebuild_path, get_sources
-from build.mono_decomp import build_godot_mono_decomp, get_godot_mono_decomp_lib_dir
-from build.paths import *
-from build.versioning import write_version_header
-from build.vtracer import build_vtracer, get_vtracer_lib_dir
+from build import gdre_icon_builder  # pyright: ignore[reportImplicitRelativeImport]
+from build.common import add_source_groups, append_cpppaths  # pyright: ignore[reportImplicitRelativeImport]
+from build.mono_decomp import (  # pyright: ignore[reportImplicitRelativeImport]
+    build_godot_mono_decomp,
+    get_godot_mono_decomp_lib_dir,
+)
+from build.paths import *  # pyright: ignore[reportImplicitRelativeImport]
+from build.versioning import write_version_header  # pyright: ignore[reportImplicitRelativeImport]
+from build.vtracer import build_vtracer, get_vtracer_lib_dir  # pyright: ignore[reportImplicitRelativeImport]
 
 if TYPE_CHECKING:
-    from SCons.Environment import Environment
-    from SCons.Builder import Builder
-    from SCons import Import
+    from ...misc.utility.scons_hints import *
 
-env: Environment = None
-env_modules: Environment = None
-env_gdsdecomp: Environment = None
 
 Import("env")
 Import("env_modules")
@@ -100,7 +98,7 @@ if not "metal" in env or not env["metal"]:
         SPIRV_CROSS_THIRDPARTY_INCLUDE_DIR,
         SPIRV_HEADERS_THIRDPARTY_DIR,
     ])
-    env_gdsdecomp.modules_sources += thirdparty_obj
+    env_gdsdecomp.modules_sources += thirdparty_obj  # pyright: ignore[reportAttributeAccessIssue]
 
 
 if env["tests"]:
@@ -178,10 +176,6 @@ build_vtracer(
     vtracer_dir=VTRACER_DIR,
     vtracer_build_dir=VTRACER_BUILD_DIR,
     vtracer_libs=VTRACER_LIBS,
-    get_sources=get_sources,
-    add_libs_to_env=add_libs_to_env,
-    builder_class=Builder,
-    find_llvm_prebuild_path=find_llvm_prebuild_path,
 )
 
 if "disable_gifski" in env and env["disable_gifski"]:
@@ -199,11 +193,6 @@ else:
         godot_mono_decomp_parent=GODOT_MONO_DECOMP_PARENT,
         godot_mono_decomp_dir=GODOT_MONO_DECOMP_DIR,
         godot_mono_decomp_libs=GODOT_MONO_DECOMP_LIBS,
-        get_sources=get_sources,
-        add_libs_to_env=add_libs_to_env,
-        builder_class=Builder,
-        copy_action=Copy,
     )
 
-env.modules_sources += module_obj
-
+env.modules_sources += module_obj  # pyright: ignore[reportAttributeAccessIssue]

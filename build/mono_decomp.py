@@ -1,9 +1,9 @@
 import json
 import os
 import shutil
-from subprocess import STDOUT, check_output
+from subprocess import STDOUT, CalledProcessError, check_output
 
-from .common import get_cmd_env, is_dev_build
+from .common import get_cmd_env, is_dev_build, get_sources, add_libs_to_env
 
 
 def get_godot_mono_decomp_libs(static_lib, build_env, libs):
@@ -68,7 +68,6 @@ def get_godot_mono_decomp_lib_paths(build_env, godot_mono_decomp_dir, libs, mono
         is_dev_build(build_env),
     )
     lib_paths = [os.path.join(build_dir, lib) for lib in lib_names]
-    print("GODOT MONO DECOMP LIB PATHS", lib_paths)
     return lib_paths
 
 
@@ -112,9 +111,13 @@ def godot_mono_builder(
     print("DOTNET PUBLISH CMD", " ".join(dotnet_publish_cmd))
     try:
         dotnet_publish_output = check_output(dotnet_publish_cmd, cwd=godot_mono_decomp_dir, stderr=STDOUT, env=cmd_env)
-    except Exception as exc:
+    except CalledProcessError as exc:
         print("ERROR PUBLISHING GODOT MONO DECOMP", exc)
         print(exc.output.decode("utf-8"))
+        raise
+    except Exception as exc:
+        print("ERROR PUBLISHING GODOT MONO DECOMP", exc)
+        print(exc)
         raise
 
     print("DOTNET PUBLISH OUTPUT", dotnet_publish_output.decode("utf-8"))
@@ -211,11 +214,10 @@ def build_godot_mono_decomp(
     godot_mono_decomp_parent,
     godot_mono_decomp_dir,
     godot_mono_decomp_libs,
-    get_sources,
-    add_libs_to_env,
-    builder_class,
-    copy_action,
 ):
+    from SCons.Script import Action, Builder
+    from SCons.Defaults import Copy
+
     libs = get_godot_mono_decomp_lib_paths(env, godot_mono_decomp_dir, godot_mono_decomp_libs, mono_native_lib_type)
     if mono_native_lib_type == "Static":
         lib_suffix = ".lib" if env.msvc else ".a"
@@ -240,7 +242,7 @@ def build_godot_mono_decomp(
             build_dir,
         )
 
-    env_gdsdecomp["BUILDERS"]["godotMonoDecompBuilder"] = builder_class(
+    env_gdsdecomp["BUILDERS"]["godotMonoDecompBuilder"] = Builder(
         action=_builder_action,
         suffix=lib_suffix,
         src_suffix=src_suffixes,
@@ -265,7 +267,7 @@ def build_godot_mono_decomp(
 
     if env["platform"] == "android" and mono_native_lib_type == "Shared":
         android_lib_dest = get_android_lib_dest(env) + "/libGodotMonoDecompNativeAOT.so"
-        env_gdsdecomp.CommandNoCache(android_lib_dest, libs[0], copy_action("$TARGET", "$SOURCE"))
+        env_gdsdecomp.CommandNoCache(android_lib_dest, libs[0], Copy("$TARGET", "$SOURCE"))
 
     add_libs_to_env(env, env_gdsdecomp, module_obj, libs, mono_sources)
     env.Depends(module_obj, depends_libs)
@@ -320,4 +322,3 @@ def build_godot_mono_decomp(
         if env["platform"] == "macos":
             for framework in framework_args:
                 env.Append(LINKFLAGS=["-framework", framework])
-

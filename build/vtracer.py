@@ -3,7 +3,7 @@ import platform
 import shutil
 from subprocess import check_output
 
-from .common import get_cmd_env, is_dev_build
+from .common import get_cmd_env, is_dev_build, find_llvm_prebuild_path, get_sources, add_libs_to_env
 
 
 def get_cargo_target(build_env):
@@ -24,7 +24,7 @@ def get_cargo_target(build_env):
     raise Exception(f"Unsupported platform: {build_env['platform']}")
 
 
-def write_cargo_config_toml_file(build_env, module_dir, vtracer_prefix, find_llvm_prebuild_path):
+def write_cargo_config_toml_file(build_env, module_dir, vtracer_prefix):
     is_windows = platform.system().lower().startswith("win")
     llvm_prebuild_path = find_llvm_prebuild_path(build_env).replace("\\", "/")
     ar = llvm_prebuild_path + "/llvm-ar"
@@ -103,7 +103,6 @@ def cargo_builder(
     build_env,
     module_dir,
     vtracer_prefix,
-    find_llvm_prebuild_path,
 ):
     if build_env is None:
         raise Exception("build_env is required")
@@ -120,7 +119,7 @@ def cargo_builder(
 
     cargo_env = get_cmd_env(build_env)
     if build_env["platform"] == "android":
-        write_cargo_config_toml_file(build_env, module_dir, vtracer_prefix, find_llvm_prebuild_path)
+        write_cargo_config_toml_file(build_env, module_dir, vtracer_prefix)
     write_cargo_toolchain_toml_file(build_env, module_dir, vtracer_prefix)
     cargo_env["CARGO_TARGET_DIR"] = build_dir
     cargo_env["CBINDGEN_TARGET_DIR"] = cbindgen_dir
@@ -156,18 +155,14 @@ def build_vtracer(
     vtracer_dir,
     vtracer_build_dir,
     vtracer_libs,
-    get_sources,
-    add_libs_to_env,
-    builder_class,
-    find_llvm_prebuild_path,
 ):
+    from SCons.Script import Action, Builder  # pyright: ignore[reportMissingImports]
+
     source_suffixes = ["*.h", "*.cpp", "*.rs", "*.txt"]
     lib_suffix = ".lib" if root_env.msvc else ".a"
 
     def vtracer_builder(target, source, env):
-        print("VTRACER BUILD")
-        print(str(target[0]))
-        print(source)
+        print("BUILDING VTRACER, LIBRARY PATH: ", str(target[0]))
         cargo_builder(
             root_env,
             external_dir,
@@ -177,18 +172,16 @@ def build_vtracer(
             env,
             module_dir,
             vtracer_prefix,
-            find_llvm_prebuild_path,
         )
 
-    env_gdsdecomp["BUILDERS"]["vtracerBuilder"] = builder_class(
+    env_gdsdecomp["BUILDERS"]["vtracerBuilder"] = Builder(
         action=vtracer_builder,
         suffix=lib_suffix,
         src_suffix=source_suffixes,
     )
     libs = get_vtracer_lib_paths(root_env, vtracer_build_dir, vtracer_libs)
-    vtracer_sources = get_sources(module_dir, vtracer_prefix, source_suffixes)
+    vtracer_sources = get_sources(module_dir, vtracer_prefix, source_suffixes, ["target/"])
     env_gdsdecomp.Alias("vtracerlib", [env_gdsdecomp.vtracerBuilder(libs, vtracer_sources)])
     add_libs_to_env(root_env, env_gdsdecomp, module_obj, libs, vtracer_sources)
     if root_env.msvc:
         root_env.Append(LINKFLAGS=["userenv.lib"])
-
