@@ -1213,7 +1213,7 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 		prev_token = curr_token;
 	}
 
-	if (!line.is_empty() || (prev_token == G_TK_NEWLINE && bytecode_version < GDSCRIPT_2_0_VERSION && indent > 0)) {
+	if (!line.is_empty() || (is_token_newline_or_indent(prev_token) && bytecode_version < GDSCRIPT_2_0_VERSION && indent > 0)) {
 		write_current_line(indent);
 	}
 	if (script_text == String()) {
