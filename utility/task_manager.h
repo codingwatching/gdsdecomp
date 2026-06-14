@@ -460,6 +460,7 @@ public:
 		int64_t size = -1;
 		int64_t start_time = 0;
 		Vector<int64_t> speed_history;
+		bool write_sha256 = false;
 		bool silent = false;
 		float download_progress = 0.0f;
 		Error download_error = OK;
@@ -470,7 +471,7 @@ public:
 
 	public:
 		bool fake = false;
-		DownloadTaskData(const String &p_download_url, const String &p_save_path, bool p_silent = false, bool p_fake = false);
+		DownloadTaskData(const String &p_download_url, const String &p_save_path, bool p_silent = false, bool p_write_sha256 = false, bool p_fake = false);
 
 		virtual void run_on_current_thread() override;
 		virtual int get_current_task_step_value() override;
@@ -503,7 +504,7 @@ public:
 
 	public:
 		DownloadTaskID add_fake_download_task(const String &p_download_url, const String &p_save_path);
-		DownloadTaskID add_download_task(const String &p_download_url, const String &p_save_path, bool silent = false);
+		DownloadTaskID add_download_task(const String &p_download_url, const String &p_save_path, bool silent, bool write_sha256);
 		Error wait_for_task_completion(DownloadTaskID p_task_id);
 		DownloadQueueThread();
 		~DownloadQueueThread();
@@ -684,7 +685,7 @@ public:
 	}
 
 	DownloadTaskID add_fake_download_task(const String &p_download_url, const String &p_save_path);
-	DownloadTaskID add_download_task(const String &p_download_url, const String &p_save_path, bool silent = false);
+	DownloadTaskID add_download_task(const String &p_download_url, const String &p_save_path, bool silent = false, bool write_sha256 = false);
 	Error wait_for_download_task_completion(DownloadTaskID p_task_id);
 	Error wait_for_task_completion(TaskManagerID p_task_id, uint64_t timeout_s_no_progress = 0);
 	bool is_current_task_completed(TaskManagerID p_task_id) const;

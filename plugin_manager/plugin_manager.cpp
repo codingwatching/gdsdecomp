@@ -52,10 +52,17 @@ String PluginManager::get_download_path_for_release(const ReleaseInfo &p_release
 
 TaskManager::DownloadTaskID PluginManager::start_download_plugin_to_cache(const ReleaseInfo &p_release_info, const String &p_sha256_sum, String &r_save_path, Error &r_error) {
 	String save_path = get_download_path_for_release(p_release_info);
-	if (!p_sha256_sum.is_empty() && FileAccess::exists(save_path)) {
-		if (gdre::get_sha256(save_path) == p_sha256_sum) {
+	if (FileAccess::exists(save_path)) {
+		String reference_sha256 = p_sha256_sum;
+		if (reference_sha256.is_empty() && FileAccess::exists(save_path + ".sha256")) {
+			reference_sha256 = FileAccess::get_file_as_string(save_path + ".sha256").strip_edges();
+		}
+		if (reference_sha256 == gdre::get_sha256(save_path)) {
 			r_error = OK;
 			r_save_path = save_path;
+			if (is_prepopping()) {
+				print_line("Plugin already cached, skipping download: " + save_path.get_file());
+			}
 			return TaskManager::get_singleton()->add_fake_download_task(p_release_info.download_url, save_path);
 		}
 	}
@@ -63,11 +70,15 @@ TaskManager::DownloadTaskID PluginManager::start_download_plugin_to_cache(const 
 	ERR_FAIL_COND_V_MSG(r_error != OK, -1, "Failed to ensure directory exists: " + save_path.get_base_dir());
 	r_save_path = save_path;
 	if (is_prepopping()) {
-		Error err = HTTPRequester::download_file_sync(p_release_info.download_url, save_path);
-		ERR_FAIL_COND_V_MSG(err != OK, -1, "Failed to download plugin to cache: " + p_release_info.download_url);
+		print_line("Downloading plugin to populate cache: " + p_release_info.download_url);
+		r_error = HTTPRequester::download_file_sync(p_release_info.download_url, save_path);
+		ERR_FAIL_COND_V_MSG(r_error != OK, -1, "Failed to download plugin to cache: " + p_release_info.download_url);
+		if (auto fa = FileAccess::open(save_path + ".sha256", FileAccess::WRITE); fa.is_valid()) {
+			fa->store_string(gdre::get_sha256(save_path));
+		}
 		return TaskManager::get_singleton()->add_fake_download_task(p_release_info.download_url, save_path);
 	}
-	return TaskManager::get_singleton()->add_download_task(p_release_info.download_url, save_path);
+	return TaskManager::get_singleton()->add_download_task(p_release_info.download_url, save_path, false, true);
 }
 
 TaskManager::DownloadTaskID PluginManager::download_plugin(const PluginVersion &p_plugin_version, String &r_save_path, Error &r_error) {
@@ -423,7 +434,9 @@ Error PluginManager::populate_plugin_version_hashes(PluginVersion &plugin_versio
 	String url = plugin_version.release_info.download_url;
 	String new_temp_foldr = temp_folder.path_join(plugin_version.release_info.get_cache_key());
 	String zip_path;
-	print_line("Downloading plugin to populate cache: " + url);
+	if (!is_prepopping()) {
+		print_line("Downloading plugin to populate cache: " + url);
+	}
 
 	Error err = OK;
 	auto task_id = start_download_plugin_to_cache(plugin_version.release_info, plugin_version.archive_sha256, zip_path, err);

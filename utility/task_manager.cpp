@@ -1,6 +1,10 @@
 #include "task_manager.h"
+
+#include "core/io/file_access.h"
+
 #include "gui/gdre_progress.h"
 #include "main/gdre_main_loop.h"
+#include "utility/common.h"
 #include "utility/http_requester.h"
 
 static constexpr int64_t ONE_GB = 1024LL * 1024LL * 1024LL;
@@ -405,8 +409,8 @@ TaskManager::DownloadTaskID TaskManager::add_fake_download_task(const String &p_
 	return download_thread.add_fake_download_task(p_download_url, p_save_path);
 }
 
-TaskManager::DownloadTaskID TaskManager::add_download_task(const String &p_download_url, const String &p_save_path, bool silent) {
-	return download_thread.add_download_task(p_download_url, p_save_path, silent);
+TaskManager::DownloadTaskID TaskManager::add_download_task(const String &p_download_url, const String &p_save_path, bool silent, bool write_sha256) {
+	return download_thread.add_download_task(p_download_url, p_save_path, silent, write_sha256);
 }
 
 Error TaskManager::wait_for_download_task_completion(DownloadTaskID p_task_id) {
@@ -493,6 +497,12 @@ void TaskManager::DownloadTaskData::callback_data(void *p_data) {
 	}
 	print_line(vformat("%s: Downloaded %s in %sms, Median speed: %s, Average speed: %s", download_url.get_file(), String::humanize_size(size), end_time - start_time, String::humanize_size(median_speed), String::humanize_size(average_speed)));
 #endif
+	if (download_error == OK && write_sha256) {
+		if (auto fa = FileAccess::open(save_path + ".sha256", FileAccess::WRITE); fa.is_valid()) {
+			String sha256 = gdre::get_sha256(save_path);
+			fa->store_string(sha256);
+		}
+	}
 }
 
 void TaskManager::DownloadTaskData::start_internal() {
@@ -502,8 +512,8 @@ void TaskManager::DownloadTaskData::start_internal() {
 	}
 }
 
-TaskManager::DownloadTaskData::DownloadTaskData(const String &p_download_url, const String &p_save_path, bool p_silent, bool p_fake) :
-		download_url(p_download_url), save_path(p_save_path), silent(p_silent), fake(p_fake) {
+TaskManager::DownloadTaskData::DownloadTaskData(const String &p_download_url, const String &p_save_path, bool p_silent, bool p_fake, bool p_write_sha256) :
+		download_url(p_download_url), save_path(p_save_path), write_sha256(p_write_sha256), silent(p_silent), fake(p_fake) {
 	not_in_main_queue = true;
 	auto_start = false;
 }
@@ -554,16 +564,16 @@ void TaskManager::DownloadQueueThread::main_loop() {
 TaskManager::DownloadTaskID TaskManager::DownloadQueueThread::add_fake_download_task(const String &p_download_url, const String &p_save_path) {
 	MutexLock lock(write_mutex);
 	DownloadTaskID task_id = ++current_task_id;
-	tasks.try_emplace(task_id, std::make_shared<DownloadTaskData>(p_download_url, p_save_path, true, true));
+	tasks.try_emplace(task_id, std::make_shared<DownloadTaskData>(p_download_url, p_save_path, true, true, false));
 	// Don't add it to the queue; it will never be actually run
 	return task_id;
 }
 
-TaskManager::DownloadTaskID TaskManager::DownloadQueueThread::add_download_task(const String &p_download_url, const String &p_save_path, bool silent) {
+TaskManager::DownloadTaskID TaskManager::DownloadQueueThread::add_download_task(const String &p_download_url, const String &p_save_path, bool silent, bool p_write_sha256) {
 	MutexLock lock(write_mutex);
 
 	DownloadTaskID task_id = ++current_task_id;
-	tasks.try_emplace(task_id, std::make_shared<DownloadTaskData>(p_download_url, p_save_path, silent));
+	tasks.try_emplace(task_id, std::make_shared<DownloadTaskData>(p_download_url, p_save_path, silent, false, p_write_sha256));
 	queue.try_push(task_id);
 	return task_id;
 }
