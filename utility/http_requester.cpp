@@ -787,11 +787,8 @@ Error HTTPRequester::wget_sync(const String &p_url, Vector<uint8_t> &response, d
 	requester.start_request(p_url, extra_headers, HTTPClient::METHOD_GET);
 
 	Error err = _wait_for_request_completion(&requester, 15, retries, p_progress, p_cancelled, nullptr);
-	if (err) {
-		return err;
-	}
 	response = requester.body;
-	return OK;
+	return err;
 }
 
 Error HTTPRequester::download_file_sync(const String &p_url, const String &p_output_path, float *p_progress, bool *p_cancelled, int64_t *r_size) {

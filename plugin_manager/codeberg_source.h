@@ -22,6 +22,8 @@ private:
 
 	virtual String get_plugin_name() override;
 
+	virtual Error make_request(const String &url, const Vector<String> &extra_headers, Vector<uint8_t> &response) override;
+
 public:
 	CodebergSource();
 	~CodebergSource();

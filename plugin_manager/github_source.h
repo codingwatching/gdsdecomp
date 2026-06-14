@@ -20,6 +20,7 @@ private:
 	virtual const HashMap<String, Vector<String>> &get_plugin_release_file_exclude_masks();
 	virtual const String &get_release_api_url();
 	virtual int get_release_page_limit();
+	virtual Error make_request(const String &url, const Vector<String> &extra_headers, Vector<uint8_t> &response);
 
 protected:
 	struct GHReleaseCache {

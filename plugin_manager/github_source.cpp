@@ -216,16 +216,16 @@ Error GitHubSource::recache_release_list(const String &plugin_name) {
 		String request_url = get_release_api_url().replace("{0}", org).replace("{1}", repo).replace("{2}", itos(page));
 
 		Vector<uint8_t> response;
-		Error err = HTTPRequester::wget_sync(request_url, response, 15, 2, extra_headers);
+		Error err = make_request(request_url, extra_headers, response);
 		if (err) {
-			if (err == ERR_UNAUTHORIZED) { // rate limit exceeded
+			if (err == ERR_BUSY) { // rate limit exceeded
 				// use the cached releases if they exist
-				print_line(get_plugin_name() + " rate limit exceeded!");
+				print_line(get_plugin_name() + ": rate limit exceeded!");
 				if (has_cached_releases) {
-					print_line(get_plugin_name() + " using cached releases...");
+					print_line(get_plugin_name() + ": using cached releases...");
 					return OK;
 				}
-				print_line(get_plugin_name() + " no cached releases, failing...");
+				print_line(get_plugin_name() + ": no cached releases, failing...");
 				return ERR_UNAUTHORIZED;
 			}
 			if (err == ERR_FILE_NOT_FOUND && page > 1) {
@@ -233,7 +233,7 @@ Error GitHubSource::recache_release_list(const String &plugin_name) {
 				break;
 			}
 			if (err != OK) {
-				print_line(get_plugin_name() + " failed to get releases: " + itos(err));
+				print_line(get_plugin_name() + ": failed to get releases: " + itos(err));
 				return err;
 			}
 		}
@@ -489,4 +489,13 @@ Vector<ReleaseInfo> GitHubSource::find_release_infos_by_tag(const String &plugin
 void GitHubSource::clear_cache() {
 	MutexLock lock(cache_mutex);
 	release_cache.clear();
+}
+
+Error GitHubSource::make_request(const String &url, const Vector<String> &extra_headers, Vector<uint8_t> &response) {
+	// more retries for github since it's
+	Error err = HTTPRequester::wget_sync(url, response, 15, 5, extra_headers);
+	if (err == ERR_UNAUTHORIZED) { // github passes back a 401 Unauthorized error if the rate limit is exceeded; we'll treat this as a rate limit error
+		err = ERR_BUSY;
+	}
+	return err;
 }
