@@ -33,9 +33,6 @@ INCLUDE_DIRS = [
     LIBVORBIS_THIRDPARTY_DIR,
     LIBTHEORA_THIRDPARTY_DIR,
     MBEDTLS_THIRDPARTY_DIR,
-    SPIRV_CROSS_THIRDPARTY_DIR,
-    SPIRV_CROSS_THIRDPARTY_INCLUDE_DIR,
-    SPIRV_HEADERS_THIRDPARTY_DIR,
     UNSIGNED_HASH_INCLUDE_DIR,
     AXML_DEC_INCLUDE_DIR,
 ]
@@ -43,17 +40,16 @@ INCLUDE_DIRS = [
 
 env_gdsdecomp = env_modules.Clone()
 
-if "-fno-exceptions" in env_gdsdecomp["CXXFLAGS"]:
-    env_gdsdecomp["CXXFLAGS"].remove("-fno-exceptions")
-env_gdsdecomp.Append(CXXFLAGS=["-fexceptions"])
+# spirv-interop
+spirv_interop_obj = []
 
+spirv_interop_sources: list[str] = []
+
+# if metal isn't being built, we have to build spirv-cross ourselves because it's not being built by the engine
 if not "metal" in env or not env["metal"]:
-    # we have to build spirv-cross ourselves because it's not being built by the engine
-    thirdparty_obj = []
-
     thirdparty_spirv_headers_dir = "#thirdparty/spirv-headers/"
     thirdparty_dir = "#thirdparty/spirv-cross/"
-    thirdparty_sources = [
+    spirv_interop_sources = [
         "spirv_cfg.cpp",
         "spirv_cross.cpp",
         "spirv_parser.cpp",
@@ -63,21 +59,29 @@ if not "metal" in env or not env["metal"]:
         "spirv_cross_parsed_ir.cpp",
         "spirv_cross_util.cpp",
     ]
+    spirv_interop_sources = [thirdparty_dir + file for file in spirv_interop_sources]
+spirv_interop_sources.append(SPIRV_INTEROP_DIR + "spirv-transpiler.cpp")
 
-    thirdparty_sources = [thirdparty_dir + file for file in thirdparty_sources]
-
-    env_thirdparty = env_gdsdecomp.Clone()
-    env_thirdparty.disable_warnings()
-    env_thirdparty.add_source_files(thirdparty_obj, thirdparty_sources)
-    append_cpppaths(
-        env_thirdparty,
-        [
-            SPIRV_CROSS_THIRDPARTY_DIR,
-            SPIRV_CROSS_THIRDPARTY_INCLUDE_DIR,
-            SPIRV_HEADERS_THIRDPARTY_DIR,
-        ],
-    )
-    env.modules_sources += thirdparty_obj  # pyright: ignore[reportAttributeAccessIssue]
+env_spirv_interop = env_gdsdecomp.Clone()
+env_spirv_interop.disable_warnings()
+env_spirv_interop.add_source_files(spirv_interop_obj, spirv_interop_sources)
+if env.msvc:
+    if "_HAS_EXCEPTIONS" in env_spirv_interop["CPPDEFINES"]:
+        env_spirv_interop.remove("_HAS_EXCEPTIONS")
+else:
+    if "-fno-exceptions" in env_spirv_interop["CXXFLAGS"]:
+        env_spirv_interop["CXXFLAGS"].remove("-fno-exceptions")
+    env_spirv_interop.Append(CXXFLAGS=["-fexceptions"])
+append_cpppaths(
+    env_spirv_interop,
+    [
+        SPIRV_INTEROP_DIR,
+        SPIRV_CROSS_THIRDPARTY_DIR,
+        SPIRV_CROSS_THIRDPARTY_INCLUDE_DIR,
+        SPIRV_HEADERS_THIRDPARTY_DIR,
+    ],
+)
+env.modules_sources += spirv_interop_obj  # pyright: ignore[reportAttributeAccessIssue]
 
 
 if env["tests"]:
