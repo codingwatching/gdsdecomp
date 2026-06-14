@@ -1603,11 +1603,15 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 	HashMap<Ref<ShaderMaterial>, Ref<BaseMaterial3D>> shader_material_to_base_material_map;
 
 	HashSet<Ref<Mesh>> meshes_in_mesh_instances;
-	auto cache_material = [&shader_material_to_base_material_map](const Ref<ShaderMaterial> &shader_material, const Ref<BaseMaterial3D> &base_material, Pair<bool, bool> used_textures_and_is_instance) {
+	auto cache_material = [&](const Ref<ShaderMaterial> &shader_material, const Ref<BaseMaterial3D> &base_material, Pair<bool, bool> used_textures_and_is_instance) {
 		// We don't want to cache it if it has instance uniforms that were actually used,
 		// since they will need to be created per-instance
 		if (base_material.is_valid() && !used_textures_and_is_instance.second) {
 			shader_material_to_base_material_map[shader_material] = base_material;
+		}
+		// Keeping the shader material around until the end to avoid errors caused when a deferred call that uses it is executed after it's freed
+		if (!loaded_deps.has(shader_material)) {
+			loaded_deps.push_back(shader_material);
 		}
 	};
 
@@ -3179,7 +3183,6 @@ struct BatchExportToken : public TaskRunnerStruct {
 	bool finished = false;
 	bool export_done = false;
 	bool no_rename = false;
-	bool do_on_main_thread = false;
 	int ver_major = 0;
 	Error err = OK;
 	size_t scene_size = 0;
@@ -3271,12 +3274,20 @@ struct BatchExportToken : public TaskRunnerStruct {
 		}
 	}
 
-	void clear_scene() {
+	void _clear_scene(void *p_userdata = nullptr) {
 		if (root) {
 			memdelete(root);
 			root = nullptr;
 		}
 		_scene = nullptr;
+		instance._unload_deps();
+	}
+
+	void clear_scene() {
+		// Ensure that the scene is cleared on the main thread to avoid rare segfaults caused by race conditions in TextureStorage
+		if (!TaskManager::get_singleton()->dispatch_to_main_thread(this, &BatchExportToken::_clear_scene, nullptr).has_value()) {
+			err = ERR_SKIP;
+		}
 	}
 
 	bool check_unsupported() {
@@ -3326,21 +3337,19 @@ struct BatchExportToken : public TaskRunnerStruct {
 					root = instance._set_stuff_from_instanced_scene(root);
 				}
 				if (!root) {
-					_scene = nullptr;
+					clear_scene();
 					err = _check_cancelled();
 					if (err == OK) {
 						err = ERR_CANT_ACQUIRE_RESOURCE;
 					}
 					report->set_error(err);
-					after_preload();
-					return false;
 				}
 			}
 		}
 
 		// print_line("Preloaded scene " + p_src_path);
 		after_preload();
-		return do_on_main_thread;
+		return false;
 	}
 
 	void after_preload() {
@@ -3361,18 +3370,11 @@ struct BatchExportToken : public TaskRunnerStruct {
 		while (!preload_done && _check_cancelled() == OK) {
 			OS::get_singleton()->delay_usec(10000);
 		}
-		if (do_on_main_thread && !Thread::is_main_thread()) {
-			return;
-		}
 		if (err == OK) {
 			err = _check_cancelled();
 		}
 		if (err != OK) {
-			if (root) {
-				memdelete(root);
-				root = nullptr;
-			}
-			_scene = nullptr;
+			clear_scene();
 			report->set_error(err);
 			export_done = true;
 			return;
@@ -3394,10 +3396,6 @@ struct BatchExportToken : public TaskRunnerStruct {
 			}
 		} else {
 			err = instance._batch_export_instanced_scene(root, p_dest_path);
-			if (root) {
-				memdelete(root);
-				root = nullptr;
-			}
 			if (err == OK) {
 				report->set_saved_path(p_dest_path);
 			}
@@ -3407,7 +3405,7 @@ struct BatchExportToken : public TaskRunnerStruct {
 				ResourceCompatLoader::to_text(p_src_path, new_dest_path);
 			}
 		}
-		_scene = nullptr;
+		clear_scene();
 		// print_line("Finished exporting scene " + p_src_path);
 		report->set_error(err);
 		finished = true;
@@ -3430,14 +3428,10 @@ struct BatchExportToken : public TaskRunnerStruct {
 			report->set_message("Export timed out.");
 		}
 		if (is_text_output() || is_obj_output()) {
-			if (is_obj_output()) {
-				instance._unload_deps();
-			}
 			if (err == OK) {
 				report->set_saved_path(p_dest_path);
 			}
 		} else {
-			instance._unload_deps();
 			if (instance.had_script() && err == OK) {
 				report->set_message("Script has scripts, not saving to original path.");
 				if (!no_rename) {
