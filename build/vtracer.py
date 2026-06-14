@@ -124,8 +124,6 @@ def cargo_builder(
     module_dir: str,
     vtracer_prefix: str,
 ):
-    if build_env is None:
-        raise Exception("build_env is required")
     print("BUILDING VTRACER, LIBRARY PATH: ", str(libs[0].get_abspath()))
     build_variant = "Debug" if is_dev_build(build_env) else "Release"
     print("BUILD VARIANT", build_variant)
@@ -202,6 +200,7 @@ def build_vtracer(
     vtracer_sources = get_sources(module_dir, vtracer_prefix, source_suffixes, ["target/"])
     vtracer_obj = env_gdsdecomp.vtracerBuilder(libs, vtracer_sources)
     env_gdsdecomp.Alias("vtracer", [vtracer_obj])
-    add_libs_to_env(root_env, env_gdsdecomp, vtracer_obj, libs, vtracer_sources)
+    add_libs_to_env(root_env, libs)
+    env_gdsdecomp.Requires(module_obj, vtracer_obj)
     if root_env.msvc:
         root_env.Append(LINKFLAGS=["userenv.lib"])

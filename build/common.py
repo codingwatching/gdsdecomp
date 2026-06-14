@@ -61,7 +61,7 @@ def get_cmd_env(build_env):
     return cmd_env
 
 
-def add_libs_to_env(env, env_gdsdecomp, module_obj, libs, sources):
+def add_libs_to_env(env, libs):
     for lib in libs:
         if env.msvc:
             if not lib.endswith(".lib"):
