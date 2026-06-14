@@ -1,9 +1,11 @@
-#pragma once
 #include "../compat/resource_compat_binary.h"
 #include "../compat/resource_compat_text.h"
 
 #include "test_common.h"
 #include "tests/test_macros.h"
+
+#include "utility/common.h"
+#include "utility/gdre_settings.h"
 
 #include <core/io/pck_packer.h>
 #include <core/io/resource_format_binary.h>
@@ -14,6 +16,11 @@
 #include <utility/file_access_gdre.h>
 #include <utility/import_exporter.h>
 #include <utility/pck_dumper.h>
+
+TEST_FORCE_LINK(test_gdre_project_loading)
+
+
+namespace TestGdreProjectLoading {
 
 inline Error create_test_pck(const String &pck_path, const HashMap<String, String> &paths) {
 	PCKPacker pck;
@@ -272,3 +279,4 @@ TEST_CASE("[GDSDecomp] uh oh") {
 	gdre::rimraf(temp_scripts_path);
 }
 #endif
+} // namespace TestGdreProjectLoading

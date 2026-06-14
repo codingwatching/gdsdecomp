@@ -1,10 +1,11 @@
-#pragma once
 
 #include <compat/resource_compat_text.h>
 #include <compat/resource_loader_compat.h>
 #include <modules/gdscript/gdscript_tokenizer_buffer.h>
 #include <utility/common.h>
+#include <utility/gdre_settings.h>
 #include <utility/glob.h>
+#include <core/io/image.h>
 
 #include "core/version_generated.gen.h"
 #include "test_common.h"
@@ -13,6 +14,8 @@
 #include "utility/resource_info.h"
 
 #include "core/os/thread_safe.h"
+
+TEST_FORCE_LINK(test_resource_loading)
 
 namespace TestResourceLoading {
 

@@ -1,17 +1,22 @@
-#include "test_project_export.h"
+#include "tests/test_macros.h"
+
+#include "test_common.h"
 
 #include "core/io/json.h"
 
 #include "exporters/export_report.h"
 #include "exporters/resource_exporter.h"
 #include "exporters/translation_exporter.h"
-#include "test_common.h"
-#include "tests/test_macros.h"
 #include "utility/common.h"
+#include "utility/gdre_settings.h"
 #include "utility/import_exporter.h"
 #include "utility/pck_dumper.h"
 #include <compat/resource_loader_compat.h>
 
+TEST_FORCE_LINK(test_project_export)
+
+class ExportReport;
+class ImportInfo;
 namespace TestProjectExport {
 
 Error test_json_import_info(const Ref<ImportInfo> &import_info) {
@@ -108,4 +113,22 @@ Error test_export_project(const String &version, const String &sub_project, cons
 	GDRESettings::get_singleton()->unload_project();
 	return err;
 }
+
+// '[SceneTree]' is in the name so that the test runner instantiates the rendering server and various other things.
+TEST_CASE("[GDSDecomp][ProjectRecovery] ([SceneTree]) Recover projects ") {
+	// get a list of all version numbers in the test_projects/exported' directory
+	String test_projects_path = get_test_projects_path();
+	String original_path = test_projects_path.path_join("original");
+	String exported_path = test_projects_path.path_join("exported");
+	Vector<String> versions = gdre::get_dirs_at(exported_path, {}, false);
+	for (const String &version : versions) {
+		Vector<String> sub_projects = gdre::get_recursive_dir_list(exported_path.path_join(version), { "*.pck", "*.apk" }, false);
+		for (const String &sub_project : sub_projects) {
+			SUBCASE(vformat("%s: Test recover project %s", version, sub_project).utf8().get_data()) {
+				test_export_project(version, sub_project, original_path, exported_path);
+			}
+		}
+	}
+}
+
 } //namespace TestProjectExport

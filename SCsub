@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from SCons.Script.SConscript import SConsEnvironment
 import os
 from typing import TYPE_CHECKING
 
@@ -137,8 +138,7 @@ common_sources = [
 add_source_groups(env_gdsdecomp, module_obj, common_sources)
 if env["target"] == "editor":
     add_source_groups(env_gdsdecomp, module_obj, ["editor/*.cpp"])
-if env["tests"]:
-    add_source_groups(env_gdsdecomp, module_obj, ["tests/*.cpp"])
+
 
 build_vtracer(root_env=env, env_gdsdecomp=env_gdsdecomp, module_obj=module_obj)
 
@@ -148,5 +148,33 @@ if "disable_godot_mono_decomp" in env and env["disable_godot_mono_decomp"]:
     env_gdsdecomp.Append(CPPDEFINES=["GODOT_MONO_DECOMP_DISABLED"])
 else:
     build_godot_mono_decomp(env=env, env_gdsdecomp=env_gdsdecomp, module_obj=module_obj)
+
+
+if env["tests"]:
+    import glob
+
+    test_obj = []
+    env_tests: SConsEnvironment = env_gdsdecomp.Clone()
+    force_link_sources = glob.glob(os.path.join(MODULE_DIR, "tests", "*.cpp"))
+
+    add_source_groups(env_tests, test_obj, ["#modules/gdsdecomp/tests/*.cpp"])
+    env.modules_sources += test_obj  # pyright: ignore[reportAttributeAccessIssue]
+
+    from tests.test_builders import force_link_builder  # pyright: ignore[reportMissingImports]
+
+    def gen_tests_header_fixed(target, source, env):
+        force_link_builder(target, source, env)
+        contents = open(str(target[0].abspath), "r", encoding="utf-8").read()
+        with open(str(target[0].abspath), "w", encoding="utf-8") as file:
+            file.write(contents.replace("force_link_tests()", "force_link_gdre_tests()"))
+
+    force_link_header = env.CommandNoCache(
+        "#modules/gdsdecomp/tests/gdre_tests_force_link.gen.h",
+        env.Value(force_link_sources),
+        env.Run(gen_tests_header_fixed),
+    )
+
+    env.Depends("#modules/modules_tests.gen.h", force_link_header)
+
 
 env.modules_sources += module_obj  # pyright: ignore[reportAttributeAccessIssue]
