@@ -68,6 +68,10 @@ String FileAccessBuffer::get_path() const {
 	return path;
 }
 
+String FileAccessBuffer::get_path_absolute() const {
+	return path;
+}
+
 bool FileAccessBuffer::is_open() const {
 	return true;
 }

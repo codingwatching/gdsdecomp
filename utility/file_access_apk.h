@@ -80,6 +80,7 @@ class FileAccessAPK : public FileAccess {
 	GDSOFTCLASS(FileAccessAPK, FileAccess);
 	unzFile zfile = nullptr;
 	unz_file_info64 file_info;
+	String path;
 
 	mutable bool at_eof = false;
 
@@ -88,6 +89,9 @@ class FileAccessAPK : public FileAccess {
 public:
 	virtual Error open_internal(const String &p_path, int p_mode_flags) override; ///< open a file
 	virtual bool is_open() const override; ///< true when file is open
+
+	virtual String get_path() const override; /// returns the path for the current open file
+	virtual String get_path_absolute() const override; /// returns the absolute path for the current open file
 
 	virtual void seek(uint64_t p_position) override; ///< seek to a given position
 	virtual void seek_end(int64_t p_position = 0) override; ///< seek from the end of file

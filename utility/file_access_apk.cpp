@@ -316,6 +316,8 @@ APKArchive::~APKArchive() {
 Error FileAccessAPK::open_internal(const String &p_path, int p_mode_flags) {
 	_close();
 
+	path = p_path;
+
 	ERR_FAIL_COND_V(p_mode_flags & FileAccess::WRITE, FAILED);
 	APKArchive *arch = APKArchive::get_singleton();
 	ERR_FAIL_COND_V(!arch, FAILED);
@@ -341,6 +343,14 @@ void FileAccessAPK::_close() {
 
 bool FileAccessAPK::is_open() const {
 	return zfile != nullptr;
+}
+
+String FileAccessAPK::get_path() const {
+	return path;
+}
+
+String FileAccessAPK::get_path_absolute() const {
+	return path;
 }
 
 void FileAccessAPK::seek(uint64_t p_position) {
