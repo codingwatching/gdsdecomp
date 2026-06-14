@@ -1635,4 +1635,5 @@ void GDRECommon::_bind_methods() {
 	ClassDB::bind_static_method("GDRECommon", D_METHOD("get_recursive_dir_list_multithread", "dir", "wildcards", "absolute", "include_hidden", "exclude_filters", "files_first", "exclude_dot_prefix_and_gdignore", "show_progress"), &gdre::get_recursive_dir_list_multithread, DEFVAL(PackedStringArray()), DEFVAL(true), DEFVAL(true), DEFVAL(PackedStringArray()), DEFVAL(false), DEFVAL(false), DEFVAL(false));
 	ClassDB::bind_static_method("GDRECommon", D_METHOD("get_safe_dir_name", "dir_name", "allow_paths"), &gdre::get_safe_dir_name, DEFVAL(false));
 	ClassDB::bind_static_method("GDRECommon", D_METHOD("clear_dir_except_for", "dir", "files_or_dirs"), &gdre::clear_dir_except_for);
+	ClassDB::bind_static_method("GDRECommon", D_METHOD("load_image_from_file", "path"), &gdre::load_image_from_file);
 }

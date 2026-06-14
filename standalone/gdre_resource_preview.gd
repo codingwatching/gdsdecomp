@@ -91,7 +91,7 @@ func load_texture(path):
 	if (ext == "image"):
 		%TextureRect.texture = ImageTexture.create_from_image(ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP))
 	elif (is_image(ext)):
-		%TextureRect.texture = ImageTexture.create_from_image(Image.load_from_file(path))
+		%TextureRect.texture = ImageTexture.create_from_image(GDRECommon.load_image_from_file(path))
 	else:
 		%TextureRect.texture = ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP) # TODO: handle other texture types
 	if (%TextureRect.texture == null):
