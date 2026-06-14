@@ -672,3 +672,6 @@ func _on_add_pcks_button_pressed() -> void:
 
 func _on_extract_success_dialog_confirmed() -> void:
 	pass # Replace with function body.
+
+func _init():
+	set_process(true)
