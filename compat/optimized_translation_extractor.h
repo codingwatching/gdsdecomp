@@ -8,6 +8,7 @@ class OptimizedTranslationExtractor : public Translation {
 	Vector<int> hash_table;
 	Vector<int> bucket_table;
 	Vector<uint8_t> strings;
+	bool use_old_hash = true;
 
 	String original_class = "OptimizedTranslation";
 
@@ -30,7 +31,11 @@ class OptimizedTranslationExtractor : public Translation {
 			d = 0x1000193;
 		}
 		while (*p_str) {
-			d = (d * 0x1000193) ^ uint32_t(*p_str);
+			if (use_old_hash) {
+				d = (d * 0x1000193) ^ uint32_t(*p_str);
+			} else {
+				d = (d * 0x1000193) ^ static_cast<uint8_t>(*p_str);
+			}
 			p_str++;
 		}
 
@@ -67,6 +72,8 @@ public:
 	Error replace_message_at_index(int p_index, const String &p_message);
 	String get_save_class() const override;
 	void set_original_class(const String &p_class);
+	void set_use_old_hash(bool p_use_old_hash);
+	bool get_use_old_hash() const;
 	static Ref<OptimizedTranslationExtractor> create_from(const Ref<OptimizedTranslation> &p_otr);
 	OptimizedTranslationExtractor() {}
 };
