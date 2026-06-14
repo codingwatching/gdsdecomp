@@ -67,7 +67,6 @@ public:
 
 		Variant::Type vtype = Variant::VARIANT_MAX;
 		int func = -1;
-		int current_indent = 0;
 
 		const char *get_name() const;
 		String get_debug_name() const;
@@ -92,6 +91,7 @@ public:
 	static String get_token_name(Token::Type p_token_type);
 
 	virtual Token scan() = 0;
+	virtual void set_multiline_mode(bool p_state) = 0;
 
 	virtual ~GDScriptTokenizerCompat() {}
 };

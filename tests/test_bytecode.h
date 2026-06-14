@@ -74,10 +74,10 @@ static constexpr const char *test_unique_id_modulo = R"(
 extends AnimationPlayer
 
 func _ready() -> void :
-    %BlinkTimer.timeout.connect(check_for_blink)
-    var thingy = 10 % 3
-    var thingy2 = 10 % thingy
-    var thingy3 = thingy % 20
+	%BlinkTimer.timeout.connect(check_for_blink)
+	var thingy = 10 % 3
+	var thingy2 = 10 % thingy
+	var thingy3 = thingy % 20
 )";
 
 // should pass on all versions of GDScript
@@ -161,23 +161,32 @@ inline void test_script_binary(const String &script_name, const Vector<uint8_t> 
 	CHECK(recompiled_bytecode.size() > 0);
 	auto recompiled_result = decomp->test_bytecode(recompiled_bytecode, false);
 	CHECK(recompiled_result == GDScriptDecomp::BYTECODE_TEST_PASS);
-	err = decomp->test_bytecode_match(bytecode, recompiled_bytecode);
+	err = decomp->test_bytecode_match(bytecode, recompiled_bytecode, !compare_whitespace, false);
 #if DEBUG_ENABLED
 	if (err) {
 		TextDiff::print_diff(TextDiff::get_diff_with_header(script_name + "_original", script_name + "_decompiled", helper_script_text_stripped, decompiled_string_stripped));
 		output_diff(script_name, decompiled_string_stripped, helper_script_text_stripped);
+		auto new_path = get_tmp_path().path_join(script_name.get_basename() + ".decompiled.gd");
+		gdre::ensure_dir(new_path.get_base_dir());
+		auto fa = FileAccess::open(new_path, FileAccess::WRITE);
+		if (fa.is_valid()) {
+			fa->store_string(decompiled_string_stripped);
+			fa->flush();
+			fa->close();
+		}
 	}
 #endif
 
+	CHECK(decomp->get_error_message() == "");
 	if (revision == GDScriptDecompVersion::LATEST_GDSCRIPT_COMMIT) {
 		// test with the latest GDScriptTokenizer
 		auto reference_result = GDScriptTokenizerBuffer::parse_code_string(helper_script_text, GDScriptTokenizerBuffer::CompressMode::COMPRESS_ZSTD);
 		CHECK(reference_result.size() > 0);
-		err = decomp->test_bytecode_match(bytecode, reference_result, true);
+		err = decomp->test_bytecode_match(bytecode, reference_result, true, false);
 		CHECK(decomp->get_error_message() == "");
 		CHECK(err == OK);
 	}
-	CHECK(decomp->get_error_message() == "");
+
 	CHECK(err == OK);
 
 	Ref<FakeGDScript> fake_script = memnew(FakeGDScript);
@@ -312,7 +321,7 @@ TEST_CASE("[GDSDecomp][Bytecode] Test sample GDScript bytecode") {
 				auto compiled_bytecode = decomp->compile_code_string(original_script_text);
 				CHECK(decomp->get_error_message() == "");
 				CHECK(compiled_bytecode.size() > 0);
-				CHECK(decomp->test_bytecode_match(bytecode, compiled_bytecode) == OK);
+				CHECK(decomp->test_bytecode_match(bytecode, compiled_bytecode, false, false) == OK);
 				test_script_binary(original_file, bytecode, original_script_text, revision, false, true);
 			}
 		}

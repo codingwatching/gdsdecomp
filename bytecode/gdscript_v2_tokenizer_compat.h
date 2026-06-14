@@ -61,7 +61,6 @@ public:
 	virtual int get_cursor_line() const = 0;
 	virtual int get_cursor_column() const = 0;
 	virtual void set_cursor_position(int p_line, int p_column) = 0;
-	virtual void set_multiline_mode(bool p_state) = 0;
 	virtual bool is_past_cursor() const = 0;
 	virtual void push_expression_indented_block() = 0; // For lambdas, or blocks inside expressions.
 	virtual void pop_expression_indented_block() = 0; // For lambdas, or blocks inside expressions.

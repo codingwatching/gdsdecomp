@@ -160,6 +160,11 @@ String GDScriptDecomp::get_constant_string(const Vector<Variant> &constants, uin
 	String constString;
 	GDSDECOMP_FAIL_COND_V_MSG(constId >= constants.size(), "", "Invalid constant ID.");
 	const Variant &var = constants[constId];
+	return get_constant_string(var);
+}
+
+String GDScriptDecomp::get_constant_string(const Variant &var) {
+	String constString;
 	// negative decimal constants are encoded as `op_sub, num` instead of `-num` in GDScript 1.0, this is a hex number
 	if (get_bytecode_version() < GDSCRIPT_2_0_VERSION && var.get_type() == Variant::INT && var.operator int64_t() < 0) {
 		if (var.operator int64_t() < INT_MIN) {
@@ -611,6 +616,7 @@ Error GDScriptDecomp::debug_print(Vector<uint8_t> p_buffer) {
 }
 
 Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
+	return decompile_buffer_2(p_buffer);
 #if 0
 	debug_print(p_buffer);
 #endif
@@ -1190,6 +1196,565 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 		return ERR_INVALID_DATA;
 	}
 	error_message = "";
+	return OK;
+}
+
+Error GDScriptDecomp::decompile_buffer_2(Vector<uint8_t> p_buffer) {
+	ScriptState s;
+	Error err = get_script_state(p_buffer, s);
+	ERR_FAIL_COND_V(err != OK, err);
+
+	Ref<GDScriptTokenizerCompat> tokenizer = GDScriptTokenizerCompat::create_buffer_tokenizer(this, p_buffer);
+	if (tokenizer.is_null()) {
+		return ERR_INVALID_DATA;
+	}
+	using Token = GDScriptTokenizerCompat::Token;
+	tokenizer->set_multiline_mode(false);
+
+	Token current = tokenizer->scan();
+	Vector<Token> tokens;
+	while (current.type != Token::Type::G_TK_EOF) {
+		tokens.push_back(current);
+		current = tokenizer->scan();
+	}
+
+	bool use_spaces = false;
+	bool first_line = true;
+	int version = s.bytecode_version;
+	int bytecode_version = get_bytecode_version();
+	int variant_ver_major = get_variant_ver_major();
+	uint32_t FUNC_MAX = get_function_count();
+	GDSDECOMP_FAIL_COND_V(version != get_bytecode_version(), ERR_INVALID_DATA);
+
+	//Decompile script
+	String line;
+	int indent = 0;
+
+	GlobalToken prev_token = G_TK_NEWLINE;
+	GlobalToken prev_prev_token = G_TK_MAX;
+	uint32_t prev_line = 1;
+	uint32_t prev_line_start_column = 1;
+
+	auto handle_newline = [&](int i, GlobalToken curr_token) {
+		auto curr_line = tokens[i].end_line;
+		for (int j = 0; j < indent; j++) {
+			script_text += use_spaces ? " " : "\t";
+		}
+		script_text += line;
+		if (curr_line <= prev_line) {
+			curr_line = prev_line + 1; // force new line
+		}
+		bool was_escaped = false;
+		while (curr_line > prev_line) {
+			if (curr_token != G_TK_NEWLINE && bytecode_version < GDSCRIPT_2_0_VERSION) {
+				script_text += "\\"; // line continuation
+				was_escaped = true;
+			} else if (bytecode_version >= GDSCRIPT_2_0_VERSION && tokens[i].start_line != tokens[i].end_line) {
+				if (!first_line || (!gdre::remove_whitespace(line).is_empty())) {
+					script_text += "\\";
+					was_escaped = true;
+				}
+			}
+			script_text += "\n";
+			prev_line++;
+		}
+		first_line = false;
+		line = String();
+		prev_token = G_TK_NEWLINE;
+	};
+
+	auto check_new_line = [&](int i) {
+		auto ln = tokens[i].start_line;
+		if (ln > prev_line && ln != 0) {
+			return true;
+		}
+		ln = tokens[i].end_line;
+		if (ln != prev_line && ln != 0) {
+			return true;
+		}
+		return false;
+	};
+
+	auto is_token_newline_or_indent = [](GlobalToken p_token) {
+		return p_token == G_TK_NEWLINE || p_token == G_TK_DEDENT || p_token == G_TK_INDENT;
+	};
+
+	auto ensure_space_func = [&]() {
+		if (!line.ends_with(" ") && !is_token_newline_or_indent(prev_token)) {
+			line += " ";
+		}
+	};
+
+	auto ensure_ending_space_func([&](int idx, GlobalToken check_tk = G_TK_NEWLINE) {
+		if (
+				!line.ends_with(" ") && idx < tokens.size() - 1 &&
+				(!is_token_newline_or_indent(tokens[idx + 1].type) &&
+						!check_new_line(idx + 1)) &&
+				(check_tk == G_TK_NEWLINE || tokens[idx + 1].type != check_tk)) {
+			line += " ";
+		}
+	});
+
+	for (int i = 0; i < tokens.size(); i++) {
+		const Token &token = tokens[i];
+		GlobalToken curr_token = tokens[i].type;
+		if (!is_token_newline_or_indent(curr_token) && check_new_line(i)) {
+			handle_newline(i, curr_token);
+		}
+		switch (curr_token) {
+			case G_TK_EMPTY: {
+				//skip
+			} break;
+			case G_TK_ANNOTATION: // fallthrough
+			case G_TK_IDENTIFIER: {
+				line += tokens[i].literal.operator String();
+			} break;
+			case G_TK_CONSTANT: {
+				// TODO: handle GDScript 2.0 multi-line strings: we have to check the number of newlines
+				// in the string and if the next token has a line number difference >= the number of newlines
+				line += get_constant_string(tokens[i].literal);
+			} break;
+			case G_TK_SELF: {
+				line += "self";
+			} break;
+			case G_TK_BUILT_IN_TYPE: {
+				line += token.literal.operator String();
+			} break;
+			case G_TK_BUILT_IN_FUNC: {
+				line += token.literal.operator String();
+			} break;
+			case G_TK_OP_IN: {
+				ensure_space_func();
+				line += "in ";
+			} break;
+			case G_TK_OP_EQUAL: {
+				ensure_space_func();
+				line += "== ";
+			} break;
+			case G_TK_OP_NOT_EQUAL: {
+				ensure_space_func();
+				line += "!= ";
+			} break;
+			case G_TK_OP_LESS: {
+				ensure_space_func();
+				line += "< ";
+			} break;
+			case G_TK_OP_LESS_EQUAL: {
+				ensure_space_func();
+				line += "<= ";
+			} break;
+			case G_TK_OP_GREATER: {
+				ensure_space_func();
+				line += "> ";
+			} break;
+			case G_TK_OP_GREATER_EQUAL: {
+				ensure_space_func();
+				line += ">= ";
+			} break;
+			case G_TK_OP_AND: {
+				ensure_space_func();
+				line += "and ";
+			} break;
+			case G_TK_OP_OR: {
+				ensure_space_func();
+				line += "or ";
+			} break;
+			case G_TK_OP_NOT: {
+				ensure_space_func();
+				line += "not ";
+			} break;
+			case G_TK_OP_ADD: {
+				ensure_space_func();
+				line += "+ ";
+			} break;
+			case G_TK_OP_SUB: {
+				ensure_space_func();
+				line += "- ";
+				//TODO: do not add space after unary "-"
+			} break;
+			case G_TK_OP_MUL: {
+				ensure_space_func();
+				line += "* ";
+			} break;
+			case G_TK_OP_DIV: {
+				ensure_space_func();
+				line += "/ ";
+			} break;
+			case G_TK_OP_MOD: {
+				ensure_space_func();
+				line += "%";
+				// if the previous token was a constant or an identifier, this is a modulo operation, add a space
+				if (prev_token == G_TK_CONSTANT || prev_token == G_TK_IDENTIFIER || prev_token == G_TK_PARENTHESIS_CLOSE) {
+					ensure_ending_space_func(i);
+				}
+			} break;
+			case G_TK_OP_SHIFT_LEFT: {
+				ensure_space_func();
+				line += "<< ";
+			} break;
+			case G_TK_OP_SHIFT_RIGHT: {
+				ensure_space_func();
+				line += ">> ";
+			} break;
+			case G_TK_OP_ASSIGN: {
+				ensure_space_func();
+				line += "= ";
+			} break;
+			case G_TK_OP_ASSIGN_ADD: {
+				ensure_space_func();
+				line += "+= ";
+			} break;
+			case G_TK_OP_ASSIGN_SUB: {
+				ensure_space_func();
+				line += "-= ";
+			} break;
+			case G_TK_OP_ASSIGN_MUL: {
+				ensure_space_func();
+				line += "*= ";
+			} break;
+			case G_TK_OP_ASSIGN_DIV: {
+				ensure_space_func();
+				line += "/= ";
+			} break;
+			case G_TK_OP_ASSIGN_MOD: {
+				ensure_space_func();
+				line += "%= ";
+			} break;
+			case G_TK_OP_ASSIGN_SHIFT_LEFT: {
+				ensure_space_func();
+				line += "<<= ";
+			} break;
+			case G_TK_OP_ASSIGN_SHIFT_RIGHT: {
+				ensure_space_func();
+				line += ">>= ";
+			} break;
+			case G_TK_OP_ASSIGN_BIT_AND: {
+				ensure_space_func();
+				line += "&= ";
+			} break;
+			case G_TK_OP_ASSIGN_BIT_OR: {
+				ensure_space_func();
+				line += "|= ";
+			} break;
+			case G_TK_OP_ASSIGN_BIT_XOR: {
+				ensure_space_func();
+				line += "^= ";
+			} break;
+			case G_TK_OP_BIT_AND: {
+				ensure_space_func();
+				line += "& ";
+			} break;
+			case G_TK_OP_BIT_OR: {
+				ensure_space_func();
+				line += "| ";
+			} break;
+			case G_TK_OP_BIT_XOR: {
+				ensure_space_func();
+				line += "^ ";
+			} break;
+			case G_TK_OP_BIT_INVERT: {
+				ensure_space_func();
+				line += "~ ";
+			} break;
+			//case G_TK_OP_PLUS_PLUS: {
+			//	line += "++";
+			//} break;
+			//case G_TK_OP_MINUS_MINUS: {
+			//	line += "--";
+			//} break;
+			case G_TK_CF_IF: {
+				ensure_space_func();
+				line += "if ";
+			} break;
+			case G_TK_CF_ELIF: {
+				line += "elif ";
+			} break;
+			case G_TK_CF_ELSE: {
+				ensure_space_func();
+				line += "else";
+				ensure_ending_space_func(i, G_TK_COLON);
+			} break;
+			case G_TK_CF_FOR: {
+				line += "for ";
+			} break;
+			case G_TK_CF_WHILE: {
+				line += "while ";
+			} break;
+			case G_TK_CF_BREAK: {
+				line += "break";
+			} break;
+			case G_TK_CF_CONTINUE: {
+				line += "continue";
+			} break;
+			case G_TK_CF_PASS: {
+				line += "pass";
+			} break;
+			case G_TK_CF_RETURN: {
+				line += "return";
+				ensure_ending_space_func(i);
+			} break;
+			case G_TK_CF_MATCH: {
+				line += "match";
+				ensure_ending_space_func(i);
+			} break;
+			case G_TK_PR_FUNCTION: {
+				ensure_space_func();
+				line += "func";
+				ensure_ending_space_func(i, G_TK_PARENTHESIS_OPEN);
+			} break;
+			case G_TK_PR_CLASS: {
+				ensure_space_func();
+				line += "class ";
+			} break;
+			case G_TK_PR_CLASS_NAME: {
+				ensure_space_func();
+				line += "class_name ";
+			} break;
+			case G_TK_PR_EXTENDS: {
+				ensure_space_func();
+				line += "extends ";
+			} break;
+			case G_TK_PR_IS: {
+				ensure_space_func();
+				line += "is ";
+			} break;
+			case G_TK_PR_ONREADY: {
+				line += "onready ";
+			} break;
+			case G_TK_PR_TOOL: {
+				line += "tool ";
+			} break;
+			case G_TK_PR_STATIC: {
+				line += "static ";
+			} break;
+			case G_TK_PR_EXPORT: {
+				line += "export ";
+			} break;
+			case G_TK_PR_SETGET: {
+				line += " setget ";
+			} break;
+			case G_TK_PR_CONST: {
+				line += "const ";
+			} break;
+			case G_TK_PR_VAR: {
+				ensure_space_func();
+				line += "var ";
+			} break;
+			case G_TK_PR_AS: {
+				ensure_space_func();
+				line += "as ";
+			} break;
+			case G_TK_PR_VOID: {
+				line += "void ";
+			} break;
+			case G_TK_PR_ENUM: {
+				line += "enum ";
+			} break;
+			case G_TK_PR_PRELOAD: {
+				line += "preload";
+			} break;
+			case G_TK_PR_ASSERT: {
+				line += "assert ";
+			} break;
+			case G_TK_PR_YIELD: {
+				line += "yield";
+				ensure_ending_space_func(i, G_TK_PARENTHESIS_OPEN);
+			} break;
+			case G_TK_PR_SIGNAL: {
+				line += "signal ";
+			} break;
+			case G_TK_PR_BREAKPOINT: {
+				line += "breakpoint";
+				ensure_ending_space_func(i);
+			} break;
+			case G_TK_PR_REMOTE: {
+				line += "remote ";
+			} break;
+			case G_TK_PR_SYNC: {
+				line += "sync ";
+			} break;
+			case G_TK_PR_MASTER: {
+				line += "master ";
+			} break;
+			case G_TK_PR_SLAVE: {
+				line += "slave ";
+			} break;
+			case G_TK_PR_PUPPET: {
+				line += "puppet ";
+			} break;
+			case G_TK_PR_REMOTESYNC: {
+				line += "remotesync ";
+			} break;
+			case G_TK_PR_MASTERSYNC: {
+				line += "mastersync ";
+			} break;
+			case G_TK_PR_PUPPETSYNC: {
+				line += "puppetsync ";
+			} break;
+			case G_TK_BRACKET_OPEN: {
+				line += "[";
+			} break;
+			case G_TK_BRACKET_CLOSE: {
+				line += "]";
+			} break;
+			case G_TK_CURLY_BRACKET_OPEN: {
+				line += "{";
+			} break;
+			case G_TK_CURLY_BRACKET_CLOSE: {
+				line += "}";
+			} break;
+			case G_TK_PARENTHESIS_OPEN: {
+				line += "(";
+			} break;
+			case G_TK_PARENTHESIS_CLOSE: {
+				line += ")";
+			} break;
+			case G_TK_COMMA: {
+				line += ", ";
+			} break;
+			case G_TK_SEMICOLON: {
+				line += ";";
+			} break;
+			case G_TK_PERIOD: {
+				line += ".";
+			} break;
+			case G_TK_QUESTION_MARK: {
+				line += "?";
+			} break;
+			case G_TK_COLON: {
+				line += ":";
+				ensure_ending_space_func(i);
+			} break;
+			case G_TK_DOLLAR: {
+				line += "$";
+			} break;
+			case G_TK_FORWARD_ARROW: {
+				ensure_space_func();
+				line += "->";
+				ensure_ending_space_func(i);
+			} break;
+			case G_TK_INDENT: {
+				indent++;
+			} break;
+			case G_TK_DEDENT: {
+				indent--;
+			} break;
+			case G_TK_NEWLINE: {
+				handle_newline(i, curr_token);
+			} break;
+			case G_TK_CONST_PI: {
+				line += "PI";
+			} break;
+			case G_TK_CONST_TAU: {
+				line += "TAU";
+			} break;
+			case G_TK_WILDCARD: {
+				line += "_";
+			} break;
+			case G_TK_CONST_INF: {
+				line += "INF";
+			} break;
+			case G_TK_CONST_NAN: {
+				line += "NAN";
+			} break;
+			case G_TK_PR_SLAVESYNC: {
+				line += "slavesync ";
+			} break;
+			case G_TK_CF_DO: {
+				line += "do ";
+			} break;
+			case G_TK_CF_CASE: {
+				line += "case ";
+			} break;
+			case G_TK_CF_SWITCH: {
+				line += "switch ";
+			} break;
+			case G_TK_AMPERSAND_AMPERSAND: {
+				ensure_space_func();
+				line += "&& ";
+			} break;
+			case G_TK_PIPE_PIPE: {
+				ensure_space_func();
+				line += "|| ";
+			} break;
+			case G_TK_BANG: {
+				ensure_space_func();
+				line += "!";
+			} break;
+			case G_TK_STAR_STAR: {
+				ensure_space_func();
+				line += "** ";
+			} break;
+			case G_TK_STAR_STAR_EQUAL: {
+				ensure_space_func();
+				line += "**= ";
+			} break;
+			case G_TK_CF_WHEN: {
+				ensure_space_func();
+				line += "when ";
+			} break;
+			case G_TK_PR_AWAIT: {
+				ensure_space_func();
+				line += "await ";
+			} break;
+			case G_TK_PR_NAMESPACE: {
+				ensure_space_func();
+				line += "namespace ";
+			} break;
+			case G_TK_PR_SUPER: {
+				ensure_space_func();
+				line += "super";
+				ensure_ending_space_func(i, G_TK_PERIOD);
+			} break;
+			case G_TK_PR_TRAIT: {
+				ensure_space_func();
+				line += "trait ";
+			} break;
+			case G_TK_PERIOD_PERIOD: {
+				line += "..";
+			} break;
+			case G_TK_PERIOD_PERIOD_PERIOD: {
+				line += "...";
+			} break;
+			case G_TK_UNDERSCORE: {
+				line += "_";
+			} break;
+			case G_TK_BACKTICK: {
+				line += "`";
+			} break;
+			case G_TK_ABSTRACT: {
+				line += "abstract ";
+			} break;
+			case G_TK_ERROR: {
+				//skip - invalid
+			} break;
+			case G_TK_EOF: {
+				//skip - invalid
+			} break;
+			case G_TK_CURSOR: {
+				//skip - invalid
+			} break;
+			case G_TK_VCS_CONFLICT_MARKER: {
+				//skip - invalid
+			} break;
+			case G_TK_MAX: {
+				GDSDECOMP_FAIL_V_MSG(ERR_INVALID_DATA, "Invalid token: TK_MAX (" + itos(tokens[i].type) + ")");
+			} break;
+			default: {
+				GDSDECOMP_FAIL_V_MSG(ERR_INVALID_DATA, "Invalid token: " + itos(tokens[i].type));
+			}
+		}
+		prev_prev_token = prev_token;
+		prev_token = curr_token;
+	}
+
+	if (!line.is_empty() || (prev_token == G_TK_NEWLINE && bytecode_version < GDSCRIPT_2_0_VERSION && indent > 0)) {
+		for (int j = 0; j < indent; j++) {
+			script_text += use_spaces ? " " : "\t";
+		}
+		script_text += line;
+	}
+
 	return OK;
 }
 
@@ -1779,7 +2344,7 @@ static int64_t continuity_tester(const HashMap<K, V> &p_vector, const HashMap<K,
 	return -1;
 }
 
-Error GDScriptDecomp::test_bytecode_match(const Vector<uint8_t> &p_buffer1, const Vector<uint8_t> &p_buffer2, bool ignore_lines_cols, bool is_printing_verbose) {
+Error GDScriptDecomp::test_bytecode_match(const Vector<uint8_t> &p_buffer1, const Vector<uint8_t> &p_buffer2, bool ignore_columns, bool ignore_lines, bool is_printing_verbose) {
 	int64_t discontinuity = -1;
 	if (p_buffer1 == p_buffer2) {
 		return OK;
@@ -1853,7 +2418,7 @@ Error GDScriptDecomp::test_bytecode_match(const Vector<uint8_t> &p_buffer1, cons
 	auto old_tokens_size = state1.tokens.size();
 	auto new_tokens_size = state2.tokens.size();
 	discontinuity = continuity_tester(state1.tokens, state2.tokens, "Tokens");
-	if (discontinuity == -1 && ignore_lines_cols && err == OK) {
+	if (discontinuity == -1 && ignore_lines && ignore_columns && err == OK) {
 		return OK;
 	}
 
@@ -1984,9 +2549,15 @@ Error GDScriptDecomp::test_bytecode_match(const Vector<uint8_t> &p_buffer1, cons
 		}
 	};
 
-	do_vmap_thing("Lines", state1.lines, state2.lines);
-	do_vmap_thing("Columns", state1.columns, state2.columns);
-	do_vmap_thing("End Lines", state1.end_lines, state2.end_lines);
+	if (!ignore_lines) {
+		do_vmap_thing("Lines", state1.lines, state2.lines);
+	}
+	if (!ignore_columns) {
+		do_vmap_thing("Columns", state1.columns, state2.columns);
+	}
+	if (!ignore_lines) {
+		do_vmap_thing("End Lines", state1.end_lines, state2.end_lines);
+	}
 	return err;
 }
 

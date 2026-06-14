@@ -104,7 +104,14 @@ public:
 	// };
 
 protected:
+	int current_line = 1;
 	int current_indent = 0;
+	bool multiline_mode = false;
+	List<int> indent_stack;
+	List<List<int>> indent_stack_stack; // For lambdas, which require manipulating the indentation point.
+	int pending_indents = 0;
+	bool last_token_was_newline = false;
+
 	const GDScriptDecomp *decomp;
 	enum StringMode {
 		STRING_SINGLE_QUOTE,
@@ -120,6 +127,7 @@ public:
 	virtual TokenType get_token(int p_offset = 0) const = 0;
 	virtual StringName get_token_identifier(int p_offset = 0) const = 0;
 	virtual int get_token_built_in_func(int p_offset = 0) const = 0;
+	virtual int get_old_token_type(int p_offset = 0) const = 0;
 	virtual Variant::Type get_token_type(int p_offset = 0) const = 0;
 	virtual int get_token_line(int p_offset = 0) const = 0;
 	virtual int get_token_column(int p_offset = 0) const = 0;
@@ -127,6 +135,7 @@ public:
 	virtual int get_token_line_tab_indent(int p_offset = 0) const = 0;
 	virtual String get_token_error(int p_offset = 0) const = 0;
 	virtual void advance(int p_amount = 1) = 0;
+	virtual void set_multiline_mode(bool p_state) override { multiline_mode = p_state; }
 	virtual Token scan() override;
 #ifdef DEBUG_ENABLED
 	virtual const Vector<Pair<int, String>> &get_warning_skips() const = 0;
@@ -200,6 +209,7 @@ public:
 	virtual GDScriptDecomp::GlobalToken get_token(int p_offset = 0) const;
 	virtual StringName get_token_identifier(int p_offset = 0) const;
 	virtual int get_token_built_in_func(int p_offset = 0) const;
+	virtual int get_old_token_type(int p_offset = 0) const;
 	virtual Variant::Type get_token_type(int p_offset = 0) const;
 	virtual int get_token_line(int p_offset = 0) const;
 	virtual int get_token_column(int p_offset = 0) const;
@@ -247,6 +257,7 @@ public:
 	virtual Token get_token(int p_offset = 0) const;
 	virtual StringName get_token_identifier(int p_offset = 0) const;
 	virtual int get_token_built_in_func(int p_offset = 0) const;
+	virtual int get_old_token_type(int p_offset = 0) const;
 	virtual Variant::Type get_token_type(int p_offset = 0) const;
 	virtual int get_token_line(int p_offset = 0) const;
 	virtual int get_token_column(int p_offset = 0) const;
