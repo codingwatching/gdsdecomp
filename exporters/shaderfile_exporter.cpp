@@ -1,3 +1,7 @@
+#include "thirdparty/spirv-cross/spirv_cross.hpp"
+#include "thirdparty/spirv-cross/spirv_glsl.hpp"
+#include "thirdparty/spirv-cross/spirv_parser.hpp"
+
 #include "shaderfile_exporter.h"
 #include "compat/resource_loader_compat.h"
 #include "core/error/error_list.h"
@@ -233,47 +237,42 @@ Vector<String> ShaderFileExporter::get_export_extensions(const String &res_path)
 	return extensions;
 }
 
-#include "thirdparty/spirv-cross/spirv_cross.hpp"
-#include "thirdparty/spirv-cross/spirv_glsl.hpp"
-#include "thirdparty/spirv-cross/spirv_parser.hpp"
-using namespace std;
-using namespace spirv_cross;
-
-static const char *execution_model_to_str(ExecutionModel model) {
+static const char *execution_model_to_str(spirv_cross::ExecutionModel model) {
 	switch (model) {
-		case ExecutionModelVertex:
+		case spirv_cross::ExecutionModelVertex:
 			return "vertex";
-		case ExecutionModelTessellationControl:
+		case spirv_cross::ExecutionModelTessellationControl:
 			return "tesselation_controlcontrol";
-		case ExecutionModelTessellationEvaluation:
+		case spirv_cross::ExecutionModelTessellationEvaluation:
 			return "tesselation_evaluation";
-		case ExecutionModelGeometry:
+		case spirv_cross::ExecutionModelGeometry:
 			return "geometry";
-		case ExecutionModelFragment:
+		case spirv_cross::ExecutionModelFragment:
 			return "fragment";
-		case ExecutionModelGLCompute:
+		case spirv_cross::ExecutionModelGLCompute:
 			return "compute";
-		case ExecutionModelRayGenerationNV:
+		case spirv_cross::ExecutionModelRayGenerationNV:
 			return "raygen";
-		case ExecutionModelIntersectionNV:
+		case spirv_cross::ExecutionModelIntersectionNV:
 			return "intersection";
-		case ExecutionModelCallableNV:
+		case spirv_cross::ExecutionModelCallableNV:
 			return "callable";
-		case ExecutionModelAnyHitNV:
+		case spirv_cross::ExecutionModelAnyHitNV:
 			return "anyhit";
-		case ExecutionModelClosestHitNV:
+		case spirv_cross::ExecutionModelClosestHitNV:
 			return "closesthit";
-		case ExecutionModelMissNV:
+		case spirv_cross::ExecutionModelMissNV:
 			return "miss";
 		default:
 			return "???";
 	}
 }
+
 static String compile_iteration(const SPIRVCrossOptions &args, std::vector<uint32_t> spirv_file, String &execution_model_str) {
-	Parser spirv_parser(std::move(spirv_file));
+	spirv_cross::Parser spirv_parser(std::move(spirv_file));
 	spirv_parser.parse();
 
-	unique_ptr<CompilerGLSL> compiler;
+	std::unique_ptr<spirv_cross::CompilerGLSL> compiler;
 	bool combined_image_samplers = false;
 	bool build_dummy_sampler = false;
 
@@ -282,11 +281,11 @@ static String compile_iteration(const SPIRVCrossOptions &args, std::vector<uint3
 		if (!args.vulkan_semantics || args.vulkan_glsl_disable_ext_samplerless_texture_functions) {
 			build_dummy_sampler = true;
 		}
-		compiler.reset(new CompilerGLSL(std::move(spirv_parser.get_parsed_ir())));
+		compiler.reset(new spirv_cross::CompilerGLSL(std::move(spirv_parser.get_parsed_ir())));
 	}
 
 	if (!args.variable_type_remaps.empty()) {
-		auto remap_cb = [&](const SPIRType &, const string &name, string &out) -> void {
+		auto remap_cb = [&](const spirv_cross::SPIRType &, const std::string &name, std::string &out) -> void {
 			for (const VariableTypeRemap &remap : args.variable_type_remaps) {
 				if (name == remap.variable_name) {
 					out = remap.new_variable_type;
@@ -316,7 +315,7 @@ static String compile_iteration(const SPIRVCrossOptions &args, std::vector<uint3
 		// exit(EXIT_FAILURE);
 	}
 
-	CompilerGLSL::Options opts = compiler->get_common_options();
+	spirv_cross::CompilerGLSL::Options opts = compiler->get_common_options();
 	if (args.set_version) {
 		opts.version = args.version;
 	}
@@ -354,12 +353,12 @@ static String compile_iteration(const SPIRVCrossOptions &args, std::vector<uint3
 		uint32_t sampler = compiler->build_dummy_sampler_for_combined_images();
 		if (sampler != 0) {
 			// Set some defaults to make validation happy.
-			compiler->set_decoration(sampler, DecorationDescriptorSet, 0);
-			compiler->set_decoration(sampler, DecorationBinding, 0);
+			compiler->set_decoration(sampler, spirv_cross::DecorationDescriptorSet, 0);
+			compiler->set_decoration(sampler, spirv_cross::DecorationBinding, 0);
 		}
 	}
 
-	ShaderResources res;
+	spirv_cross::ShaderResources res;
 	if (args.remove_unused) {
 		auto active = compiler->get_active_interface_variables();
 		res = compiler->get_shader_resources(active);
@@ -387,7 +386,7 @@ static String compile_iteration(const SPIRVCrossOptions &args, std::vector<uint3
 
 		// Give the remapped combined samplers new names.
 		for (auto &remap : compiler->get_combined_image_samplers()) {
-			compiler->set_name(remap.combined_id, join("SPIRV_Cross_Combined", compiler->get_name(remap.image_id), compiler->get_name(remap.sampler_id)));
+			compiler->set_name(remap.combined_id, spirv_cross::join("SPIRV_Cross_Combined", compiler->get_name(remap.image_id), compiler->get_name(remap.sampler_id)));
 		}
 	}
 
