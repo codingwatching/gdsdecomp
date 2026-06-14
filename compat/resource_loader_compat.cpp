@@ -279,6 +279,16 @@ String _validate_local_path(const String &p_path) {
 	}
 	return p_path;
 }
+
+void _ensure_path(const Ref<Resource> &res, const String &p_path, bool is_real_load, ResourceCompatLoader::CacheMode p_cache_mode) {
+	if (res.is_valid() && res->get_path().is_empty()) {
+		if (is_real_load && p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE_DEEP && p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE) {
+			res->set_path(p_path, p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE || p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE_DEEP);
+		} else {
+			res->set_path_cache(p_path);
+		}
+	}
+}
 } //namespace
 
 thread_local HashSet<String> currently_loading_paths;
@@ -299,13 +309,7 @@ Ref<Resource> ResourceCompatLoader::custom_load(const String &p_path, const Stri
 		currently_loading_paths.insert(res_path);
 		Ref<Resource> res = load_with_real_resource_loader(local_path, p_type_hint, r_error, use_threads, p_cache_mode);
 		currently_loading_paths.erase(res_path);
-		if (res.is_valid() && res->get_path() != local_path) {
-			if (is_real_load && p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE_DEEP && p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE) {
-				res->set_path(local_path, p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE || p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE_DEEP);
-			} else {
-				res->set_path_cache(local_path);
-			}
-		}
+		_ensure_path(res, local_path, is_real_load, p_cache_mode);
 		return res;
 	}
 	FAIL_LOADER_NOT_FOUND(loader);
@@ -316,39 +320,27 @@ Ref<Resource> ResourceCompatLoader::custom_load(const String &p_path, const Stri
 	currently_loading_paths.insert(res_path);
 	Ref<Resource> res = loader->custom_load(res_path, local_path, p_type, r_error, use_threads, p_cache_mode);
 	currently_loading_paths.erase(res_path);
-	if (res.is_valid()) {
-		if (res->get_path().is_empty()) {
-			if (is_real_load && p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE_DEEP && p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE) {
-				res->set_path(local_path, p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE || p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE_DEEP);
-			} else {
-				res->set_path_cache(local_path);
-			}
-		}
-	}
+	_ensure_path(res, local_path, is_real_load, p_cache_mode);
 	return res;
 }
 
 Ref<Resource> ResourceCompatLoader::load_with_real_resource_loader(const String &p_path, const String &p_type_hint, Error *r_error, bool use_threads, ResourceCompatLoader::CacheMode p_cache_mode) {
 	String local_path = _validate_local_path(p_path);
+	Ref<Resource> res;
 	if (use_threads) {
-		return ResourceLoader::load(local_path, p_type_hint, p_cache_mode, r_error);
-	}
-	auto load_token = ResourceLoader::_load_start(local_path, p_type_hint, ResourceLoader::LoadThreadMode::LOAD_THREAD_FROM_CURRENT, p_cache_mode);
-	if (!load_token.is_valid()) {
-		if (r_error) {
-			*r_error = FAILED;
+		res = ResourceLoader::load(local_path, p_type_hint, p_cache_mode, r_error);
+	} else {
+		auto load_token = ResourceLoader::_load_start(local_path, p_type_hint, ResourceLoader::LoadThreadMode::LOAD_THREAD_FROM_CURRENT, p_cache_mode);
+		if (!load_token.is_valid()) {
+			if (r_error) {
+				*r_error = FAILED;
+			}
+			return Ref<Resource>();
 		}
-		return Ref<Resource>();
+		res = ResourceLoader::_load_complete(*load_token.ptr(), r_error);
 	}
 
-	Ref<Resource> res = ResourceLoader::_load_complete(*load_token.ptr(), r_error);
-	if (res.is_valid() && res->get_path().is_empty()) {
-		if (p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE_DEEP && p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE) {
-			res->set_path(local_path, p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE || p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE_DEEP);
-		} else {
-			res->set_path_cache(local_path);
-		}
-	}
+	_ensure_path(res, local_path, true, p_cache_mode);
 
 	return res;
 }
