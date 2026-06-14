@@ -138,6 +138,7 @@ public:
 private:
 	Vector<Ref<PackInfo>> packs;
 	Ref<ProjectInfo> current_project;
+	Ref<GodotVer> version_override;
 	GDREPackedData *gdre_packeddata_singleton = nullptr;
 	GDRELogger *logger;
 	Array import_files;
@@ -488,6 +489,9 @@ public:
 	bool detected_godotsteam_usage() const;
 
 	bool requires_double_precision() const;
+
+	// for testing
+	void _set_version_override(String ver_string);
 
 	GDRESettings();
 	~GDRESettings();

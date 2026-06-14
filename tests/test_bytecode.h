@@ -20,6 +20,10 @@
 
 namespace TestBytecode {
 
+void test_fake_script();
+
+Vector<String> get_gdscript2_0_scripts();
+
 struct ScriptToRevision {
 	const char *script;
 	int revision;
@@ -170,7 +174,7 @@ inline String strip_script_text(const String &script_text) {
 	return remove_comments(script_text).replace("\"\"\"", "\"").replace("'", "\"");
 }
 
-Vector<PropertyInfo> list_to_vector(const List<PropertyInfo> &list) {
+inline Vector<PropertyInfo> list_to_vector(const List<PropertyInfo> &list) {
 	Vector<PropertyInfo> vector;
 	for (auto &E : list) {
 		vector.push_back(E);
@@ -369,21 +373,7 @@ TEST_CASE("[GDSDecomp][Bytecode][GDScript1.0] Compiling Helper Scripts") {
 
 TEST_CASE("[GDSDecomp][Bytecode][GDScript2.0] Compiling GDScript Tests") {
 	REQUIRE(GDRESettings::get_singleton());
-	auto cwd = GDRESettings::get_singleton()->get_cwd();
-	String gdscript_tests_path = get_gdscript_tests_path();
-	auto gdscript_test_scripts = Glob::rglob(gdscript_tests_path.path_join("**/*.gd"), true);
-	auto gdscript_test_error_scripts = Vector<String>();
-	for (int i = 0; i < gdscript_test_scripts.size(); i++) {
-		// remove any that contain ".notest." or "/error/"
-		auto script_path = gdscript_test_scripts[i].trim_prefix(cwd + "/");
-		if (script_path.contains(".notest.") || script_path.contains("error") || script_path.contains("completion")) {
-			gdscript_test_error_scripts.push_back(script_path);
-			gdscript_test_scripts.erase(gdscript_test_scripts[i]);
-			i--;
-		} else {
-			gdscript_test_scripts.write[i] = script_path;
-		}
-	}
+	auto gdscript_test_scripts = get_gdscript2_0_scripts();
 
 	for (int64_t i = 0; i < gdscript_test_scripts.size(); i++) {
 		auto &script_path = gdscript_test_scripts[i];
@@ -443,7 +433,7 @@ TEST_CASE("[GDSDecomp][Bytecode] Test sample GDScript bytecode") {
 	}
 }
 
-void simple_pass_fail_test(const String &script_name, const String &helper_script_text, int revision, bool expect_fail) {
+inline void simple_pass_fail_test(const String &script_name, const String &helper_script_text, int revision, bool expect_fail) {
 	SUBCASE(vformat("Testing %s, revision %07x", script_name, revision).utf8().get_data()) {
 		auto decomp = GDScriptDecomp::create_decomp_for_commit(revision);
 		CHECK(decomp.is_valid());
@@ -593,5 +583,7 @@ TEST_CASE("[GDSDecomp][Bytecode][EOFNewline] Test indented newline at EOF") {
 		test_script_text("indented_newline_at_eof", test_eof_newline, revision, false, true, false);
 	}
 }
-
+TEST_CASE("[GDSDecomp][FakeScript] test FakeScript") {
+	test_fake_script();
+}
 } //namespace TestBytecode

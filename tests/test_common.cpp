@@ -64,14 +64,14 @@ public:
 		ResourceCompatLoader::_init();
 		String name = String(p_in.m_name);
 		String suite_name = String(p_in.m_test_suite);
-		if (name.contains("[ProjectRecovery]")) {
+		if (name.contains("[ProjectRecovery]") || name.contains("[FakeScript]")) {
 #ifndef XR_DISABLED
 			xr_server = memnew(XRServer);
 			CHECK(xr_server != nullptr);
 			CHECK(xr_server->get_xr_mode() == XRServer::XRMODE_OFF);
 #endif // XR_DISABLED
 		}
-		if (name.contains("[ProjectRecovery]") || name.contains("[ResourceExport]")) {
+		if (name.contains("[ProjectRecovery]") || name.contains("[ResourceExport]") || name.contains("[FakeScript]")) {
 			main_loop = memnew(MainLoop);
 			set_main_loop(main_loop);
 			GDREMainLoop::set_is_testing(true);

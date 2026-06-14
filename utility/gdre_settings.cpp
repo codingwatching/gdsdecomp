@@ -1242,7 +1242,7 @@ void GDRESettings::add_pack_info(Ref<PackInfo> packinfo) {
 	packs.push_back(packinfo);
 	if (!current_project.is_valid()) { // only set if we don't have a current pack
 		current_project = Ref<ProjectInfo>(memnew(ProjectInfo));
-		current_project->version = GodotVer::copy_from(packinfo->version);
+		current_project->version = version_override.is_valid() ? version_override : GodotVer::copy_from(packinfo->version);
 		current_project->pack_file = packinfo->pack_file;
 		current_project->type = packinfo->type;
 		current_project->suspect_version = packinfo->suspect_version;
@@ -1252,7 +1252,7 @@ void GDRESettings::add_pack_info(Ref<PackInfo> packinfo) {
 		if (current_project->app_version.is_empty() && !packinfo->app_version.is_empty()) {
 			current_project->app_version = packinfo->app_version;
 		}
-		if (!current_project->version->eq(packinfo->version)) {
+		if (!version_override.is_valid() && !current_project->version->eq(packinfo->version)) {
 			if ((!current_project->version->is_valid_semver() || current_project->version->get_major() == 0) &&
 					packinfo->version->is_valid_semver() && packinfo->version->get_major() != 0) {
 				current_project->version = GodotVer::copy_from(packinfo->version);
@@ -2535,6 +2535,15 @@ bool GDRESettings::detected_godotsteam_usage() const {
 
 bool GDRESettings::requires_double_precision() const {
 	return is_project_config_loaded() && current_project->pcfg->requires_double_precision();
+}
+
+void GDRESettings::_set_version_override(String ver_string) {
+	if (ver_string.is_empty()) {
+		version_override = Ref<GodotVer>();
+		return;
+	}
+	version_override = GodotVer::parse(ver_string);
+	ERR_FAIL_COND_MSG(!version_override.is_valid(), "Failed to parse version string: " + ver_string);
 }
 
 void GDRESettings::_do_string_load(uint32_t i, StringLoadToken *tokens) {
