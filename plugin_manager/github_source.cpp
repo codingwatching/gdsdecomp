@@ -7,6 +7,7 @@
 #include "core/string/ustring.h"
 #include "plugin_manager.h"
 #include "utility/common.h"
+#include "utility/http_requester.h"
 
 const String GitHubSource::github_release_api_url = _github_release_api_url;
 namespace {
@@ -215,7 +216,7 @@ Error GitHubSource::recache_release_list(const String &plugin_name) {
 		String request_url = get_release_api_url().replace("{0}", org).replace("{1}", repo).replace("{2}", itos(page));
 
 		Vector<uint8_t> response;
-		Error err = gdre::wget_sync(request_url, response, 20, extra_headers);
+		Error err = HTTPRequester::wget_sync(request_url, response, 15, 2, extra_headers);
 		if (err) {
 			if (err == ERR_UNAUTHORIZED) { // rate limit exceeded
 				// use the cached releases if they exist

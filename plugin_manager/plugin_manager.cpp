@@ -10,6 +10,7 @@
 #include "utility/common.h"
 #include "utility/gdre_settings.h"
 #include "utility/glob.h"
+#include "utility/http_requester.h"
 #include "utility/task_manager.h"
 
 Ref<PluginSource> PluginManager::sources[MAX_SOURCES];
@@ -425,7 +426,7 @@ Error PluginManager::populate_plugin_version_hashes(PluginVersion &plugin_versio
 		err = TaskManager::get_singleton()->wait_for_download_task_completion(task_id);
 	} else {
 		zip_path = get_download_path_for_release(plugin_version.release_info);
-		err = gdre::download_file_sync(url, zip_path);
+		err = HTTPRequester::download_file_sync(url, zip_path);
 	}
 
 	if (err) {

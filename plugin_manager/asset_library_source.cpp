@@ -4,6 +4,7 @@
 #include "core/os/os.h"
 #include "plugin_manager.h"
 #include "utility/common.h"
+#include "utility/http_requester.h"
 
 HashMap<String, String> AssetLibrarySource::GODOT_VERSION_RELEASE_DATES = {
 	{ "2.0", "2016-02-23" },
@@ -44,7 +45,7 @@ Error AssetLibrarySource::search_for_assets(const String &plugin_name, Vector<Di
 										 .replace("{2}", "500")
 										 .replace("{3}", itos(page));
 			Vector<uint8_t> response;
-			Error err = gdre::wget_sync(request_url, response);
+			Error err = HTTPRequester::wget_sync(request_url, response, 30, 2);
 			ERR_FAIL_COND_V_MSG(err != OK, err, "Failed to get assets ids for plugin " + plugin_name + " godot version " + godot_version);
 			String response_str;
 			response_str.append_utf8((const char *)response.ptr(), response.size());
@@ -106,7 +107,7 @@ Error AssetLibrarySource::get_edit_list(int64_t asset_id, Vector<Dictionary> &r_
 		String URL = URL_TEMPLATE.replace("{0}", itos(asset_id)).replace("{1}", itos(page));
 
 		Vector<uint8_t> response;
-		Error err = gdre::wget_sync(URL, response);
+		Error err = HTTPRequester::wget_sync(URL, response, 30, 2);
 		ERR_FAIL_COND_V_MSG(err != OK, err, "Failed to get edit list for asset " + itos(asset_id));
 		String response_str;
 		response_str.append_utf8((const char *)response.ptr(), response.size());
@@ -149,7 +150,7 @@ Error AssetLibrarySource::get_edit(int64_t edit_id, Dictionary &r_edit) {
 	String URL = "https://godotengine.org/asset-library/api/asset/edit/{0}";
 	URL = URL.replace("{0}", itos(edit_id));
 	Vector<uint8_t> response;
-	Error err = gdre::wget_sync(URL, response);
+	Error err = HTTPRequester::wget_sync(URL, response, 30, 2);
 	if (err || response.size() == 0) {
 		return err;
 	}

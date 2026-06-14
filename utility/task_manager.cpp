@@ -1,8 +1,7 @@
 #include "task_manager.h"
-#include "core/object/message_queue.h"
 #include "gui/gdre_progress.h"
 #include "main/gdre_main_loop.h"
-#include "utility/common.h"
+#include "utility/http_requester.h"
 
 static constexpr int64_t ONE_GB = 1024LL * 1024LL * 1024LL;
 static constexpr int64_t TWELVE_GB = 12 * ONE_GB;
@@ -478,7 +477,7 @@ String TaskManager::DownloadTaskData::get_current_task_step_description() {
 
 void TaskManager::DownloadTaskData::callback_data(void *p_data) {
 	start_time = OS::get_singleton()->get_ticks_msec();
-	download_error = gdre::download_file_sync(download_url, save_path, &download_progress, &canceled, &size);
+	download_error = HTTPRequester::download_file_sync(download_url, save_path, &download_progress, &canceled, &size);
 #if TOOLS_ENABLED
 	speed_history.sort();
 	int64_t end_time = OS::get_singleton()->get_ticks_msec();
