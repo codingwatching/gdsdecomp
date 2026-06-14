@@ -1554,6 +1554,20 @@ func handle_cli(args: PackedStringArray) -> bool:
 				print("Error: failed to set custom encryption script: " + decryptor_script_path)
 				ret_code = 1
 				return true
+			set_setting = true
+		elif arg.begins_with("--custom-pack-source-script"):
+			var pack_source_script_path = get_cli_abs_path(get_arg_value(arg))
+			if pack_source_script_path.is_empty():
+				print_usage()
+				print("Error: path is required for --custom-pack-source-script")
+				ret_code = 1
+				return true
+			if GDRESettings.add_custom_pack_source_script(pack_source_script_path) != OK:
+				print_usage()
+				print("Error: failed to set custom pack source script: " + pack_source_script_path)
+				ret_code = 1
+				return true
+			set_setting = true
 		elif arg.begins_with("--ignore-checksum-errors"):
 			ignore_md5 = true
 		elif arg.begins_with("--skip-checksum-check"):

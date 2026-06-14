@@ -572,6 +572,8 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<GDREFindReplaceBar>();
 	ClassDB::register_class<GDREXMLHighlighter>();
 	ClassDB::register_class<GodotMonoDecompWrapper>();
+	ClassDB::register_class<CoreBind::PackedFile>();
+	ClassDB::register_class<PackSourceCustom>();
 
 	ClassDB::register_class<GDREConfig>();
 	ClassDB::register_class<GDREConfigSetting>();
@@ -581,7 +583,9 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<GDRESceneTree>();
 	ClassDB::register_class<GDREMainLoop>();
 
+	ClassDB::register_class<GDREPackedData>();
 	gdre_packeddata_singleton = memnew(GDREPackedData);
+	Engine::get_singleton()->add_singleton(Engine::Singleton("GDREPackedData", GDREPackedData::get_singleton()));
 	gui_icons = memnew(GDREGuiIcons);
 	gdre_main_loop = memnew(GDREMainLoop);
 	Engine::get_singleton()->add_singleton(Engine::Singleton("GDREMainLoop", GDREMainLoop::get_singleton()));

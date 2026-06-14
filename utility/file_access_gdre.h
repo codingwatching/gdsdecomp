@@ -3,7 +3,88 @@
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/file_access_pack.h"
+#include "core/object/gdvirtual.gen.h"
+#include "core/object/ref_counted.h"
 #include "utility/packed_file_info.h"
+#include <memory>
+
+namespace CoreBind {
+class PackedFile : public RefCounted {
+	GDCLASS(PackedFile, RefCounted);
+
+	PackedData::PackedFile pf;
+
+protected:
+	static void _bind_methods();
+
+public:
+	String get_pack() const { return pf.pack; }
+	void set_pack(const String &p_pack) { pf.pack = p_pack; }
+	uint64_t get_offset() const { return pf.offset; }
+	void set_offset(uint64_t p_offset) { pf.offset = p_offset; }
+	uint64_t get_size() const { return pf.size; }
+	void set_size(uint64_t p_size) { pf.size = p_size; }
+	PackedByteArray get_md5() const {
+		PackedByteArray ret;
+		ret.resize(16);
+		memcpy(ret.ptrw(), pf.md5, 16);
+		return ret;
+	}
+	void set_md5(const PackedByteArray &p_md5) { memcpy(pf.md5, p_md5.ptr(), 16); }
+	PackSource *get_src() const { return pf.src; }
+	void set_src(PackSource *p_src) { pf.src = p_src; }
+	bool is_encrypted() const { return pf.encrypted; }
+	void set_encrypted(bool p_encrypted) { pf.encrypted = p_encrypted; }
+	bool is_bundle() const { return pf.bundle; }
+	void set_bundle(bool p_bundle) { pf.bundle = p_bundle; }
+	bool is_delta() const { return pf.delta; }
+	void set_delta(bool p_delta) { pf.delta = p_delta; }
+	String get_salt() const { return pf.salt; }
+	void set_salt(const String &p_salt) { pf.salt = p_salt; }
+
+	const PackedData::PackedFile &get_packed_file() const { return pf; }
+	PackedData::PackedFile &get_packed_file() { return pf; }
+
+	PackedFile(const PackedData::PackedFile &p_pf);
+	PackedFile() = default;
+};
+} //namespace CoreBind
+
+class PackSourceCustomScript;
+
+class PackSourceCustom : public RefCounted {
+	GDCLASS(PackSourceCustom, RefCounted);
+
+protected:
+	static void _bind_methods();
+	std::unique_ptr<PackSourceCustomScript> parent;
+
+public:
+	bool try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key = Vector<uint8_t>());
+	Ref<FileAccess> get_file(const String &p_path, Ref<CoreBind::PackedFile> p_file, const Vector<uint8_t> &p_decryption_key = Vector<uint8_t>());
+
+	static Ref<FileAccess> create_file_access_pck(const String &p_path, const Ref<CoreBind::PackedFile> &p_file, const Vector<uint8_t> &p_decryption_key);
+	static int64_t seek_pck_offset_from_exe(Ref<FileAccess> p_file, const String &p_path, const PackedByteArray &custom_magic = PackedByteArray());
+	static Ref<FileAccess> get_bundled_file(const String &p_path, const Ref<CoreBind::PackedFile> &p_file, const Vector<uint8_t> &p_decryption_key);
+
+	PackSource *get_parent() const;
+
+	PackSourceCustom();
+
+	GDVIRTUAL4R(bool, _try_open_pack, const String &, bool, uint64_t, const Vector<uint8_t> &);
+	GDVIRTUAL3R(Ref<FileAccess>, _get_file, const String &, Ref<CoreBind::PackedFile>, const Vector<uint8_t> &);
+};
+
+class PackSourceCustomScript : public PackSource {
+	PackSourceCustom *pack_source;
+
+protected:
+public:
+	virtual bool try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key = Vector<uint8_t>()) override;
+	virtual Ref<FileAccess> get_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key = Vector<uint8_t>()) override;
+
+	PackSourceCustomScript(PackSourceCustom *p_pack_source);
+};
 
 class DirSource : public PackSource {
 	Vector<String> packs;
@@ -32,7 +113,8 @@ public:
 	~DummySource();
 };
 
-class GDREPackedData {
+class GDREPackedData : public Object {
+	GDCLASS(GDREPackedData, Object);
 	friend class FileAccessPack;
 	friend class DirAccessGDRE;
 	friend class PackSource;
@@ -71,6 +153,7 @@ private:
 	HashMap<String, Ref<PackedFileInfo>> file_map;
 
 	Vector<PackSource *> sources;
+	Vector<Ref<PackSourceCustom>> custom_sources;
 
 	PackedDir *root = nullptr;
 
@@ -87,6 +170,11 @@ private:
 	void _get_file_paths(PackedDir *p_dir, const String &p_parent_dir, HashSet<String> &r_paths) const;
 
 	void _clear();
+
+protected:
+	static void _bind_methods();
+
+	void _add_path(const String &p_pkg_path, const String &p_path, uint64_t p_ofs, uint64_t p_size, const PackedByteArray &p_md5, Ref<PackSourceCustom> p_src, bool p_replace_files, bool p_encrypted = false, bool p_bundle = false, bool p_delta = false, const String &p_salt = String()); // for PackSource
 
 public:
 	void set_default_file_access();
@@ -118,12 +206,15 @@ public:
 	Vector<Ref<PackedFileInfo>> get_file_info_list(const Vector<String> &filters = Vector<String>());
 	static bool real_packed_data_has_pack_loaded();
 	bool has_loaded_packs();
-	String fix_res_path(const String &p_path);
 	int64_t get_file_size(const String &p_path);
 	static String get_current_file_access_class(FileAccess::AccessType p_access_type);
 	static String get_current_dir_access_class(DirAccess::AccessType p_access_type);
 	static String get_os_file_access_class_name();
 	static String get_os_dir_access_class_name();
+
+	void add_custom_pack_source(Ref<PackSourceCustom> p_source);
+	void clear_custom_pack_sources();
+
 	GDREPackedData();
 	~GDREPackedData();
 };

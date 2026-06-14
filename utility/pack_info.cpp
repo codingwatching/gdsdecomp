@@ -146,7 +146,7 @@ void PackInfo::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "pack_flags", PROPERTY_HINT_FLAGS, "ENCRYPTED:1,REL_FILEBASE:2,SPARSE_BUNDLE:4"), "set_pack_flags", "get_pack_flags");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "file_base"), "set_file_base", "get_file_base");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "file_count"), "set_file_count", "get_file_count");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "type"), "set_type", "get_type");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "type", PROPERTY_HINT_ENUM, "PCK,APK,ZIP,DIR,EXE,UNKNOWN"), "set_type", "get_type");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "encrypted"), "set_encrypted", "is_encrypted");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "suspect_version"), "set_suspect_version", "has_suspect_version");
 	ADD_PROPERTY(PropertyInfo(Variant::STRING, "non_standard_header"), "set_non_standard_header", "get_non_standard_header");

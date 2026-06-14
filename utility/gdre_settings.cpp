@@ -1261,6 +1261,40 @@ void GDRESettings::add_pack_info(Ref<PackInfo> packinfo) {
 	}
 }
 
+Error GDRESettings::add_custom_pack_source_script(const String &p_script_path) {
+	if (is_pack_loaded()) {
+		ERR_FAIL_V_MSG(ERR_ALREADY_IN_USE, "Cannot set custom pack source script after pack is loaded!");
+	}
+	if (p_script_path.is_empty()) {
+		GDREPackedData::get_singleton()->clear_custom_pack_sources();
+		return OK;
+	}
+	ERR_FAIL_COND_V_MSG(!FileAccess::exists(p_script_path), ERR_FILE_NOT_FOUND, "Custom pack source script file '" + p_script_path + "' does not exist");
+	ERR_FAIL_COND_V_MSG(p_script_path.get_extension().to_lower() != "gd", ERR_INVALID_PARAMETER, "Custom pack source script file must be a GDScript!");
+	Error err = OK;
+	ResourceFormatLoaderGDScript loader;
+	Ref<Script> script = loader.load(p_script_path, p_script_path, &err, false, nullptr, ResourceFormatLoader::CACHE_MODE_IGNORE);
+	ERR_FAIL_COND_V_MSG(script.is_null() || err != OK, err, "Failed to load custom pack source script!");
+	auto base_type = script->get_instance_base_type();
+	ERR_FAIL_COND_V_MSG(base_type != "PackSourceCustom", ERR_INVALID_PARAMETER, "Custom pack source script does not inherit from PackSourceCustom!");
+	Ref<PackSourceCustom> pack_source;
+	pack_source.instantiate();
+	pack_source->set_script(script);
+	ERR_FAIL_COND_V_MSG(Ref<Script>(pack_source->get_script()).is_null(), ERR_INVALID_PARAMETER, "Failed to instantiate custom pack source script!");
+	ERR_FAIL_NULL_V_MSG(pack_source->get_script_instance(), ERR_INVALID_PARAMETER, "Failed to get script instance from custom pack source script!");
+	GDREPackedData::get_singleton()->clear_custom_pack_sources();
+	GDREPackedData::get_singleton()->add_custom_pack_source(pack_source);
+	return OK;
+}
+
+void GDRESettings::clear_custom_pack_source_script() {
+	if (is_pack_loaded()) {
+		ERR_FAIL_MSG("Cannot clear custom pack source script after pack is loaded!");
+	}
+
+	GDREPackedData::get_singleton()->clear_custom_pack_sources();
+}
+
 StringName GDRESettings::get_cached_script_class(const String &p_path) {
 	if (!is_pack_loaded() || p_path.is_empty()) {
 		return "";
@@ -3147,6 +3181,10 @@ void GDRESettings::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("update_from_ephemeral_settings"), &GDRESettings::update_from_ephemeral_settings);
 	ClassDB::bind_method(D_METHOD("get_recent_error_string", "filter_backtraces"), &GDRESettings::get_recent_error_string, DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("load_translation_key_hint_file", "p_path"), &GDRESettings::load_translation_key_hint_file);
+	ClassDB::bind_method(D_METHOD("add_pack_info", "p_pack_info"), &GDRESettings::add_pack_info);
+
+	ClassDB::bind_method(D_METHOD("add_custom_pack_source_script", "p_script_path"), &GDRESettings::add_custom_pack_source_script);
+	ClassDB::bind_method(D_METHOD("clear_custom_pack_source_script"), &GDRESettings::clear_custom_pack_source_script);
 }
 
 // This is at the bottom to account for the platform header files pulling in their respective OS headers and creating all sorts of issues

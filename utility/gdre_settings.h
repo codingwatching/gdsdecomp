@@ -239,6 +239,9 @@ public:
 	// Adds a pack info to the list of packs (used by the pack sources in GDREPackedData)
 	void add_pack_info(Ref<PackInfo> packinfo);
 
+	Error add_custom_pack_source_script(const String &p_script_path);
+	void clear_custom_pack_source_script();
+
 	// Returns the class for the given script path from the script cache
 	StringName get_cached_script_class(const String &p_path);
 	// Returns the base class for the given script path from the script cache
