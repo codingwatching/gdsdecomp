@@ -361,7 +361,7 @@ Error FakeGDScript::parse_script() {
 		return (decomp->check_prev_token(i, tokens, GT::G_TK_PERIOD) ||
 				(script_state.bytecode_version < GDScriptDecomp::GDSCRIPT_2_0_VERSION &&
 						(decomp->check_prev_token(i, tokens, GT::G_TK_PR_FUNCTION) ||
-								decomp->is_token_func_call(i, tokens))));
+								(decomp->get_global_token(tokens[i]) != GT::G_TK_PR_EXPORT && decomp->is_token_func_call(i, tokens)))));
 	};
 	bool func_used = false;
 	bool class_used = false;
@@ -597,7 +597,7 @@ Error FakeGDScript::parse_script() {
 				}
 			} break;
 			case GT::G_TK_PR_EXPORT: {
-				if (!is_not_actually_reserved_word(i)) {
+				if (!is_not_actually_reserved_word(i) && indent == 0) {
 					Error err = get_export_var(i);
 					if (err) {
 						return err;
