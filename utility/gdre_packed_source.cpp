@@ -575,16 +575,17 @@ Ref<FileAccess> GDREPackedSource::get_file(const String &p_path, PackedData::Pac
 	// if we call the constructor for FileAccessPack if it's a bundle,
 	// it'll cause an infinite loop; we need to just create the thing ourselves
 	Ref<FileAccess> file;
+	Vector<uint8_t> decryption_key = p_decryption_key.is_empty() ? GDRESettings::get_singleton()->get_encryption_key() : p_decryption_key;
 	if (p_file->bundle) {
-		file = get_bundled_file(p_path, p_file, p_decryption_key.is_empty() ? GDRESettings::get_singleton()->get_encryption_key() : p_decryption_key);
+		file = get_bundled_file(p_path, p_file, decryption_key);
 		ERR_FAIL_COND_V_MSG(file.is_null(), nullptr, vformat("Can't open bundled pack-referenced file '%s'.", String(p_path)));
 	} else {
 		if (p_file->encrypted && GDRESettings::get_singleton()->get_custom_decryptor().is_valid()) {
-			file = open_encrypted_file(p_file, p_path, p_decryption_key.is_empty() ? GDRESettings::get_singleton()->get_encryption_key() : p_decryption_key);
+			file = open_encrypted_file(p_file, p_path, decryption_key);
 			ERR_FAIL_COND_V_MSG(file.is_null(), nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
 		} else {
 			// otherwise...
-			file = Ref<FileAccess>(memnew(FileAccessPack(p_path, *p_file)));
+			file = Ref<FileAccess>(memnew(FileAccessPack(p_path, *p_file, decryption_key)));
 		}
 	}
 
