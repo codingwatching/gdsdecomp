@@ -139,7 +139,6 @@ private:
 	Vector<Ref<PackInfo>> packs;
 	Ref<ProjectInfo> current_project;
 	Ref<GodotVer> version_override;
-	GDREPackedData *gdre_packeddata_singleton = nullptr;
 	GDRELogger *logger;
 	Array import_files;
 	HashMap<String, Ref<ImportInfoRemap>> remap_iinfo;

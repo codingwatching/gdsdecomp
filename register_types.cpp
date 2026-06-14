@@ -147,6 +147,7 @@ static Ref<SpineSkeletonExporter> spine_skeleton_exporter = nullptr;
 static Ref<TextureExporter> texture_exporter = nullptr;
 static Ref<TranslationExporter> translation_exporter = nullptr;
 static Ref<ObjExporter> obj_exporter = nullptr;
+static GDREPackedData *gdre_packeddata_singleton = nullptr;
 
 //plugin manager sources
 static Ref<CodebergSource> codeberg_source = nullptr;
@@ -577,6 +578,7 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<GDRESceneTree>();
 	ClassDB::register_class<GDREMainLoop>();
 
+	gdre_packeddata_singleton = memnew(GDREPackedData);
 	gui_icons = memnew(GDREGuiIcons);
 	gdre_main_loop = memnew(GDREMainLoop);
 	Engine::get_singleton()->add_singleton(Engine::Singleton("GDREMainLoop", GDREMainLoop::get_singleton()));
@@ -638,5 +640,9 @@ void uninitialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	if (gui_icons) {
 		memdelete(gui_icons);
 		gui_icons = nullptr;
+	}
+	if (gdre_packeddata_singleton) {
+		memdelete(gdre_packeddata_singleton);
+		gdre_packeddata_singleton = nullptr;
 	}
 }

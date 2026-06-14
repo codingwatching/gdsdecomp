@@ -206,7 +206,6 @@ GDRESettings::GDRESettings() {
 	}
 #endif
 	singleton = this;
-	gdre_packeddata_singleton = memnew(GDREPackedData);
 	addCompatibilityClasses();
 #ifdef TOOLS_ENABLED
 	print_line("GDRE User path: " + get_gdre_user_path());
@@ -242,7 +241,6 @@ GDRESettings::GDRESettings() {
 GDRESettings::~GDRESettings() {
 	PluginManager::save_cache();
 	remove_current_pack();
-	memdelete(gdre_packeddata_singleton);
 	singleton = nullptr;
 	logger->_disable();
 	// logger doesn't get memdeleted because the OS singleton will do so
