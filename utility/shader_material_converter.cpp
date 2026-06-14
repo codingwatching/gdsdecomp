@@ -284,6 +284,9 @@ ShaderMaterialConverter::ShaderInfo ShaderMaterialConverter::parse_shader_info(c
 		info.type = E.value.type;
 		info.array_size = E.value.array_size;
 		info.hints = { E.value.hint };
+		if (info.hints.size() == 1 && info.hints[0] == ShaderLanguage::ShaderNode::Uniform::HINT_NONE && E.value.use_color) {
+			info.hints = { ShaderLanguage::ShaderNode::Uniform::HINT_SOURCE_COLOR };
+		}
 		if (info.is_texture()) {
 			info.default_value = shader->get_default_texture_parameter(info.name);
 		}
@@ -667,6 +670,14 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 		{ "orm_texture", BaseMaterial3D::TEXTURE_ORM },
 	};
 
+	const HashMap<BaseMaterial3D::TextureParam, String> texture_param_val_to_name_map = [&]() {
+		HashMap<BaseMaterial3D::TextureParam, String> map;
+		for (auto &E : texture_param_map) {
+			map.insert(E.value, E.key);
+		}
+		return map;
+	}();
+
 	static const HashMap<BaseMaterial3D::TextureParam, BaseMaterial3D::Feature> feature_to_enable_map = {
 		{ BaseMaterial3D::TEXTURE_NORMAL, BaseMaterial3D::FEATURE_NORMAL_MAPPING },
 		{ BaseMaterial3D::TEXTURE_BENT_NORMAL, BaseMaterial3D::FEATURE_BENT_NORMAL_MAPPING },
@@ -691,8 +702,9 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 	for (int i = 0; i < BaseMaterial3D::TEXTURE_MAX; i++) {
 		base_material_texture_candidates[BaseMaterial3D::TextureParam(i)] = Vector<TextureCandidate>();
 	}
-	HashMap<String, Variant> set_params;
-	HashMap<String, Variant> non_set_params;
+	HashSet<String> set_param_material_names;
+	HashMap<String, Pair<String, Variant>> set_params;
+	HashMap<String, Pair<String, Variant>> non_set_params;
 	auto add_orm_texture_candidate = [&](const UniformInfo &info, const Ref<Texture> &tex) {
 		String lparam_name = info.name.to_lower();
 		bool did_set = true;
@@ -713,6 +725,9 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 	auto third_pass_texture_candidate = [&](const UniformInfo &info, const Ref<Texture> &tex) {
 		if (info.hints.has(Hint::HINT_ROUGHNESS_NORMAL) && info.name.to_lower().contains("normal") && base_material_texture_candidates[BaseMaterial3D::TEXTURE_NORMAL].is_empty()) {
 			base_material_texture_candidates[BaseMaterial3D::TEXTURE_NORMAL].push_back({ info, tex });
+			return true;
+		} else if (info.hints.has(Hint::HINT_NONE)) {
+			base_material_texture_candidates[BaseMaterial3D::TEXTURE_ALBEDO].push_back({ info, tex });
 			return true;
 		}
 		return false;
@@ -782,6 +797,25 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 		return filtered_candidates;
 	};
 
+	auto remap_param_name = [&](const String &param_name) -> String {
+		if (shader_texture_name_to_base_material_texture_param.has(param_name)) {
+			return shader_texture_name_to_base_material_texture_param.get(param_name);
+		}
+		if (!base_material_params.has(param_name)) {
+			if (base_material_params.has("params_" + param_name)) {
+				return "params_" + param_name;
+			}
+			if (base_material_params.has("flags_" + param_name)) {
+				return "flags_" + param_name;
+			}
+		}
+		if (param_name.contains("use") && param_name.contains("vertex_color") && p_shader_material->get_shader_parameter(param_name).get_type() == Variant::BOOL) {
+			return "vertex_color_use_as_albedo";
+		}
+
+		return param_name;
+	};
+
 	Vector<TextureCandidate> unknown_texture_candidates;
 	for (auto &E : shader_info.uniforms) {
 		auto &info = E.value;
@@ -805,9 +839,7 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 				val = instance_val;
 			}
 		}
-		if (shader_texture_name_to_base_material_texture_param.has(param_name)) {
-			param_name = shader_texture_name_to_base_material_texture_param.get(param_name);
-		}
+		param_name = remap_param_name(param_name);
 
 		if (base_material_params.has(param_name)) {
 			Variant base_material_val = base_material->get(param_name);
@@ -819,14 +851,16 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 			if (base_material_val_type == val.get_type()) {
 				base_material->set(param_name, val);
 				did_set = true;
-				set_params[real_param_name] = val;
+				set_params[real_param_name] = { param_name, val };
+				set_param_material_names.insert(param_name);
 			}
 		} else if (set_param_not_in_property_list(base_material, param_name, val)) {
 			did_set = true;
-			set_params[real_param_name] = val;
+			set_params[real_param_name] = { param_name, val };
+			set_param_material_names.insert(param_name);
 		}
 		if (!did_set) {
-			non_set_params[real_param_name] = val;
+			non_set_params[real_param_name] = { param_name, val };
 		}
 
 		Ref<Texture2D> tex = get_texture_2d(val, info);
@@ -863,17 +897,19 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 		if (candidates.size() == 1) {
 			base_material->set_texture(BaseMaterial3D::TextureParam(i), candidates[0].second);
 			set_texture = true;
-			set_params[candidates[0].first.name] = candidates[0].second;
+			set_params[candidates[0].first.name] = { texture_param_val_to_name_map.get(BaseMaterial3D::TextureParam(i)), candidates[0].second };
+			set_param_material_names.insert(texture_param_val_to_name_map.get(BaseMaterial3D::TextureParam(i)));
 			continue;
 		}
 		bool set_this_texture = false;
 		if (i == BaseMaterial3D::TEXTURE_ALBEDO) {
 			for (auto &E : candidates) {
-				if (E.first.name.contains("albedo")) {
+				if (E.first.name.contains("albedo") || E.first.name.contains("color")) {
 					base_material->set_texture(BaseMaterial3D::TEXTURE_ALBEDO, E.second);
 					set_texture = true;
 					set_this_texture = true;
-					set_params[E.first.name] = E.second;
+					set_params[E.first.name] = { "albedo_texture", E.second };
+					set_param_material_names.insert("albedo_texture");
 				} else if (E.first.name.contains("emissi") && set_this_texture) {
 					// push this back to the emission candidates
 					base_material_texture_candidates[BaseMaterial3D::TEXTURE_EMISSION].push_back(E);
@@ -885,7 +921,8 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 					base_material->set_texture(BaseMaterial3D::TEXTURE_NORMAL, E.second);
 					set_texture = true;
 					set_this_texture = true;
-					set_params[E.first.name] = E.second;
+					set_params[E.first.name] = { "normal_texture", E.second };
+					set_param_material_names.insert("normal_texture");
 				}
 			}
 		}
@@ -893,11 +930,22 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 			// just use the first one
 			base_material->set_texture(BaseMaterial3D::TextureParam(i), candidates[0].second);
 			set_texture = true;
-			set_params[candidates[0].first.name] = candidates[0].second;
+			set_params[candidates[0].first.name] = { texture_param_val_to_name_map.get(BaseMaterial3D::TextureParam(i)), candidates[0].second };
+			set_param_material_names.insert(texture_param_val_to_name_map.get(BaseMaterial3D::TextureParam(i)));
 		}
 	}
-	if (set_params.has("alpha_scissor_threshold") && base_material->get_transparency() != BaseMaterial3D::TRANSPARENCY_ALPHA_SCISSOR) {
+	auto render_mode_params = set_params_from_render_mode(shader_info.render_modes, base_material);
+	for (auto &E : render_mode_params) {
+		set_params[E.key] = { E.key, E.value };
+		set_param_material_names.insert(E.key);
+	}
+	// These params modify the transparency
+	static const Vector<String> transparency_params = { "params_use_alpha_hash", "params_use_alpha_scissor", "transparency" };
+
+	bool transparency_set = gdre::hashset_intersects_vector(set_param_material_names, transparency_params) || base_material->get_transparency() != BaseMaterial3D::TRANSPARENCY_DISABLED;
+	if (set_param_material_names.has("alpha_scissor_threshold") && !transparency_set) {
 		base_material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA_SCISSOR);
+		transparency_set = true;
 	}
 	if (shader_uniforms.has("brightness") && p_shader_material->get_shader_parameter("brightness").get_type() == Variant::FLOAT) {
 		float brightness = p_shader_material->get_shader_parameter("brightness");
@@ -907,7 +955,7 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 		}
 		base_material->set_emission(get_emission * brightness);
 	}
-	if (shader_uniforms.has("alpha")) {
+	if (!transparency_set && shader_uniforms.has("alpha")) {
 		Variant alpha_val = p_shader_material->get_shader_parameter("alpha");
 		if (alpha_val.get_type() == Variant::FLOAT) {
 			base_material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA);
@@ -915,6 +963,7 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 			Color albedo = base_material->get_albedo();
 			albedo.a = alpha_val;
 			base_material->set_albedo(albedo);
+			transparency_set = true;
 		}
 	}
 	// set the resource properties
@@ -930,9 +979,8 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 			break;
 		}
 	}
-	auto render_mode_params = set_params_from_render_mode(shader_info.render_modes, base_material);
 
-	if (base_material->get_transparency() == BaseMaterial3D::TRANSPARENCY_DISABLED) {
+	if (!transparency_set) {
 		auto albedo_tex = base_material->get_texture(BaseMaterial3D::TEXTURE_ALBEDO);
 		if (albedo_tex.is_valid()) {
 			Ref<Image> albedo_image = albedo_tex->get_image();
