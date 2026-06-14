@@ -16,6 +16,7 @@
 #include "modules/regex/regex.h"
 #include "utility/app_version_getter.h"
 #include "utility/file_access_gdre.h"
+#include "utility/file_access_patched_gdre.h"
 #include "utility/image_saver.h"
 #include "utility/text_diff.h"
 #ifdef TOOLS_ENABLED
@@ -543,6 +544,8 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<GDREAudioStreamPreviewGeneratorNode>();
 	ClassDB::register_class<GDREAudioStreamPreviewGenerator>();
 	ClassDB::register_class<GDREAudioStreamPreview>();
+
+	ClassDB::register_class<FileAccessPatchedGDRE>();
 
 	// crypto classes
 	ClassDB::register_class<CustomDecryptor>(true);
