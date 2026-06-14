@@ -930,8 +930,10 @@ func recovery(  input_files:PackedStringArray,
 
 	err = GDRESettings.load_project(input_files, extract_only, csharp_assembly)
 	if (err != OK):
-		print_usage()
-		print("Error: failed to open ", (GDRECommon.get_files_for_paths(input_files)))
+		var error_msg = GDRESettings.get_recent_error_string()
+		if error_msg.to_lower().contains("encrypt"):
+			error_msg = "Incorrect encryption key. Please set the correct key and try again."
+		print("\nError: Failed to open " + str(GDRECommon.get_files_for_paths(input_files)) + ":\n" + error_msg)
 		return 1
 
 	print("Successfully loaded PCK!")

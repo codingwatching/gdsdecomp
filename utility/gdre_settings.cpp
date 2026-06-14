@@ -731,7 +731,11 @@ Error GDRESettings::load_project(const Vector<String> &p_paths, bool _cmd_line_e
 			if (err == ERR_ALREADY_IN_USE) {
 				continue;
 			}
+			bool crypto_error = had_encryption_error();
 			unload_project(true);
+			if (crypto_error) {
+				ERR_FAIL_COND_V_MSG(err, ERR_UNAUTHORIZED, "Can't load project! (Did you set the correct key?)");
+			}
 			ERR_FAIL_COND_V_MSG(err, err, "Can't load project!");
 		}
 	}
