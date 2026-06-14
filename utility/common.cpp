@@ -1297,7 +1297,10 @@ bool gdre::store_var_compat(Ref<FileAccess> f, const Variant &p_var, int ver_maj
 Ref<FileAccess> gdre::open_encrypted_v3(const String &p_path, int p_mode, const Vector<uint8_t> &p_key) {
 	Ref<FileAccess> p_base = FileAccess::open(p_path, p_mode);
 	ERR_FAIL_COND_V(p_base.is_null(), Ref<FileAccess>());
+	return open_encrypted_v3_from_file(p_base, p_mode, p_key);
+}
 
+Ref<FileAccess> gdre::open_encrypted_v3_from_file(Ref<FileAccess> p_base, int p_mode, const Vector<uint8_t> &p_key) {
 	Ref<FileAccessEncryptedv3> fae;
 	fae.instantiate();
 	Error err = fae->open_and_parse(p_base, p_key, (p_mode == FileAccess::WRITE) ? FileAccessEncryptedv3::MODE_WRITE_AES256 : FileAccessEncryptedv3::MODE_READ);
@@ -1619,6 +1622,7 @@ void GDRECommon::_bind_methods() {
 	ClassDB::bind_static_method("GDRECommon", D_METHOD("rsplit_multichar", "str", "splitters", "allow_empty", "maxsplit"), &gdre::_rsplit_multichar);
 	ClassDB::bind_static_method("GDRECommon", D_METHOD("copy_dir", "src", "dst"), &gdre::copy_dir);
 	ClassDB::bind_static_method("GDRECommon", D_METHOD("open_encrypted_v3", "path", "mode", "key"), &gdre::open_encrypted_v3);
+	ClassDB::bind_static_method("GDRECommon", D_METHOD("open_encrypted_v3_from_file", "file", "mode", "key"), &gdre::open_encrypted_v3_from_file);
 	ClassDB::bind_static_method("GDRECommon", D_METHOD("filter_error_backtraces", "error_messages"), &gdre::filter_error_backtraces);
 	ClassDB::bind_static_method("GDRECommon", D_METHOD("get_files_for_paths", "paths"), &gdre::get_files_for_paths);
 	ClassDB::bind_static_method("GDRECommon", D_METHOD("rimraf", "path"), &gdre::rimraf);
