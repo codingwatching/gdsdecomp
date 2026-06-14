@@ -128,7 +128,7 @@ Error GDScriptExporter::test_export(const Ref<ExportReport> &export_report, cons
 		// Bytecode may not be exactly the same due to earlier Godot variant encoder failing to zero out the padding bytes,
 		// so we need to use the tester function to compare the bytecode
 		auto compiled_exported_bytecode = decomp->compile_code_string(exported_script_text);
-		Error bytecode_err = decomp->test_bytecode_match(original_bytecode, compiled_exported_bytecode, false, false, true);
+		Error bytecode_err = decomp->test_bytecode_match(original_bytecode, compiled_exported_bytecode, true, false, true);
 		GDRE_CHECK_EQ(decomp->get_error_message(), "");
 		GDRE_CHECK_EQ(bytecode_err, OK);
 
@@ -137,7 +137,7 @@ Error GDScriptExporter::test_export(const Ref<ExportReport> &export_report, cons
 			String original_script_text = FileAccess::get_file_as_string(original_script_path);
 			GDRE_CHECK(!original_script_text.is_empty());
 			auto compiled_original_bytecode = decomp->compile_code_string(original_script_text);
-			Error bytecode_err2 = decomp->test_bytecode_match(compiled_exported_bytecode, compiled_original_bytecode, false, false, true);
+			Error bytecode_err2 = decomp->test_bytecode_match(compiled_exported_bytecode, compiled_original_bytecode, true, false, true);
 			GDRE_CHECK_EQ(decomp->get_error_message(), "");
 			GDRE_CHECK_EQ(bytecode_err2, OK);
 		}
