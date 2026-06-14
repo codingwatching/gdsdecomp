@@ -461,6 +461,7 @@ Error PluginManager::populate_plugin_version_hashes(PluginVersion &plugin_versio
 	if (!plugin_version.archive_sha256.is_empty() && archive_sha256 != plugin_version.archive_sha256) {
 		WARN_PRINT("Archive SHA-256 mismatch: " + plugin_version.archive_sha256 + " != " + archive_sha256);
 	}
+	plugin_version.archive_sha256 = archive_sha256;
 
 	auto files = gdre::get_recursive_dir_list(unzupped_path, {}, false, true);
 	for (int64_t i = files.size() - 1; i >= 0; i--) {

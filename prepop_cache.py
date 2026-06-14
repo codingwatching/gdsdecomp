@@ -80,6 +80,8 @@ def get_godot_arch():
         raise ValueError(f"Unsupported architecture: {platform.machine()}")
 
 CLEAR_ALL = os.getenv("CLEAR_ALL", "0") != "0"
+CLEAR_CACHE = os.getenv("CLEAR_CACHE", "0") != "0"
+CLEAR_DOWNLOAD_CACHE = os.getenv("CLEAR_DOWNLOAD_CACHE", "0") != "0"
 DEV_MODE = os.getenv("DEV_MODE", "0") != "0"
 GODOT_EXE = os.path.join(BIN_DIR, f"godot.{get_godot_platform()}.editor.{('dev.' if DEV_MODE else '')}{get_godot_arch()}")
 ARGS = [GODOT_EXE, "--headless", "--path", STANDALONE_DIR]
@@ -115,16 +117,23 @@ def generate_header_file():
 
 def check_and_save_json_file():
     new_json_dicts: dict[str, dict[str, object]] = json.load(open(JSON_TMP_PATH))
-    old_json_dicts: dict[str, dict[str, object]] = json.load(open(JSON_DST_PATH))
+    old_json_dicts: dict[str, dict[str, object]] = {}
+    if os.path.exists(JSON_DST_PATH):
+        old_json_dicts = json.load(open(JSON_DST_PATH))
+    else:
+        print(f"Old static cache missing!")
+        save_json_file(new_json_dicts, JSON_DST_PATH)
+        return 0
     if len(new_json_dicts) < len(old_json_dicts):
         if not IGNORE_SIZE_CHECK:
             print(f"New JSON file has less entries than the old one: {len(new_json_dicts)} < {len(old_json_dicts)}")
-            return
+            return 1
         else:
             print(f"New JSON file has less entries than the old one: {len(new_json_dicts)} < {len(old_json_dicts)}, ignoring size check")
     # remove the old one and save the new one
     os.remove(JSON_DST_PATH)
     save_json_file(new_json_dicts, JSON_DST_PATH)
+    return 0
 
 def save_json_file(json_dicts: dict[str, dict[str, object]], dest_path: str):
     with open(dest_path, "w") as f:
@@ -141,6 +150,11 @@ def prepop_cache():
     if CLEAR_ALL:
         args.append("--clear-plugin-cache-including-static")
         args.append("--clear-download-cache")
+    else:
+        if CLEAR_CACHE:
+            args.append("--clear-plugin-cache-including-static")
+        if CLEAR_DOWNLOAD_CACHE:
+            args.append("--clear-download-cache")
     for plugin in PLUGINS_TO_PREPOP:
         args.append(f"--plcache={plugin}")
     args.append(f"--output={JSON_TMP_PATH}")
@@ -174,4 +188,5 @@ def get_base64_from_file(file_path: str) -> str:
 
 if __name__ == "__main__":
     prepop_cache()
-    check_and_save_json_file()
+    exit_code = check_and_save_json_file()
+    sys.exit(exit_code)
