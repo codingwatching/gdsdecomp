@@ -171,7 +171,6 @@ public:
 
 	void set_tls_options(const Ref<TLSOptions> &p_options);
 
-
 	double get_progress() const;
 
 	bool poll();

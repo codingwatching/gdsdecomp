@@ -21,8 +21,7 @@
 // 	unsigned components;
 // };
 
-struct VariableTypeRemap
-{
+struct VariableTypeRemap {
 	std::string variable_name;
 	std::string new_variable_type;
 };
@@ -100,7 +99,6 @@ String ShaderFileExporter::get_name() const {
 	return EXPORTER_NAME;
 }
 
-
 Error ShaderFileExporter::export_file(const String &out_path, const String &res_path) {
 	auto res = ResourceCompatLoader::fake_load(res_path);
 	ERR_FAIL_COND_V_MSG(res.is_null(), ERR_FILE_CANT_OPEN, "Failed to load resource: " + res_path);
@@ -154,7 +152,7 @@ Error ShaderFileExporter::export_file(const String &out_path, const String &res_
 		for (const String &name : bytecode_names) {
 			PackedByteArray bytecode = bc->get(name, &is_valid);
 			ERR_CONTINUE(!is_valid);
-			uint32_t* ptr = reinterpret_cast<uint32_t*>(bytecode.ptrw());
+			uint32_t *ptr = reinterpret_cast<uint32_t *>(bytecode.ptrw());
 			size_t len = bytecode.size() / sizeof(uint32_t);
 			std::vector<uint32_t> spirv_file(ptr, ptr + len);
 			try {
@@ -274,36 +272,34 @@ Vector<String> ShaderFileExporter::get_export_extensions(const String &res_path)
 using namespace std;
 using namespace spirv_cross;
 
-static const char *execution_model_to_str(ExecutionModel model)
-{
-	switch (model)
-	{
-	case ExecutionModelVertex:
-		return "vertex";
-	case ExecutionModelTessellationControl:
-		return "tesselation_controlcontrol";
-	case ExecutionModelTessellationEvaluation:
-		return "tesselation_evaluation";
-	case ExecutionModelGeometry:
-		return "geometry";
-	case ExecutionModelFragment:
-		return "fragment";
-	case ExecutionModelGLCompute:
-		return "compute";
-	case ExecutionModelRayGenerationNV:
-		return "raygen";
-	case ExecutionModelIntersectionNV:
-		return "intersection";
-	case ExecutionModelCallableNV:
-		return "callable";
-	case ExecutionModelAnyHitNV:
-		return "anyhit";
-	case ExecutionModelClosestHitNV:
-		return "closesthit";
-	case ExecutionModelMissNV:
-		return "miss";
-	default:
-		return "???";
+static const char *execution_model_to_str(ExecutionModel model) {
+	switch (model) {
+		case ExecutionModelVertex:
+			return "vertex";
+		case ExecutionModelTessellationControl:
+			return "tesselation_controlcontrol";
+		case ExecutionModelTessellationEvaluation:
+			return "tesselation_evaluation";
+		case ExecutionModelGeometry:
+			return "geometry";
+		case ExecutionModelFragment:
+			return "fragment";
+		case ExecutionModelGLCompute:
+			return "compute";
+		case ExecutionModelRayGenerationNV:
+			return "raygen";
+		case ExecutionModelIntersectionNV:
+			return "intersection";
+		case ExecutionModelCallableNV:
+			return "callable";
+		case ExecutionModelAnyHitNV:
+			return "anyhit";
+		case ExecutionModelClosestHitNV:
+			return "closesthit";
+		case ExecutionModelMissNV:
+			return "miss";
+		default:
+			return "???";
 	}
 }
 static String compile_iteration(const SPIRVCrossOptions &args, std::vector<uint32_t> spirv_file, String &execution_model_str) {
@@ -322,8 +318,7 @@ static String compile_iteration(const SPIRVCrossOptions &args, std::vector<uint3
 		compiler.reset(new CompilerGLSL(std::move(spirv_parser.get_parsed_ir())));
 	}
 
-	if (!args.variable_type_remaps.empty())
-	{
+	if (!args.variable_type_remaps.empty()) {
 		auto remap_cb = [&](const SPIRType &, const string &name, string &out) -> void {
 			for (const VariableTypeRemap &remap : args.variable_type_remaps) {
 				if (name == remap.variable_name) {
@@ -348,9 +343,7 @@ static String compile_iteration(const SPIRVCrossOptions &args, std::vector<uint3
 	auto entry_point = args.entry;
 	// ExecutionModel model = ExecutionModelMax;
 
-
-	if (!args.set_version && !compiler->get_common_options().version)
-	{
+	if (!args.set_version && !compiler->get_common_options().version) {
 		fprintf(stderr, "Didn't specify GLSL version and SPIR-V did not specify language.\n");
 		// print_help();
 		// exit(EXIT_FAILURE);
@@ -390,11 +383,9 @@ static String compile_iteration(const SPIRVCrossOptions &args, std::vector<uint3
 		compiler->remap_ext_framebuffer_fetch(fetch.first, fetch.second, !args.glsl_ext_framebuffer_fetch_noncoherent);
 	}
 
-	if (build_dummy_sampler)
-	{
+	if (build_dummy_sampler) {
 		uint32_t sampler = compiler->build_dummy_sampler_for_combined_images();
-		if (sampler != 0)
-		{
+		if (sampler != 0) {
 			// Set some defaults to make validation happy.
 			compiler->set_decoration(sampler, DecorationDescriptorSet, 0);
 			compiler->set_decoration(sampler, DecorationBinding, 0);
@@ -402,8 +393,7 @@ static String compile_iteration(const SPIRVCrossOptions &args, std::vector<uint3
 	}
 
 	ShaderResources res;
-	if (args.remove_unused)
-	{
+	if (args.remove_unused) {
 		auto active = compiler->get_active_interface_variables();
 		res = compiler->get_shader_resources(active);
 		compiler->set_enabled_interface_variables(std::move(active));
@@ -411,8 +401,7 @@ static String compile_iteration(const SPIRVCrossOptions &args, std::vector<uint3
 		res = compiler->get_shader_resources();
 	}
 
-	if (args.flatten_ubo)
-	{
+	if (args.flatten_ubo) {
 		for (auto &ubo : res.uniform_buffers) {
 			compiler->flatten_buffer_block(ubo.id);
 		}
@@ -424,17 +413,14 @@ static String compile_iteration(const SPIRVCrossOptions &args, std::vector<uint3
 		compiler->require_extension(ext);
 	}
 
-	if (combined_image_samplers)
-	{
+	if (combined_image_samplers) {
 		compiler->build_combined_image_samplers();
 		// if (args.combined_samplers_inherit_bindings)
 		// 	spirv_cross_util::inherit_combined_sampler_bindings(*compiler);
 
 		// Give the remapped combined samplers new names.
-		for (auto &remap : compiler->get_combined_image_samplers())
-		{
-			compiler->set_name(remap.combined_id, join("SPIRV_Cross_Combined", compiler->get_name(remap.image_id),
-			                                           compiler->get_name(remap.sampler_id)));
+		for (auto &remap : compiler->get_combined_image_samplers()) {
+			compiler->set_name(remap.combined_id, join("SPIRV_Cross_Combined", compiler->get_name(remap.image_id), compiler->get_name(remap.sampler_id)));
 		}
 	}
 

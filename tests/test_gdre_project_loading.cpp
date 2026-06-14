@@ -19,7 +19,6 @@
 
 TEST_FORCE_LINK(test_gdre_project_loading)
 
-
 namespace TestGdreProjectLoading {
 
 inline Error create_test_pck(const String &pck_path, const HashMap<String, String> &paths) {

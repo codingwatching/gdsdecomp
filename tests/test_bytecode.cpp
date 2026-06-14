@@ -602,7 +602,7 @@ void test_individual_script(const String &script_path, const String &helper_scri
 
 	auto cwd = GDRESettings::get_singleton()->get_cwd();
 
-	String local_path = cwd.path_join(script_path);//ProjectSettings::get_singleton()->localize_path(script_path);
+	String local_path = cwd.path_join(script_path); //ProjectSettings::get_singleton()->localize_path(script_path);
 
 	Ref<GDScript> real_script = memnew(GDScript);
 	real_script->set_path(local_path);
@@ -610,7 +610,7 @@ void test_individual_script(const String &script_path, const String &helper_scri
 	CHECK(err == OK);
 	err = real_script->reload(false);
 	// TODO: Figure out why the real loader fails to load some scripts
-	if (err != OK){
+	if (err != OK) {
 		CoreGlobals::print_error_enabled = true;
 		return;
 	}
@@ -700,7 +700,7 @@ void test_fake_script() {
 	GDRESettings::get_singleton()->_set_version_override(GODOT_VERSION_FULL_CONFIG);
 	String project_path = GDRESettings::get_singleton()->get_project_path();
 	GDRESettings::get_singleton()->set_project_path(get_gdscript_tests_path());
-	Error err = GDRESettings::get_singleton()->load_project({get_gdscript_tests_path()});
+	Error err = GDRESettings::get_singleton()->load_project({ get_gdscript_tests_path() });
 	CHECK(err == OK);
 	auto gdscript_test_scripts = get_gdscript2_0_scripts();
 	for (int i = 0; i < gdscript_test_scripts.size(); i++) {

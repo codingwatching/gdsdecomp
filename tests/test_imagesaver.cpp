@@ -3,8 +3,8 @@
 #include "core/io/image.h"
 #include "tests/test_macros.h"
 #include "utility/common.h"
-#include "utility/image_saver.h"
 #include "utility/gdre_settings.h"
+#include "utility/image_saver.h"
 
 TEST_FORCE_LINK(test_imagesaver)
 namespace TestImageSaver {

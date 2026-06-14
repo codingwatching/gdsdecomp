@@ -5,19 +5,31 @@
 
 #include "utility/glob.h"
 
-#define SKIP_UNTIL_NODE_TYPE(type) {while (parser->get_node_type() != type && parser->read() != ERR_FILE_EOF) { }; if (parser->get_node_type() != type) { break; }}
-#define SKIP_UNTIL_NODE_NAME(name) {while (!(parser->get_node_type() == XMLParser::NODE_ELEMENT && parser->get_node_name() == name) && parser->read() != ERR_FILE_EOF) { }; if (!(parser->get_node_type() == XMLParser::NODE_ELEMENT && parser->get_node_name() == name)) { break; }}
+#define SKIP_UNTIL_NODE_TYPE(type)                                                  \
+	{                                                                               \
+		while (parser->get_node_type() != type && parser->read() != ERR_FILE_EOF) { \
+		};                                                                          \
+		if (parser->get_node_type() != type) {                                      \
+			break;                                                                  \
+		}                                                                           \
+	}
+#define SKIP_UNTIL_NODE_NAME(name)                                                                                                           \
+	{                                                                                                                                        \
+		while (!(parser->get_node_type() == XMLParser::NODE_ELEMENT && parser->get_node_name() == name) && parser->read() != ERR_FILE_EOF) { \
+		};                                                                                                                                   \
+		if (!(parser->get_node_type() == XMLParser::NODE_ELEMENT && parser->get_node_name() == name)) {                                      \
+			break;                                                                                                                           \
+		}                                                                                                                                    \
+	}
 String AppVersionGetter::get_version_from_info_plist(const String &p_path) {
 	Ref<XMLParser> parser = memnew(XMLParser);
 	Error err = parser->open(p_path);
 	ERR_FAIL_COND_V_MSG(err != OK, "", "Failed to open info.plist file");
 
-
 	bool not_in_dict = true;
 	String short_version_string = "";
 	String version = "";
 	while (parser->read() != ERR_FILE_EOF) {
-
 		if (not_in_dict && (parser->get_node_type() != XMLParser::NODE_ELEMENT || parser->get_node_name() != "dict")) {
 			// parser->skip_section();
 			continue;

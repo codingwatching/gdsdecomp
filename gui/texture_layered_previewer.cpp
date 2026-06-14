@@ -32,8 +32,8 @@
 
 #include "core/input/input.h"
 #include "core/object/callable_mp.h"
-#include "scene/gui/label.h"
 #include "core/object/class_db.h"
+#include "scene/gui/label.h"
 
 #include "gui/gdre_color_channel_selector.h"
 

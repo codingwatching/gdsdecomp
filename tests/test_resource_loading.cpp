@@ -1,11 +1,11 @@
 
 #include <compat/resource_compat_text.h>
 #include <compat/resource_loader_compat.h>
+#include <core/io/image.h>
 #include <modules/gdscript/gdscript_tokenizer_buffer.h>
 #include <utility/common.h>
 #include <utility/gdre_settings.h>
 #include <utility/glob.h>
-#include <core/io/image.h>
 
 #include "core/version_generated.gen.h"
 #include "test_common.h"

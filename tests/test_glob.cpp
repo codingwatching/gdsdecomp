@@ -4,9 +4,9 @@
 #include "core/os/os.h"
 #include "tests/test_common.h"
 #include "tests/test_macros.h"
-#include "utility/glob.h"
 #include "utility/common.h"
 #include "utility/gdre_settings.h"
+#include "utility/glob.h"
 
 TEST_FORCE_LINK(test_glob)
 
