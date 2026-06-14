@@ -53,7 +53,6 @@ def get_godot_mono_decomp_lib_dir(godot_mono_decomp_dir, target_platform, target
         for line in csproj_file:
             if "TargetFramework" in line:
                 target_framework = line.split(">")[1].split("<")[0].strip()
-                print("TARGET FRAMEWORK", target_framework)
                 break
 
     return os.path.join(godot_mono_decomp_dir, "bin", get_dotnet_variant_name(dev_build), target_framework, triplet, "publish")
@@ -229,8 +228,16 @@ def build_godot_mono_decomp(
         else:
             lib_suffix = ".so"
 
-    src_suffixes = ["*.h", "*.cs", "*.csproj", "*.props", "*.targets", "*.pubxml", "*.config"]
-
+    src_suffixes = ["*.h", "*.cs", "*.csproj", "*.props", "*.targets", "*.pubxml", "*.config", "*.nupkg", "*.sln"]
+    exclude_filters = [
+        "obj/",
+        "bin/",
+        "obj\\",
+        "bin\\",
+        "collection_examples",
+        "GodotMonoDecompCLI",
+        "godot-mono-decomp-aot-test",
+    ]
     def _builder_action(target, source, env):
         return godot_mono_builder(
             target,
@@ -261,7 +268,7 @@ def build_godot_mono_decomp(
         module_dir,
         godot_mono_decomp_parent,
         src_suffixes,
-        ["obj/", "bin/", "obj\\", "bin\\"],
+        exclude_filters,
     )
     env_gdsdecomp.Alias("godotMonoDecomp", [env_gdsdecomp.godotMonoDecompBuilder(all_libs, mono_sources)])
 
@@ -270,7 +277,7 @@ def build_godot_mono_decomp(
         env_gdsdecomp.CommandNoCache(android_lib_dest, libs[0], Copy("$TARGET", "$SOURCE"))
 
     add_libs_to_env(env, env_gdsdecomp, module_obj, libs, mono_sources)
-    env.Depends(module_obj, depends_libs)
+    # env.Depends(module_obj, depends_libs)
 
     if env["platform"] == "linuxbsd" and mono_native_lib_type == "Shared":
         env.Append(LINKFLAGS=["-z", "origin"])
