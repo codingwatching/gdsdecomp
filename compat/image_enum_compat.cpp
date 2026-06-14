@@ -339,10 +339,26 @@ Image::Format ImageEnumCompat::convert_image_format_enum_v3_to_v4(V3Image::Forma
 	}
 
 	// They removed four PVRTC enum values after BPTC_RGBFU, so just subtract 4
-	if (fmt >= V3Image::Format::FORMAT_ETC && fmt < V3Image::Format::FORMAT_MAX) {
+	if (fmt >= V3Image::Format::FORMAT_ETC && fmt <= V3Image::Format::FORMAT_ETC2_RGB8A1) {
 		return Image::Format(fmt - 4);
+	}
+	if (fmt == V3Image::FORMAT_ASTC_8x8) {
+		return Image::FORMAT_ASTC_8x8;
 	}
 	// If this is an invalid value, return FORMAT_MAX
 
 	return Image::FORMAT_MAX;
+}
+
+V3Image::Format ImageEnumCompat::convert_image_format_enum_v4_to_v3(Image::Format p_format) {
+	if (p_format <= Image::Format::FORMAT_BPTC_RGBFU) {
+		return V3Image::Format(p_format);
+	}
+	if (p_format >= Image::Format::FORMAT_ETC && p_format <= Image::Format::FORMAT_ETC2_RGB8A1) {
+		return V3Image::Format(p_format + 4);
+	}
+	if (p_format == Image::FORMAT_ASTC_8x8) {
+		return V3Image::FORMAT_ASTC_8x8;
+	}
+	return V3Image::FORMAT_MAX;
 }

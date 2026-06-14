@@ -2,6 +2,7 @@
 
 #include "compat/resource_compat_binary.h"
 #include "compat/resource_loader_compat.h"
+#include "core/variant/variant.h"
 #include "core/version_generated.gen.h"
 #include "gdre_test_macros.h"
 #include "scene/resources/dpi_texture.h"
@@ -1019,46 +1020,32 @@ Error TextureExporter::_convert_svg(const String &p_path, const String &dest_pat
 	return OK;
 }
 
-Ref<ExportReport> TextureExporter::export_resource(const String &output_dir, Ref<ImportInfo> iinfo) {
-	String path = iinfo->get_path();
-	String source = iinfo->get_source_file();
-	bool lossy = false;
+Error get_extant_texture_path(Ref<ImportInfo> iinfo, String &path) {
+	path = iinfo->get_path();
 	int ver_major = iinfo->get_ver_major();
 	int ver_minor = iinfo->get_ver_minor();
-	Ref<ExportReport> report = memnew(ExportReport(iinfo, get_name()));
 
-	// Sonic Colors Unlimited specific hack: We don't support atsc and nx-low formats, so we need to set the path to something else
-	if (ver_major == 3 && ver_minor == 1) {
+	// Prefer s3tc textures over other formats for v3 (the etc2 compressor was vastly inferior to s3tc in v3)
+	if (ver_major <= 3) {
 		String format_type = path.get_basename().get_extension();
-		Vector<String> banned_types = { "atsc", "nx-low", "atsc-low" };
-		if (banned_types.has(format_type)) {
-			bool found = false;
-			Vector<String> dest_files = iinfo->get_dest_files();
-			if (dest_files.size() > 0) {
-				String new_path = path.get_basename().get_basename() + ".s3tc" + path.get_extension();
-				if (FileAccess::exists(new_path)) {
-					path = new_path;
-					found = true;
-				}
-				if (!found) {
-					for (auto &dest : dest_files) {
-						String fmt = dest.get_basename().get_extension();
-						if (!banned_types.has(format_type) && FileAccess::exists(new_path)) {
-							path = dest;
-							found = true;
-							break;
-						}
-					}
-				}
+		if (format_type != "s3tc") {
+			PackedStringArray dest_files = iinfo->get_dest_files();
+			String new_path = path.get_basename() + ".s3tc" + path.get_extension();
+			if (dest_files.has(new_path) && FileAccess::exists(new_path)) {
+				path = new_path;
+				return OK;
 			}
-			if (!found) {
-				report->set_error(ERR_UNAVAILABLE);
-				report->set_message("Cannot convert custom SCU texture format");
-				report->set_unsupported_format_type(format_type);
+			Vector<String> preferred_formats = { "s3tc", "etc2", "atsc", "s3tc-low", "nx-low", "atsc-low" };
+			for (int i = 0; i < preferred_formats.size(); i++) {
+				Variant new_path = iinfo->get_iinfo_val("remap", "path." + preferred_formats[i]);
+				if (new_path.get_type() == Variant::STRING && !new_path.operator String().is_empty() && FileAccess::exists(new_path.operator String())) {
+					path = new_path;
+					return OK;
+				}
 			}
 		}
 	}
-	report->set_resources_used({ path });
+
 	if (!FileAccess::exists(path)) {
 		path = "";
 		for (auto &dest : iinfo->get_dest_files()) {
@@ -1067,14 +1054,30 @@ Ref<ExportReport> TextureExporter::export_resource(const String &output_dir, Ref
 				break;
 			}
 		}
-		if (path.is_empty()) {
-			report->set_error(ERR_FILE_NOT_FOUND);
-			report->set_message("No existing textures found for this import");
-			report->append_message_detail({ "Possibles:" });
-			report->append_message_detail(iinfo->get_dest_files());
-			return report;
-		}
 	}
+	if (path.is_empty()) {
+		return ERR_FILE_NOT_FOUND;
+	}
+	return OK;
+}
+
+Ref<ExportReport> TextureExporter::export_resource(const String &output_dir, Ref<ImportInfo> iinfo) {
+	String path = iinfo->get_path();
+	String source = iinfo->get_source_file();
+	bool lossy = false;
+	int ver_major = iinfo->get_ver_major();
+	int ver_minor = iinfo->get_ver_minor();
+	Ref<ExportReport> report = memnew(ExportReport(iinfo, get_name()));
+
+	Error err = get_extant_texture_path(iinfo, path);
+	if (err) {
+		report->set_error(ERR_FILE_NOT_FOUND);
+		report->set_message("No existing textures found for this import");
+		report->append_message_detail({ "Possibles:" });
+		report->append_message_detail(iinfo->get_dest_files());
+		return report;
+	}
+	report->set_resources_used({ path });
 	String importer = iinfo->get_importer();
 
 	// for Godot 2.x resources, we can easily rewrite the metadata to point to a renamed file with a different extension,
@@ -1120,7 +1123,6 @@ Ref<ExportReport> TextureExporter::export_resource(const String &output_dir, Ref
 		}
 	}
 
-	Error err = OK;
 	String img_format = "bitmap";
 	String dest_path = output_dir.path_join(iinfo->get_export_dest().replace("res://", ""));
 	if (importer == "image") {
