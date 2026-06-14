@@ -1452,6 +1452,9 @@ func split_map_arg(arg: String) -> PackedStringArray:
 		return []
 	return patch_files
 
+func get_bool_arg(arg: String) -> bool:
+	var val = get_arg_value(arg).to_lower()
+	return val == "true" or val == "1" or val == "yes" or val == "on" or val == "y"
 
 func handle_cli(args: PackedStringArray) -> bool:
 	var custom_bytecode_file: String = ""
@@ -1482,6 +1485,9 @@ func handle_cli(args: PackedStringArray) -> bool:
 	var locales_to_patch: PackedStringArray = []
 	var test_recovery: bool = false
 	var test_output_dir: String = ""
+	var clear_plugin_cache: bool = false
+	var clear_static_cache: bool = false
+	var clear_download_cache: bool = false
 	if (args.size() == 0):
 		if GDRESettings.is_headless():
 			print_usage()
@@ -1557,8 +1563,7 @@ func handle_cli(args: PackedStringArray) -> bool:
 		elif arg.begins_with("--disable-multithreading"):
 			var val: bool = true
 			if arg.contains("="):
-				var str_val = get_arg_value(arg).to_lower()
-				val = str_val == "true" or str_val == "1" or str_val == "yes" or str_val == "on" or str_val == "y"
+				val = get_bool_arg(arg)
 			GDREConfig.set_setting("force_single_threaded", val, true)
 			set_setting = true
 		elif arg.begins_with("--enable-experimental-plugin-downloading"):
@@ -1615,6 +1620,17 @@ func handle_cli(args: PackedStringArray) -> bool:
 		elif arg.begins_with("--print-plugin-cache"):
 			print_plugin_cache()
 			return true
+		elif arg == "--clear-plugin-cache":
+			clear_plugin_cache = true
+			set_setting = true
+		elif arg == "--clear-plugin-cache-including-static":
+			clear_static_cache = true
+			clear_plugin_cache = true
+			set_setting = true
+		elif arg == "--clear-download-cache":
+			clear_download_cache = true
+			set_setting = true
+
 		elif arg.begins_with("--plcache"):
 			main_cmds["plcache"] = true
 			prepop.append(get_arg_value(arg))
@@ -1696,6 +1712,11 @@ func handle_cli(args: PackedStringArray) -> bool:
 		print("ERROR: invalid option! Must specify only one of " + ", ".join(MAIN_COMMANDS))
 		ret_code = 1
 		return true
+
+	if clear_plugin_cache:
+		PluginManager.clear_plugin_cache(clear_static_cache)
+	if clear_download_cache:
+		PluginManager.clear_download_cache()
 
 	if main_cmds.size() == 0:
 		if (GDRESettings.is_headless() or not set_setting):

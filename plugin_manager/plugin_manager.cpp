@@ -723,6 +723,26 @@ Dictionary PluginManager::_get_plugin_info(const String &plugin_name, const Vect
 	return val.to_json();
 }
 
+void PluginManager::clear_plugin_cache(bool clear_static_cache) {
+	{
+		MutexLock lock(plugin_version_cache_mutex);
+		plugin_version_cache.clear();
+		if (!clear_static_cache) {
+			if (FileAccess::exists(STATIC_PLUGIN_CACHE_PATH)) {
+				load_plugin_version_cache_file(STATIC_PLUGIN_CACHE_PATH, true);
+			}
+		}
+	}
+	for (int i = 0; i < source_count; ++i) {
+		sources[i]->clear_cache();
+	}
+}
+
+void PluginManager::clear_download_cache() {
+	gdre::rimraf(get_plugin_download_cache_path());
+	gdre::ensure_dir(get_plugin_download_cache_path());
+}
+
 void PluginManager::_bind_methods() {
 	// ClassDB::bind_method(D_METHOD("get_plugin_version", "plugin_name", "version"), &PluginManager::get_plugin_version);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_plugin_info", "plugin_name", "hashes"), &PluginManager::_get_plugin_info);
@@ -732,6 +752,8 @@ void PluginManager::_bind_methods() {
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("register_source", "name", "source"), &PluginManager::register_source);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("unregister_source", "name"), &PluginManager::unregister_source);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("print_plugin_cache"), &PluginManager::print_plugin_cache);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("clear_plugin_cache", "clear_static_cache"), &PluginManager::clear_plugin_cache, DEFVAL(false));
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("clear_download_cache"), &PluginManager::clear_download_cache);
 }
 
 struct _PluginVersionSort {

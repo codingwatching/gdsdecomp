@@ -62,4 +62,6 @@ public:
 	static void register_source(Ref<PluginSource> source, bool at_front = false);
 	static void unregister_source(Ref<PluginSource> source);
 	static void print_plugin_cache();
+	static void clear_plugin_cache(bool clear_static_cache = false);
+	static void clear_download_cache();
 };

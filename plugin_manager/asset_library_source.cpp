@@ -447,3 +447,9 @@ Vector<ReleaseInfo> AssetLibrarySource::find_release_infos_by_tag(const String &
 	}
 	return release_infos;
 }
+
+void AssetLibrarySource::clear_cache() {
+	MutexLock lock(cache_mutex);
+	edit_list_cache.clear();
+	edit_cache.clear();
+}

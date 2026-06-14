@@ -485,3 +485,8 @@ Vector<ReleaseInfo> GitHubSource::find_release_infos_by_tag(const String &plugin
 	}
 	return release_infos;
 }
+
+void GitHubSource::clear_cache() {
+	MutexLock lock(cache_mutex);
+	release_cache.clear();
+}

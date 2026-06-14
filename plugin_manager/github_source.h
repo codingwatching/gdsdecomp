@@ -93,6 +93,6 @@ public:
 	void save_cache() override;
 	bool handles_plugin(const String &plugin_name) override;
 	bool is_default() override { return false; }
-	// void load_cache_data(const String &plugin_name, const Dictionary &data) override; // Deprecated
 	Vector<ReleaseInfo> find_release_infos_by_tag(const String &plugin_name, const String &tag, Error &r_error) override;
+	void clear_cache() override;
 };

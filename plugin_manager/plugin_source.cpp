@@ -168,6 +168,9 @@ Vector<ReleaseInfo> PluginSource::find_release_infos_by_tag(const String &plugin
 	ERR_FAIL_V_MSG({}, "Not implemented");
 }
 
+void PluginSource::clear_cache() {
+}
+
 void PluginSource::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_release_info", "plugin_name", "primary_id", "secondary_id"), &PluginSource::_get_release_info);
 	ClassDB::bind_method(D_METHOD("get_plugin_version_numbers", "plugin_name"), &PluginSource::_get_plugin_version_numbers);
