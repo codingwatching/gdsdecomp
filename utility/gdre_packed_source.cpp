@@ -522,54 +522,66 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 
 	return true;
 }
+namespace {
+static inline Ref<FileAccess> open_encrypted_file(PackedData::PackedFile *p_file, const String &p_path, const Vector<uint8_t> &p_decryption_key) {
+	Ref<FileAccess> base = FileAccess::open(p_file->pack, FileAccess::READ);
+	ERR_FAIL_COND_V_MSG(base.is_null(), nullptr, vformat("Can't open pack-referenced file '%s'.", String(p_path)));
+	base->seek(p_file->offset);
+	if (GDRESettings::get_singleton()->get_custom_decryptor().is_valid()) {
+		Ref<FileAccessEncryptedCustom> fae = FileAccessEncryptedCustom::create(GDRESettings::get_singleton()->get_custom_decryptor());
+		ERR_FAIL_COND_V_MSG(fae.is_null(), nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
+		Error err = fae->open_and_parse(base, p_decryption_key, FileAccessEncryptedCustom::MODE_READ, false);
+		ERR_FAIL_COND_V_MSG(err, nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
+		return fae;
+	}
+	Ref<FileAccessEncrypted> fae = memnew(FileAccessEncrypted);
+	ERR_FAIL_COND_V_MSG(fae.is_null(), nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
+	Error err = fae->open_and_parse(base, p_decryption_key, FileAccessEncrypted::MODE_READ, false);
+	ERR_FAIL_COND_V_MSG(err, nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
+	return fae;
+}
+} // namespace
+
+Ref<FileAccess> GDREPackedSource::get_bundled_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key) {
+	String simplified_path = p_path.simplify_path();
+	String search_path = simplified_path;
+	auto pf = PackedData::PackedFile(*p_file);
+	pf.offset = 0;
+
+	Ref<FileAccess> file;
+
+	if (!pf.salt.is_empty()) {
+		search_path = "res://" + (simplified_path + pf.salt).sha256_text();
+	}
+
+	if (APKArchive::get_singleton() && APKArchive::get_singleton()->file_exists(search_path)) {
+		// APKArchive ignores the pf file, so no need to modify it
+		file = APKArchive::get_singleton()->get_file(search_path, &pf);
+	} else if (DirSource::get_singleton() && DirSource::get_singleton()->file_exists(search_path)) {
+		pf.pack = DirSource::get_singleton()->get_pack_path(search_path);
+		file = DirSource::get_singleton()->get_file(search_path, &pf);
+	}
+
+	ERR_FAIL_COND_V_MSG(file.is_null(), nullptr, vformat("APKArchive or DirSource doesn't contain sparse pack-referenced file '%s'.", p_path));
+
+	if (pf.encrypted) {
+		file = open_encrypted_file(&pf, p_path, p_decryption_key);
+	}
+
+	return file;
+}
 
 Ref<FileAccess> GDREPackedSource::get_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key) {
 	// if we call the constructor for FileAccessPack if it's a bundle,
 	// it'll cause an infinite loop; we need to just create the thing ourselves
 	Ref<FileAccess> file;
 	if (p_file->bundle) {
-		String simplified_path = p_path.simplify_path();
-		String search_path = simplified_path;
-		auto pf = PackedData::PackedFile(*p_file);
-		pf.offset = 0;
-
-		if (!pf.salt.is_empty()) {
-			search_path = "res://" + (simplified_path + pf.salt).sha256_text();
-		}
-
-		if (APKArchive::get_singleton() && APKArchive::get_singleton()->file_exists(search_path)) {
-			// APKArchive ignores the pf file, so no need to modify it
-			file = APKArchive::get_singleton()->get_file(search_path, &pf);
-		} else if (DirSource::get_singleton() && DirSource::get_singleton()->file_exists(search_path)) {
-			pf.pack = DirSource::get_singleton()->get_pack_path(search_path);
-			file = DirSource::get_singleton()->get_file(search_path, &pf);
-		}
-
-		ERR_FAIL_COND_V_MSG(file.is_null(), nullptr, vformat("APKArchive or DirSource doesn't contain sparse pack-referenced file '%s'.", p_path));
-
-		if (pf.encrypted) {
-			Ref<FileAccessEncrypted> fae;
-			fae.instantiate();
-			ERR_FAIL_COND_V_MSG(fae.is_null(), nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
-
-			Vector<uint8_t> key = GDRESettings::get_singleton()->get_encryption_key();
-
-			Error err = fae->open_and_parse(file, key, FileAccessEncrypted::MODE_READ, false);
-			ERR_FAIL_COND_V_MSG(err, nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
-			file = fae;
-		}
+		file = get_bundled_file(p_path, p_file, p_decryption_key.is_empty() ? GDRESettings::get_singleton()->get_encryption_key() : p_decryption_key);
+		ERR_FAIL_COND_V_MSG(file.is_null(), nullptr, vformat("Can't open bundled pack-referenced file '%s'.", String(p_path)));
 	} else {
 		if (p_file->encrypted && GDRESettings::get_singleton()->get_custom_decryptor().is_valid()) {
-			Ref<FileAccess> base = FileAccess::open(p_file->pack, FileAccess::READ);
-			ERR_FAIL_COND_V_MSG(base.is_null(), nullptr, vformat("Can't open pack-referenced file '%s'.", String(p_path)));
-			base->seek(p_file->offset);
-
-			Ref<FileAccessEncryptedCustom> fae = FileAccessEncryptedCustom::create(GDRESettings::get_singleton()->get_custom_decryptor());
-			ERR_FAIL_COND_V_MSG(fae.is_null(), nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
-			Vector<uint8_t> key = GDRESettings::get_singleton()->get_encryption_key();
-			Error err = fae->open_and_parse(base, key, FileAccessEncryptedCustom::MODE_READ, false);
-			ERR_FAIL_COND_V_MSG(err, nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
-			file = fae;
+			file = open_encrypted_file(p_file, p_path, p_decryption_key.is_empty() ? GDRESettings::get_singleton()->get_encryption_key() : p_decryption_key);
+			ERR_FAIL_COND_V_MSG(file.is_null(), nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
 		} else {
 			// otherwise...
 			file = Ref<FileAccess>(memnew(FileAccessPack(p_path, *p_file)));

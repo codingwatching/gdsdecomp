@@ -36,6 +36,8 @@ public:
 	static bool has_embedded_pck(const String &p_path);
 	static bool get_exe_embedded_pck_info(const String &p_path, GDREPackedSource::EXEPCKInfo &r_info);
 	static bool seek_offset_from_exe(Ref<FileAccess> f, const String &p_path, uint64_t &r_pck_size, const PackedByteArray &custom_magic = PackedByteArray());
+	static Ref<FileAccess> get_bundled_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key = Vector<uint8_t>());
+
 	virtual bool try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset = 0, const Vector<uint8_t> &p_decryption_key = Vector<uint8_t>()) override;
 	virtual Ref<FileAccess> get_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key = Vector<uint8_t>()) override;
 };
