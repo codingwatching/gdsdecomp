@@ -17,6 +17,10 @@ static constexpr int64_t LOG_MESSAGE_THRESHOLD_MS = 200;
 static constexpr int64_t LOG_MAX_LINES = 100000;
 
 void GodotREEditorStandalone::write_log_message(const String &p_message) {
+	// Don't pollute the editor's instance with log messages
+	if (Engine::get_singleton()->is_editor_hint()) {
+		return;
+	}
 	// find a child with the name "log_window"
 	uint64_t current_time = OS::get_singleton()->get_ticks_msec();
 	if (!log_message_buffer.try_push(p_message)) {
@@ -68,25 +72,27 @@ void GodotREEditorStandalone::flush_log_message_buffer(uint64_t current_time) {
 	if (!log_window) {
 		return;
 	}
-	String text = log_window->get_text() + queue_string;
-	int line_count = text.count("\n");
+	String full_text = log_window->get_text() + queue_string;
+	int line_count = full_text.count("\n");
 	if (line_count > LOG_MAX_LINES) {
 		int new_lines_to_remove = line_count - 10000;
 		auto found = -1;
 		while (new_lines_to_remove > 0) {
-			auto new_found = text.find_char('\n', found + 1);
+			auto new_found = full_text.find_char('\n', found + 1);
 			if (new_found == String::npos) {
 				break;
 			}
 			found = new_found;
 			new_lines_to_remove--;
 		}
-		text = text.substr(found + 1);
+		full_text = full_text.substr(found + 1);
+		log_window->set_text(full_text);
+		// this forces it to scroll to vscroll max
+		log_window->scroll_to_paragraph(INT_MAX);
+	} else {
+		log_window->add_text(queue_string);
 	}
 	last_log_message_time = OS::get_singleton()->get_ticks_msec();
-	log_window->set_text(text);
-	// this forces it to scroll to vscroll max
-	log_window->scroll_to_paragraph(INT_MAX);
 }
 
 String GodotREEditorStandalone::get_version() {
