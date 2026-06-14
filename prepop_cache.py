@@ -79,6 +79,7 @@ def get_godot_arch():
     else:
         raise ValueError(f"Unsupported architecture: {platform.machine()}")
 
+CLEAR_ALL = os.getenv("CLEAR_ALL", "0") != "0"
 DEV_MODE = os.getenv("DEV_MODE", "0") != "0"
 GODOT_EXE = os.path.join(BIN_DIR, f"godot.{get_godot_platform()}.editor.{('dev.' if DEV_MODE else '')}{get_godot_arch()}")
 ARGS = [GODOT_EXE, "--headless", "--path", STANDALONE_DIR]
@@ -137,6 +138,9 @@ def prepop_cache():
     # set the environment variable
     os.environ[CACHE_DIR_ENV_VAR] = TEMP_CACHE_DIR
     args: list[str] = ARGS.copy()
+    if CLEAR_ALL:
+        args.append("--clear-plugin-cache-including-static")
+        args.append("--clear-download-cache")
     for plugin in PLUGINS_TO_PREPOP:
         args.append(f"--plcache={plugin}")
     args.append(f"--output={JSON_TMP_PATH}")
