@@ -43,7 +43,8 @@ INCLUDE_DIRS = [
     LIBVORBIS_THIRDPARTY_DIR,
     LIBTHEORA_THIRDPARTY_DIR,
     MBEDTLS_THIRDPARTY_DIR,
-    UNSIGNED_HASH_INCLUDE_DIR
+    UNSIGNED_HASH_INCLUDE_DIR,
+    AXML_DEC_INCLUDE_DIR,
 ]
 
 # TODO: Keep static branch intact for future use. Runtime/dotnet issues still block rollout.
@@ -116,6 +117,7 @@ common_sources = [
     "main/*.cpp",
     "plugin_manager/*.cpp",
     "utility/*.cpp",
+    "external/axmldec/lib/jitana/util/*.cpp",
     "external/tga/*.cpp",
     "external/tinygltf/tiny_gltf.cc",
     "module_etc_decompress/*.cpp",

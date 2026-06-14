@@ -16,6 +16,7 @@ UNSIGNED_HASH_SRC_DIR = f'{UNSIGNED_HASH_DIR}/src'
 MODULE_INCLUDE_DIR = "#modules/gdsdecomp/"
 VTRACER_INCLUDE_DIR = "#modules/gdsdecomp/external/vtracer/include"
 GODOT_MONO_DECOMP_INCLUDE_DIR = "#modules/gdsdecomp/godot-mono-decomp/GodotMonoDecompNativeAOT/include"
+AXML_DEC_INCLUDE_DIR = "#modules/gdsdecomp/external/axmldec/include"
 
 VTRACER_PREFIX = "external/vtracer"
 VTRACER_LIBS = ["vtracer"]

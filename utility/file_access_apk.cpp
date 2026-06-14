@@ -28,6 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 #include "file_access_apk.h"
+#include "core/error/error_list.h"
 #include "core/error/error_macros.h"
 #include "core/io/file_access_memory.h"
 #include "core/io/zip_io.h"
@@ -35,13 +36,14 @@
 #ifdef MINIZIP_ENABLED
 #include "thirdparty/minizip/ioapi.h"
 
-#include "axml_parser.h"
 #include "file_access_gdre.h"
 #include "gdre_settings.h"
 
 #include "core/io/file_access.h"
 #include "core/io/json.h"
 #include "modules/zip/zip_reader.h"
+
+#include "external/axmldec/include/jitana/util/axml_parser.hpp"
 
 APKArchive *APKArchive::instance = nullptr;
 
@@ -163,24 +165,64 @@ unzFile APKArchive::get_file_handle(String p_file) const {
 	return pkg;
 }
 
-Error APKArchive::get_version_string_from_manifest(String &version_string) {
+Error APKArchive::get_manifest_info(ManifestInfo &r_manifest_info) {
 	Ref<FileAccessAPK> thing = memnew(FileAccessAPK("AndroidManifest.xml"));
 	Vector<uint8_t> buf;
 	buf.resize(thing->get_length());
 	thing->get_buffer(buf.ptrw(), thing->get_length());
 
-	return get_version_string_from_manifest_buffer(buf, version_string);
+	return get_manifest_info_from_buffer(buf, r_manifest_info);
 }
 
-Error APKArchive::get_version_string_from_manifest_buffer(Vector<uint8_t> &p_buf, String &version_string) {
-	AXMLParser parser;
-	Error err = parser.parse_manifest(p_buf);
-	ERR_FAIL_COND_V_MSG(err, err, "Failed to parse manifest!");
-	//right now we are only interested in the version
-	String ver_string = parser.get_godot_library_version_string();
-	// Godot 2.x did not write version strings to the manifest
-	if (!ver_string.is_empty()) {
-		version_string = ver_string;
+namespace {
+std::vector<jitana::xml_node>::const_iterator find_first_node(const jitana::xml_node &node, const std::string &name) {
+	auto result = std::find_if(node.children.begin(), node.children.end(), [name](const jitana::xml_node &child) {
+		return child.name == name;
+	});
+	return result;
+}
+
+std::vector<jitana::xml_node>::const_iterator find_first_node_with_attribute_value(const jitana::xml_node &node, const std::string &name, const std::string &attribute_name, const std::string &attribute_value) {
+	auto result = std::find_if(node.children.begin(), node.children.end(), [&name, &attribute_name, &attribute_value](const jitana::xml_node &child) {
+		if (child.name == name) {
+			auto attribute = child.get_attribute_value(attribute_name);
+			return attribute.has_value() && *attribute == attribute_value;
+		}
+		return false;
+	});
+	return result;
+}
+} //namespace
+
+Error APKArchive::get_manifest_info_from_buffer(Vector<uint8_t> &p_buf, ManifestInfo &r_manifest_info) {
+	jitana::xml_node root;
+	if (auto err = jitana::read_axml(p_buf.ptr(), p_buf.size(), root); err) {
+		return ERR_FILE_CORRUPT;
+	}
+	if (root.children.size() == 0) {
+		return ERR_FILE_CORRUPT;
+	}
+	auto manifest_node = root.children[0];
+	if (auto version_name = manifest_node.get_attribute_value("android:versionName")) {
+		r_manifest_info.app_version_name.append_utf8(version_name->c_str(), version_name->size());
+	}
+	if (auto version_code = manifest_node.get_attribute_value("android:versionCode")) {
+		r_manifest_info.app_version_code = std::stoi(*version_code);
+	}
+	if (auto package_name = manifest_node.get_attribute_value("package")) {
+		r_manifest_info.package_name.append_utf8(package_name->c_str(), package_name->size());
+	}
+	if (auto application_node = find_first_node(manifest_node, "application"); application_node != manifest_node.children.end()) {
+		if (auto editor_version_node = find_first_node_with_attribute_value(*application_node, "meta-data", "android:name", "org.godotengine.editor.version"); editor_version_node != application_node->children.end()) {
+			if (auto value = editor_version_node->get_attribute_value("android:value")) {
+				r_manifest_info.godot_editor_version_string.append_utf8(value->c_str(), value->size());
+			}
+		}
+		if (auto library_version_node = find_first_node_with_attribute_value(*application_node, "meta-data", "android:name", "org.godotengine.library.version"); library_version_node != application_node->children.end()) {
+			if (auto value = library_version_node->get_attribute_value("android:value")) {
+				r_manifest_info.godot_library_version_string.append_utf8(value->c_str(), value->size());
+			}
+		}
 	}
 	return OK;
 }
@@ -210,7 +252,9 @@ public:
 	}
 };
 
-static bool handle_xapk(const String &pack_path, String &ver_string, Vector<uint8_t> &install_pack_f) {
+} //namespace
+
+bool APKArchive::handle_xapk(const String &pack_path, ManifestInfo &r_manifest_info, Vector<uint8_t> &install_pack_f) {
 	// TODO: handle expansions too
 	Ref<ZIPReader> zip_reader = memnew(ZIPReader);
 	Error err = zip_reader->open(pack_path);
@@ -257,18 +301,16 @@ static bool handle_xapk(const String &pack_path, String &ver_string, Vector<uint
 			Error err = base_pack_reader->open_file(base_pack_f);
 			if (err == OK) {
 				auto manifest_buf = base_pack_reader->read_file("AndroidManifest.xml", false);
-				err = APKArchive::get_version_string_from_manifest_buffer(manifest_buf, ver_string);
+				err = APKArchive::get_manifest_info_from_buffer(manifest_buf, r_manifest_info);
 			}
 			if (err != OK) {
 				WARN_PRINT("Failed to parse base APK manifest!");
-				ver_string = "unknown";
 			}
 		}
 	}
 	install_pack_f = zip_reader->read_file(install_time_pack_name, false);
 	return true;
 }
-} //namespace
 
 bool APKArchive::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key) {
 	// load with offset feature only supported for PCK files
@@ -281,13 +323,13 @@ bool APKArchive::try_open_pack(const String &p_path, bool p_replace_files, uint6
 	if (!is_apk && ext != "zip" && !is_xapk) {
 		return false;
 	}
-	String ver_string = "unknown";
+	ManifestInfo manifest_info;
 	zlib_filefunc64_def io;
 	memset(&io, 0, sizeof(io));
 	Package pkg;
 	pkg.filename = pack_path;
 
-	if (is_xapk && !handle_xapk(pack_path, ver_string, pkg.install_pack_buf)) {
+	if (is_xapk && !handle_xapk(pack_path, manifest_info, pkg.install_pack_buf)) {
 		return false;
 	}
 
@@ -334,7 +376,7 @@ bool APKArchive::try_open_pack(const String &p_path, bool p_replace_files, uint6
 		if (is_apk) {
 			if (original_fname == "AndroidManifest.xml") {
 				files[original_fname] = f;
-				if (get_version_string_from_manifest(ver_string) != OK) {
+				if (get_manifest_info(manifest_info) != OK) {
 					WARN_PRINT("Failed to parse APK manifest!");
 				}
 				// reset the position
@@ -373,12 +415,12 @@ bool APKArchive::try_open_pack(const String &p_path, bool p_replace_files, uint6
 			unzGoToNextFile(zfile);
 		}
 	}
-	if (ver_string == "unknown" || ver_string.is_empty()) {
+	if (manifest_info.godot_library_version_string == "unknown" || manifest_info.godot_library_version_string.is_empty()) {
 		// Godot 2.x did not set a version string in the manifest, and there's no other easy way to get it
 		// get it from the bin resources
 		WARN_PRINT("Could not retrieve version string from AndroidManifest.xml");
 	} else {
-		godot_ver = GodotVer::parse(ver_string);
+		godot_ver = GodotVer::parse(manifest_info.godot_library_version_string);
 	}
 
 	Ref<GDRESettings::PackInfo> pckinfo;

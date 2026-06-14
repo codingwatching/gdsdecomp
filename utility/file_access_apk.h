@@ -52,15 +52,23 @@ private:
 		unzFile zfile = nullptr;
 		Vector<uint8_t> install_pack_buf;
 	};
+	struct ManifestInfo {
+		String package_name;
+		String app_version_name;
+		int64_t app_version_code;
+		String godot_editor_version_string;
+		String godot_library_version_string;
+	};
 	Vector<Package> packages;
 
 	HashMap<String, File> files;
 
 	static APKArchive *instance;
-	Error get_version_string_from_manifest(String &version_string);
+	bool handle_xapk(const String &pack_path, ManifestInfo &r_manifest_info, Vector<uint8_t> &install_pack_f);
+	Error get_manifest_info(ManifestInfo &r_manifest_info);
 
 public:
-	static Error get_version_string_from_manifest_buffer(Vector<uint8_t> &p_buf, String &version_string);
+	static Error get_manifest_info_from_buffer(Vector<uint8_t> &p_buf, ManifestInfo &r_manifest_info);
 
 	void close_handle(unzFile p_file) const;
 	unzFile get_file_handle(String p_file) const;
