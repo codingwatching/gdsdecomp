@@ -7,7 +7,6 @@
 
 #include "core/io/file_access_encrypted.h"
 #include "core/io/file_access_pack.h"
-#include "core/object/script_language.h"
 #include "utility/file_access_patched_gdre.h"
 
 static_assert(PACK_FORMAT_VERSION == GDREPackedSource::CURRENT_PACK_FORMAT_VERSION, "Pack format version changed.");
@@ -174,10 +173,23 @@ bool GDREPackedSource::is_executable(const String &p_path) {
 	}
 	return seek_after_magic_unix(f);
 }
+namespace {
+static inline bool check_magic(const Ref<FileAccess> &f, const PackedByteArray &custom_magic) {
+	if (!custom_magic.is_empty()) {
+		for (int i = 0; i < custom_magic.size(); i++) {
+			if (f->get_8() != custom_magic[i]) {
+				return false;
+			}
+		}
+		return true;
+	} else {
+		return f->get_32() == PACK_HEADER_MAGIC;
+	}
+}
+} // namespace
 
-bool GDREPackedSource::_get_exe_embedded_pck_info(Ref<FileAccess> f, const String &p_path, EXEPCKInfo &r_info) {
+bool GDREPackedSource::_get_exe_embedded_pck_info(Ref<FileAccess> f, const String &p_path, EXEPCKInfo &r_info, const PackedByteArray &custom_magic) {
 	bool pck_header_found = false;
-	uint32_t magic = 0;
 	if (f.is_null()) {
 		return false;
 	}
@@ -189,11 +201,10 @@ bool GDREPackedSource::_get_exe_embedded_pck_info(Ref<FileAccess> f, const Strin
 		for (int i = 0; i < 8; i++) {
 			f->seek(r_info.pck_actual_off);
 
-			magic = f->get_32();
-			if (magic == PACK_HEADER_MAGIC) {
+			if (check_magic(f, custom_magic)) {
 				uint64_t ret_pos = f->get_position();
 				f->seek(r_info.pck_embed_off + r_info.pck_embed_size - 4);
-				if (f->get_32() == PACK_HEADER_MAGIC) {
+				if (check_magic(f, custom_magic)) {
 					f->seek(r_info.pck_embed_off + r_info.pck_embed_size - 12);
 					r_info.pck_actual_size = f->get_64();
 				} else {
@@ -211,17 +222,15 @@ bool GDREPackedSource::_get_exe_embedded_pck_info(Ref<FileAccess> f, const Strin
 	{
 		f->seek_end();
 		f->seek(f->get_position() - 4);
-		magic = f->get_32();
 
-		if (magic == PACK_HEADER_MAGIC) {
+		if (check_magic(f, custom_magic)) {
 			f->seek(f->get_position() - 12);
 			r_info.pck_actual_size = f->get_64();
 			r_info.pck_embed_size = r_info.pck_actual_size + 12; // pck_size + magic at the end
 			f->seek(f->get_position() - r_info.pck_actual_size - 8);
 			r_info.pck_embed_off = f->get_position();
 			r_info.pck_actual_off = r_info.pck_embed_off;
-			magic = f->get_32();
-			if (magic == PACK_HEADER_MAGIC) {
+			if (check_magic(f, custom_magic)) {
 				return true;
 			}
 		}
@@ -231,7 +240,7 @@ bool GDREPackedSource::_get_exe_embedded_pck_info(Ref<FileAccess> f, const Strin
 	return false;
 }
 
-bool GDREPackedSource::seek_offset_from_exe(Ref<FileAccess> f, const String &p_path, uint64_t &r_pck_size) {
+bool GDREPackedSource::seek_offset_from_exe(Ref<FileAccess> f, const String &p_path, uint64_t &r_pck_size, const PackedByteArray &custom_magic) {
 	EXEPCKInfo info;
 	auto ret = _get_exe_embedded_pck_info(f, p_path, info);
 #ifdef DEBUG_ENABLED
