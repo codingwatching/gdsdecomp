@@ -14,6 +14,7 @@
 #include "exporters/scene_exporter.h"
 #include "exporters/translation_exporter.h"
 #include "gdre_logger.h"
+#include "plugin_manager/plugin_manager.h"
 #include "utility/common.h"
 #include "utility/gdre_config.h"
 #include "utility/gdre_settings.h"
@@ -620,6 +621,7 @@ void ImportExporter::rewrite_metadata(ExportToken &token) {
 				Ref<FileAccess> f = FileAccess::open(output_md_path, FileAccess::WRITE);
 				if (!f.is_null()) {
 					// empty dictionary
+					// p_real_t_is_double doesn't matter here because we're only storing an empty dictionary
 					store_var_compat(f, Dictionary(), iinfo->get_ver_major());
 				}
 			}
@@ -717,7 +719,9 @@ Error ImportExporter::unzip_and_copy_addon(const Ref<ImportInfoGDExt> &iinfo, co
 		ERR_CONTINUE(DirAccess::copy_absolute(tmp_dir.path_join(file), output.path_join(file)) != OK);
 	}
 	gdre::rimraf(parent_tmp_dir);
-	da->remove(zip_path);
+	if (!zip_path.begins_with(PluginManager::get_plugin_download_cache_path())) {
+		da->remove(zip_path);
+	}
 	return OK;
 }
 
@@ -758,7 +762,7 @@ void write_project_metadata_cfg(const String &p_output_dir) {
 			WARN_PRINT("Failed to load project metadata: " + output_path);
 		}
 	}
-	String _custom_features = get_settings()->get_project_setting("_custom_features");
+	String _custom_features = get_settings()->get_project_setting("_custom_features", "");
 	project_metadata->set_value(debug_options_section_key, main_feature_tags_key, _custom_features);
 	gdre::ensure_dir(output_path.get_base_dir());
 	Error err = project_metadata->save(output_path);
@@ -951,6 +955,19 @@ struct ProcessRunnerStruct : public TaskRunnerStruct {
 	}
 };
 
+bool detect_uses_prebuilt_steam_template() {
+	String glob = DirAccess::dir_exists_absolute("res://addons") ? "res://addons/*" : "res://Addons/*";
+	auto globs = Glob::glob(glob, true);
+	for (int i = 0; i < globs.size(); i++) {
+		// If it uses the plugin, it doesn't use the prebuilt steam template
+		if (globs[i].to_lower().contains("godotsteam")) {
+			return false;
+		}
+	}
+
+	return GDRESettings::get_singleton()->detected_godotsteam_usage();
+}
+
 // export all the imported resources
 Error ImportExporter::export_imports(const String &p_out_dir, const Vector<String> &_files_to_export) {
 	ERR_FAIL_COND_V_MSG(p_out_dir.is_empty(), ERR_INVALID_PARAMETER, "Output directory is empty!");
@@ -969,29 +986,19 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 		return OK;
 	}
 
-	ResourceCompatLoader::make_globally_available();
-	ResourceCompatLoader::set_default_gltf_load(false);
+	bool resource_compat_loader_was_available = ResourceCompatLoader::is_globally_available();
+	if (!resource_compat_loader_was_available) {
+		WARN_PRINT("WARNING: ResourceCompatLoader is not globally available! Making it available...");
+		ResourceCompatLoader::make_globally_available();
+	}
 
 	bool partial_export = (_files_to_export.size() > 0 && _files_to_export.size() != get_settings()->get_file_info_list({}).size());
 	size_t export_files_count = partial_export ? _files_to_export.size() : _files.size();
 	const HashSet<String> files_to_export_set = vector_to_hashset(partial_export ? _files_to_export : get_settings()->get_file_list());
 
+	report->uses_double_precision = GDRESettings::get_singleton()->requires_double_precision();
 	// *** Detect steam
-	if (get_settings()->is_project_config_loaded()) {
-		String custom_settings = get_settings()->get_project_setting("_custom_features");
-		if (custom_settings.to_lower().contains("steam")) {
-			report->godotsteam_detected = true;
-			// now check if the godotsteam plugin is in the addons directory
-			// If it is, we won't report it as detected, because you don't need the godotsteam editor to edit the project
-			auto globs = Glob::glob("res://addons/*", true);
-			for (int i = 0; i < globs.size(); i++) {
-				if (globs[i].to_lower().contains("godotsteam")) {
-					report->godotsteam_detected = false;
-					break;
-				}
-			}
-		}
-	}
+	report->godotsteam_detected = detect_uses_prebuilt_steam_template();
 	std::shared_ptr<ProcessRunnerStruct> process_runner;
 	TaskManager::TaskManagerID process_runner_task_id = -1;
 	auto check_process_done = [&](bool p_cancelled = false) {
@@ -1008,12 +1015,21 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 		return false;
 	};
 
+	bool ran_prebatch_export = false;
+
 	auto reset_before_return = [&](bool cancelled = false) {
+		if (ran_prebatch_export) {
+			for (int i = 0; i < Exporter::exporter_count; i++) {
+				Exporter::exporters[i]->postbatch_export();
+			}
+			ran_prebatch_export = false;
+		}
 		if (cancelled) {
 			print_line("Export cancelled!");
 		}
-		ResourceCompatLoader::unmake_globally_available();
-		ResourceCompatLoader::set_default_gltf_load(false);
+		if (!resource_compat_loader_was_available) {
+			ResourceCompatLoader::unmake_globally_available();
+		}
 		check_process_done(cancelled);
 	};
 
@@ -1089,9 +1105,10 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 	Vector<ExportToken> non_high_priority_tokens;
 	Vector<ExportToken> tokens;
 	Vector<ExportToken> non_multithreaded_tokens;
-	Vector<Ref<ImportInfo>> scene_tokens;
+	Vector<ExportToken> scene_tokens;
 	HashMap<String, Vector<Ref<ImportInfo>>> export_dest_to_iinfo;
 	HashSet<String> dupes;
+	bool force_single_threaded = GDREConfig::get_singleton()->get_setting("force_single_threaded", false);
 	for (int i = 0; i < _files.size(); i++) {
 		Ref<ImportInfo> iinfo = _files[i];
 		if (partial_export && !hashset_intersects_vector(files_to_export_set, iinfo->get_dest_files())) {
@@ -1147,17 +1164,15 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 				continue;
 			}
 		}
-		bool supports_multithreading = !GDREConfig::get_singleton()->get_setting("force_single_threaded", false);
+		bool supports_multithreading = !force_single_threaded;
 		bool is_high_priority = importer == "gdextension" || importer == "gdnative";
+		bool is_scene = false;
 		if (exporter_map.has(importer)) {
 			auto &exporter = exporter_map.get(importer);
-			if (exporter->get_name() == "PackedScene") {
-				scene_tokens.push_back(iinfo);
-				export_dest_to_iinfo.insert(iinfo->get_export_dest(), Vector<Ref<ImportInfo>>({ iinfo }));
-				continue;
-			} else if (!exporter->supports_multithread()) {
+			if (!exporter->supports_multithread()) {
 				supports_multithreading = false;
 			}
+			is_scene = exporter->get_name() == "PackedScene";
 		} else {
 			// Non-exportable resource that wasn't imported or auto-converted, don't report it
 			if (iinfo->get_ver_major() <= 2 && !iinfo->is_import() && !iinfo->is_auto_converted()) {
@@ -1165,15 +1180,17 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 			}
 			supports_multithreading = false;
 		}
-		if (is_high_priority) {
-			if (supports_multithreading) {
+		if (supports_multithreading) {
+			if (is_scene) {
+				scene_tokens.push_back({ iinfo, nullptr, supports_multithreading });
+			} else if (is_high_priority) {
 				tokens.insert(0, { iinfo, nullptr, supports_multithreading });
 			} else {
-				non_multithreaded_tokens.insert(0, { iinfo, nullptr, supports_multithreading });
+				non_high_priority_tokens.push_back({ iinfo, nullptr, supports_multithreading });
 			}
 		} else {
-			if (supports_multithreading) {
-				non_high_priority_tokens.push_back({ iinfo, nullptr, supports_multithreading });
+			if (is_high_priority) {
+				non_multithreaded_tokens.insert(0, { iinfo, nullptr, supports_multithreading });
 			} else {
 				non_multithreaded_tokens.push_back({ iinfo, nullptr, supports_multithreading });
 			}
@@ -1187,7 +1204,28 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 	}
 	// Shuffle the vector to prevent situations where a bunch of large resources are exported at once and exhausts the memory
 	gdre::shuffle_vector(non_high_priority_tokens);
-	tokens.append_array(non_high_priority_tokens);
+
+	if (scene_tokens.is_empty()) {
+		tokens.append_array(non_high_priority_tokens);
+	} else if (non_high_priority_tokens.is_empty()) {
+		tokens.append_array(scene_tokens);
+	} else {
+		// Evenly distribute scene exports among non-high-priority exports.
+		int scene_idx = 0;
+		const int non_scene_count = non_high_priority_tokens.size();
+		const int scene_count = scene_tokens.size();
+		for (int i = 0; i < non_scene_count; i++) {
+			tokens.push_back(non_high_priority_tokens[i]);
+			while (scene_idx < scene_count && int64_t(i + 1) * int64_t(scene_count) >= int64_t(scene_idx + 1) * int64_t(non_scene_count)) {
+				tokens.push_back(scene_tokens[scene_idx]);
+				scene_idx++;
+			}
+		}
+		while (scene_idx < scene_count) {
+			tokens.push_back(scene_tokens[scene_idx]);
+			scene_idx++;
+		}
+	}
 
 	pr->set_progress_length(false, tokens.size() + non_multithreaded_tokens.size());
 
@@ -1300,6 +1338,11 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 
 	int64_t num_multithreaded_tokens = tokens.size();
 	// ***** Export resources *****
+
+	for (int i = 0; i < Exporter::exporter_count; i++) {
+		Exporter::exporters[i]->prebatch_export();
+	}
+	ran_prebatch_export = true;
 	GDRELogger::clear_error_queues();
 	if (tokens.size() > 0) {
 		err = TaskManager::get_singleton()->run_multithreaded_group_task(
@@ -1333,24 +1376,6 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 		return err;
 	}
 
-	if (scene_tokens.size() > 0) {
-		if (GDRESettings::get_singleton()->is_headless()) {
-			print_line("WARNING: Some scenes can fail to export in headless mode. This is due to a limitation of the Godot engine.\n"
-					   "If some scenes fail to export, try running in GUI mode.");
-		}
-		// intentionally not checking for cancellation here; scene export can sometimes hang on certain scenes, and we don't want to cancel the entire export
-		auto reports = SceneExporter::get_singleton()->batch_export_files(output_dir, scene_tokens);
-		for (int i = 0; i < reports.size(); i++) {
-			ExportToken token = { reports[i]->get_import_info(), reports[i], false };
-			rewrite_metadata(token);
-			non_multithreaded_tokens.push_back(token);
-		}
-	}
-
-	if (err != OK) {
-		reset_before_return(true);
-		return err;
-	}
 	tokens.append_array(non_multithreaded_tokens);
 	pr->step("Finalizing...", tokens.size() - 1, false);
 	pr->set_progress_length(true);
@@ -1503,32 +1528,11 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 	// Need to recreate the uid files for the exported resources
 	// check if we're at version 4.4 or higher
 	if ((get_ver_major() == 4 && get_ver_minor() >= 4) || get_ver_major() > 4) {
-		static const Vector<String> non_custom_uid_filters = {
-			"*.image",
-			"*.gdextension",
-			"*.gd",
-			// "*.gdc", -- these show up outside of res://.godot, so we don't want to recreate them
-			"*.ctex",
-			"*.ctexarray",
-			"*.ccube",
-			"*.ccubearray",
-			"*.ctex3d",
-			"*.shader",
-			"*.gdshader",
-			"*.gdshaderinc",
-			"*.dds",
-			"*.ktx",
-			"*.ktx2",
-			"*.ogv",
-			"*.cs"
-		};
-		auto non_custom_uid_files = get_settings()->get_file_list(non_custom_uid_filters);
-		for (int i = 0; i < non_custom_uid_files.size(); i++) {
-			// any hidden directory
-			if (non_custom_uid_files[i].begins_with("res://.")) {
-				continue;
+		auto uid_cache = get_settings()->get_uid_cache();
+		for (auto E : uid_cache) {
+			if (!ResourceCompatLoader::has_custom_uid_support(E.key)) {
+				recreate_uid_file(E.key, false, files_to_export_set);
 			}
-			recreate_uid_file(non_custom_uid_files[i], false, files_to_export_set);
 		}
 	}
 
@@ -1998,6 +2002,16 @@ Dictionary ImportExporterReport::get_session_notes() {
 	base_ext_set.insert("ogg");
 	base_ext_set.insert("mp3");
 
+	if (uses_double_precision) {
+#if !REAL_T_IS_DOUBLE
+		Dictionary double_precision_warning;
+		double_precision_warning["title"] = "Inaccurate Project Export";
+		double_precision_warning["message"] = "This version of GDRE Tools was built with single precision, but this project uses double precision.\nResources exported with this version may be inaccurate.";
+		double_precision_warning["details"] = PackedStringArray();
+		notes["double_precision_warning"] = double_precision_warning;
+#endif
+	}
+
 	if (custom_version_detected) {
 		Dictionary custom_version;
 		custom_version["title"] = "Custom Godot engine version detected";
@@ -2098,7 +2112,7 @@ String ImportExporterReport::get_totals_string() {
 	auto failed_rewrite_md = _get_failed_rewrite_md();
 	report += vformat("%-40s", "Totals: ") + String("\n");
 	report += vformat("%-40s", "Decompiled scripts: ") + itos(decompiled_scripts.size()) + String("\n");
-	report += vformat("%-40s", "Failed scripts: ") + itos(failed_scripts.size()) + String("\n");
+	report += vformat("%-40s", "Scripts not decompiled: ") + itos(failed_scripts.size()) + String("\n");
 	report += vformat("%-40s", "Imported resources for export session: ") + itos(session_files_total) + String("\n");
 	report += vformat("%-40s", "Successfully converted: ") + itos(success.size()) + String("\n");
 	if (opt_lossy) {
@@ -2124,7 +2138,7 @@ Dictionary ImportExporterReport::get_section_labels() {
 	labels["success"] = "Successfully converted";
 	labels["decompiled_scripts"] = "Decompiled scripts";
 	labels["not_converted"] = "Not converted";
-	labels["failed_scripts"] = "Failed scripts";
+	labels["failed_scripts"] = "Scripts not decompiled";
 	labels["failed"] = "Failed conversions";
 	labels["lossy_imports"] = "Lossy imports";
 	labels["rewrote_metadata"] = "Rewrote metadata";
@@ -2355,9 +2369,13 @@ String ImportExporterReport::get_editor_message_string() {
 	}
 	report += "Use Godot editor version " + version_text + " to edit the project." + String("\n");
 	if (godotsteam_detected) {
-		report += "GodotSteam can be found here: https://github.com/CoaguCo-Industries/GodotSteam/releases \n";
+		report += "GodotSteam can be found here: https://codeberg.org/GodotSteam/GodotSteam/releases \n";
 	}
-	if (custom_version_detected) {
+	if (uses_double_precision) {
+		report += "This Project requires a Godot engine built with double precision." + String("\n");
+		report += "You must build the engine with `precision=double` flag to edit this project." + String("\n");
+		report += "See https://docs.godotengine.org/en/stable/engine_details/development/compiling/index.html for more information." + String("\n");
+	} else if (custom_version_detected) {
 		report += "Custom Godot engine version detected!" + String("\n");
 		report += "You may encounter errors when opening the project in the editor." + String("\n");
 	}
@@ -2513,6 +2531,10 @@ bool ImportExporterReport::is_custom_version_detected() const {
 	return custom_version_detected;
 }
 
+bool ImportExporterReport::is_using_double_precision() const {
+	return uses_double_precision;
+}
+
 void ImportExporterReport::print_report() {
 	print_line("\n\n********************************EXPORT REPORT********************************" + String("\n"));
 	print_line(get_report_string());
@@ -2562,6 +2584,7 @@ Dictionary ImportExporterReport::to_json() const {
 	json["custom_version_detected"] = custom_version_detected;
 	json["exported_scenes"] = exported_scenes;
 	json["show_headless_warning"] = show_headless_warning;
+	json["uses_double_precision"] = uses_double_precision;
 	json["session_files_total"] = session_files_total;
 	json["log_file_location"] = log_file_location;
 	json["decompiled_scripts"] = decompiled_scripts;
@@ -2604,6 +2627,7 @@ Ref<ImportExporterReport> ImportExporterReport::from_json(const Dictionary &p_js
 	report->custom_version_detected = p_json.get("custom_version_detected", false);
 	report->exported_scenes = p_json.get("exported_scenes", false);
 	report->show_headless_warning = p_json.get("show_headless_warning", false);
+	report->uses_double_precision = p_json.get("uses_double_precision", false);
 	report->session_files_total = p_json.get("session_files_total", 0);
 	report->log_file_location = p_json.get("log_file_location", "");
 	report->output_dir = p_json.get("output_dir", "");
@@ -2655,6 +2679,9 @@ bool ImportExporterReport::is_equal_to(const Ref<ImportExporterReport> &p_import
 		return false;
 	}
 	if (show_headless_warning != p_import_exporter_report->show_headless_warning) {
+		return false;
+	}
+	if (uses_double_precision != p_import_exporter_report->uses_double_precision) {
 		return false;
 	}
 	if (session_files_total != p_import_exporter_report->session_files_total) {
@@ -2731,6 +2758,7 @@ void ImportExporterReport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_steam_detected"), &ImportExporterReport::is_steam_detected);
 	ClassDB::bind_method(D_METHOD("is_mono_detected"), &ImportExporterReport::is_mono_detected);
 	ClassDB::bind_method(D_METHOD("is_custom_version_detected"), &ImportExporterReport::is_custom_version_detected);
+	ClassDB::bind_method(D_METHOD("is_using_double_precision"), &ImportExporterReport::is_using_double_precision);
 }
 
 #include "exporters/gdre_test_macros.h"
@@ -2787,7 +2815,7 @@ Error ImportExporter::test_exported_project(const String &p_original_project_dir
 	original_project_dir = p_original_project_dir;
 	Error _ret_err = OK;
 #if TESTS_ENABLED
-	const bool is_unit_testing = GDRESettings::is_testing();
+	const bool is_unit_testing = GDREMainLoop::is_testing();
 #else
 	const bool is_unit_testing = false;
 #endif

@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="GDREConfig" inherits="Object" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+<class name="GDREConfig" inherits="Object" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
+		Persistent and ephemeral configuration store for GDRE Tools.
 	</brief_description>
 	<description>
+		[GDREConfig] is the engine singleton that holds GDRE Tools' user configuration. It exposes a typed list of default settings (returned by [method get_all_settings]) and supports two storage layers:
+		- [b]Persistent[/b] settings are written to disk via [method save_config] and reloaded on startup.
+		- [b]Ephemeral[/b] settings live only for the current session; CLI flags like [code]--set[/code] populate this layer and it is wiped by [method reset_ephemeral_settings].
+		Retrieve the singleton with [code]Engine.get_singleton("GDREConfig")[/code].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -10,12 +15,14 @@
 		<method name="get_all_settings" qualifiers="const">
 			<return type="GDREConfigSetting[]" />
 			<description>
+				Returns the full list of registered default settings as [GDREConfigSetting] objects, including names, default values, and descriptions.
 			</description>
 		</method>
 		<method name="get_default_value" qualifiers="const">
 			<return type="Variant" />
 			<param index="0" name="setting" type="String" />
 			<description>
+				Returns the default value registered for [param setting], ignoring any persisted or ephemeral override.
 			</description>
 		</method>
 		<method name="get_setting" qualifiers="const">
@@ -23,27 +30,32 @@
 			<param index="0" name="setting" type="String" />
 			<param index="1" name="default_value" type="Variant" default="null" />
 			<description>
+				Returns the current value of [param setting], preferring an ephemeral override over a persisted value over the registered default. Returns [param default_value] if the setting is not registered.
 			</description>
 		</method>
 		<method name="has_setting" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="setting" type="String" />
 			<description>
+				Returns [code]true[/code] if [param setting] is registered as a known default.
 			</description>
 		</method>
 		<method name="load_config">
 			<return type="void" />
 			<description>
+				Re-reads the on-disk persistent configuration file, discarding any unsaved changes to persistent settings. Ephemeral settings are unaffected.
 			</description>
 		</method>
 		<method name="reset_ephemeral_settings">
 			<return type="void" />
 			<description>
+				Clears all ephemeral settings, so subsequent reads fall back to the persistent value (or default).
 			</description>
 		</method>
 		<method name="save_config">
 			<return type="void" />
 			<description>
+				Writes the current persistent configuration to disk.
 			</description>
 		</method>
 		<method name="set_setting">
@@ -52,6 +64,7 @@
 			<param index="1" name="value" type="Variant" />
 			<param index="2" name="force_ephemeral" type="bool" default="false" />
 			<description>
+				Sets [param setting] to [param value]. By default the change is recorded to the appropriate layer based on the setting's ephemeral flag; pass [param force_ephemeral] = [code]true[/code] to store the override only in the ephemeral layer, leaving the persisted value intact.
 			</description>
 		</method>
 	</methods>

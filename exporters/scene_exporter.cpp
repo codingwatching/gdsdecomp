@@ -3,6 +3,8 @@
 #include "compat/resource_loader_compat.h"
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
+#include "core/object/property_info.h"
+#include "core/os/thread_safe.h"
 #include "core/variant/variant.h"
 #include "core/version_generated.gen.h"
 #include "exporters/export_report.h"
@@ -26,28 +28,22 @@
 #include "scene/resources/3d/sphere_shape_3d.h"
 #include "scene/resources/surface_tool.h"
 #include "scene/resources/texture.h"
-#include "servers/rendering/rendering_server.h"
 #include "utility/common.h"
 #include "utility/gdre_config.h"
 #include "utility/gdre_logger.h"
 #include "utility/gdre_settings.h"
+#include "utility/shader_material_converter.h"
 
 #include "core/crypto/crypto_core.h"
 #include "core/error/error_list.h"
 #include "core/error/error_macros.h"
 #include "core/object/class_db.h"
+#include "main/gdre_main_loop.h"
 #include "main/main.h"
 #include "scene/resources/compressed_texture.h"
 #include "scene/resources/packed_scene.h"
 #include "utility/task_manager.h"
 
-#ifndef MAKE_GLTF_COPY
-#ifdef DEBUG_ENABLED
-#define MAKE_GLTF_COPY 1
-#else
-#define MAKE_GLTF_COPY 0
-#endif
-#endif
 #ifndef PRINT_PERF_CSV
 #define PRINT_PERF_CSV 0
 #endif
@@ -167,11 +163,14 @@ void _stringify_json(String &r_result, const Variant &p_var, const String &p_ind
 
 			String num_str;
 			if (force_single_precision || (double)(float)num == num) {
-				r_result += String::num_scientific((float)num);
+				num_str = String::num_scientific((float)num);
 			} else {
-				r_result += String::num_scientific(num);
+				num_str = String::num_scientific(num);
 			}
 			r_result += num_str;
+			if (!(num_str.contains_char('.') || num_str.contains_char('e'))) {
+				r_result += ".0";
+			}
 			return;
 		}
 		case Variant::PACKED_INT32_ARRAY:
@@ -355,7 +354,7 @@ void get_deps_recursive(const String &p_path, HashMap<String, dep_info> &r_deps,
 
 bool GLBExporterInstance::using_threaded_load() const {
 	// If the scenes are being exported using the worker task pool, we can't use threaded load
-	return !supports_multithread();
+	return true;
 }
 
 Error load_model(const String &p_filename, tinygltf::Model &model, String &r_error) {
@@ -769,8 +768,15 @@ String GLBExporterInstance::get_path_options(const Dictionary &import_opts) {
 }
 
 void GLBExporterInstance::set_cache_res(const dep_info &info, const Ref<Resource> &texture, bool force_replace) {
-	if (texture.is_null() || (!force_replace && ResourceCache::get_ref(info.dep).is_valid())) {
+	if (texture.is_null()) {
+		loaded_deps.push_back(texture);
 		return;
+	}
+	if (!force_replace) {
+		if (auto existing = ResourceCache::get_ref(info.dep); existing.is_valid()) {
+			loaded_deps.push_back(existing);
+			return;
+		}
 	}
 #ifdef TOOLS_ENABLED
 	texture->set_import_path(info.remap);
@@ -779,6 +785,14 @@ void GLBExporterInstance::set_cache_res(const dep_info &info, const Ref<Resource
 	texture->set_path_cache("");
 	texture->set_path(info.dep, true);
 	loaded_deps.push_back(texture);
+}
+
+bool GLBExporterInstance::check_cached_res(const dep_info &info) {
+	if (auto existing = ResourceCache::get_ref(info.dep); existing.is_valid()) {
+		loaded_deps.push_back(existing);
+		return true;
+	}
+	return false;
 }
 
 String GLBExporterInstance::get_name_res(const Dictionary &dict, const Ref<Resource> &res, int64_t idx) {
@@ -905,7 +919,7 @@ Error GLBExporterInstance::_load_deps() {
 		dep_info &info = E.value;
 		if (info.type == "Script") {
 			has_script = true;
-		} else if (info.dep.get_extension().to_lower().contains("shader")) {
+		} else if (info.type == "Shader") {
 			has_shader = true;
 		} else {
 			if (info.type == "Animation" || info.type == "AnimationLibrary") {
@@ -966,6 +980,39 @@ Error GLBExporterInstance::_load_deps() {
 			set_cache_res(info, texture, false);
 			continue;
 		}
+		// old visual
+		// if (ver_major < GODOT_VERSION_MAJOR && info.real_type == "VisualShader" && replace_shader_materials) {
+		// 	if (check_cached_res(info)) {
+		// 		continue;
+		// 	}
+		// 	auto visual_shader = ResourceCompatLoader::custom_load(
+		// 			info.remap, "",
+		// 			ResourceInfo::FAKE_LOAD,
+		// 			&err,
+		// 			using_threaded_load(),
+		// 			ResourceFormatLoader::CACHE_MODE_IGNORE); // not ignore deep, we want to reuse dependencies if they exist
+		// 	if (err != OK || visual_shader.is_null()) {
+		// 		if (ignore_missing_dependencies) {
+		// 			missing_dependencies.push_back(info.dep);
+		// 			WARN_PRINT(vformat("%s: Dependency %s -> %s failed to load.", source_path, info.dep, info.remap));
+		// 			continue;
+		// 		}
+		// 		GDRE_SCN_EXP_FAIL_V_MSG(ERR_FILE_MISSING_DEPENDENCIES, vformat("Dependency %s -> %s failed to load.", info.dep, info.remap));
+		// 	}
+		// 	bool got = false;
+		// 	String code = visual_shader->get("code", &got);
+		// 	ERR_CONTINUE_MSG(!got || code.is_empty(), vformat("Failed to get code from VisualShader %s", info.dep));
+		// 	Ref<Shader> shader;
+		// 	std::function<void(const String &)> make_new_shader = [&](const String &p_code) -> void {
+		// 		shader = memnew(Shader());
+		// 		shader->set_code(p_code);
+		// 		set_cache_res(info, shader, false);
+		// 	};
+		// 	if (!TaskManager::get_singleton()->dispatch_to_main_thread(make_new_shader, code).has_value()) {
+		// 		return ERR_SKIP;
+		// 	}
+		// 	continue;
+		// }
 		if (!FileAccess::exists(info.remap) && !FileAccess::exists(info.dep)) {
 			if (ignore_missing_dependencies) {
 				missing_dependencies.push_back(info.dep);
@@ -994,25 +1041,31 @@ Error GLBExporterInstance::_load_deps() {
 			String our_path = GDRESettings::get_singleton()->get_mapped_path(info.dep);
 			if (our_path != info.remap) {
 				WARN_PRINT(vformat("Dependency %s:%s is not mapped to the same path: %s", info.dep, info.remap, our_path));
-				if (!ResourceCache::has(info.dep)) {
-					auto texture = ResourceCompatLoader::custom_load(
+				if (check_cached_res(info)) {
+					continue;
+				}
+				auto result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<Resource>()>)[&]() -> Ref<Resource> {
+					auto res = ResourceCompatLoader::custom_load(
 							info.remap, "",
 							ResourceCompatLoader::get_default_load_type(),
 							&err,
 							using_threaded_load(),
 							ResourceFormatLoader::CACHE_MODE_IGNORE); // not ignore deep, we want to reuse dependencies if they exist
-					if (err || texture.is_null()) {
-						if (ignore_missing_dependencies) {
-							missing_dependencies.push_back(info.dep);
-							WARN_PRINT(vformat("%s: Dependency %s:%s failed to load.", source_path, info.dep, info.remap));
-							continue;
-						}
-						GDRE_SCN_EXP_FAIL_V_MSG(ERR_FILE_MISSING_DEPENDENCIES,
-								vformat("Dependency %s:%s failed to load.", info.dep, info.remap));
+					set_cache_res(info, res, false);
+					return res;
+				});
+				if (!result.has_value()) {
+					return ERR_SKIP; // cancelled
+				}
+				auto texture = result.value();
+				if (err || texture.is_null()) {
+					if (ignore_missing_dependencies) {
+						missing_dependencies.push_back(info.dep);
+						WARN_PRINT(vformat("%s: Dependency %s:%s failed to load.", source_path, info.dep, info.remap));
+						continue;
 					}
-					if (!ResourceCache::has(info.dep)) {
-						set_cache_res(info, texture, false);
-					}
+					GDRE_SCN_EXP_FAIL_V_MSG(ERR_FILE_MISSING_DEPENDENCIES,
+							vformat("Dependency %s:%s failed to load.", info.dep, info.remap));
 				}
 			} else { // if mapped_path logic changes, we have to set this to true
 				// no_threaded_load = true;
@@ -1287,6 +1340,7 @@ Dictionary get_node_options(Node *p_node, Node *original_node = nullptr) {
 		if (original_node) {
 			if (auto area_3d = Object::cast_to<Area3D>(original_node); area_3d) {
 				mesh_physics_mode = SceneExporterEnums::MESH_PHYSICS_AREA_ONLY;
+				body_type = SceneExporterEnums::BODY_TYPE_AREA;
 			} else {
 				if (auto navigation_region = Object::cast_to<NavigationRegion3D>(original_node); navigation_region) {
 					navmesh_mode = SceneExporterEnums::NAVMESH_NAVMESH_ONLY;
@@ -1352,7 +1406,11 @@ Dictionary get_node_options(Node *p_node, Node *original_node = nullptr) {
 
 			node_options_dict["physics/body_type"] = body_type;
 			node_options_dict["physics/shape_type"] = shape_type;
-			node_options_dict["physics/physics_material_override"] = physics_material_override.is_valid() ? (Variant)physics_material_override : Variant();
+			if (physics_material_override.is_valid()) {
+				node_options_dict["physics/physics_material_override"] = physics_material_override;
+			} else {
+				node_options_dict["physics/physics_material_override"] = Variant();
+			}
 			node_options_dict["physics/layer"] = physics_layer_bits;
 			node_options_dict["physics/mask"] = physics_mask_bits;
 			// TODO: Decomposition options in the case of shape_type == SHAPE_TYPE_DECOMPOSE_CONVEX;
@@ -1470,7 +1528,71 @@ Ref<ArrayMesh> get_nav_array_debug_mesh(const Ref<NavigationMesh> navmesh) {
 	return debug_mesh;
 }
 
+void GLBExporterInstance::recompute_animation_tracks_for_library(AnimationPlayer *p_player, const Ref<AnimationLibrary> &p_anim_lib, const LocalVector<StringName> &p_anim_names) {
+	if (ver_major > 3 || p_anim_names.is_empty()) {
+		return;
+	}
+	auto current_animation = p_player->get_current_animation();
+	auto current_pos = current_animation.is_empty() ? 0 : p_player->get_current_animation_position();
+
+	Ref<RegEx> mesh_surface_re = RegEx::create_from_string(":mesh:surface_(\\d+)");
+	// Force re-compute animation tracks.
+	for (auto &anim_name : p_anim_names) {
+		Ref<Animation> anim = p_anim_lib->get_animation(anim_name);
+		auto info = ResourceInfo::get_info_from_resource(anim);
+		ERR_CONTINUE(!info.is_valid());
+		constexpr const char *converted_paths_from_3_x = "converted_paths_from_3.x";
+		if (info->extra.get(converted_paths_from_3_x, false)) {
+			continue;
+		}
+
+		size_t num_tracks = anim->get_track_count();
+		for (size_t i = 0; i < num_tracks; i++) {
+			String str_path = String(anim->track_get_path(i));
+			if (str_path.contains(":mesh:surface_")) {
+				// Surface properties are 1-indexed in 3.x, but 0-indexed in 4.x.
+				Ref<RegExMatch> match = mesh_surface_re->search(str_path);
+				if (match.is_valid()) {
+					int surface_index = match->get_string(1).to_int();
+					surface_index--;
+					str_path = mesh_surface_re->sub(str_path, ":mesh:surface_" + String::num_int64(surface_index));
+				}
+			}
+			if (str_path.contains(":material/")) {
+				str_path = str_path.replace(":material/", ":surface_material_override/");
+			}
+			if (str_path.contains(":shader_param/")) {
+				str_path = str_path.replace(":shader_param/", ":shader_parameter/");
+			}
+			anim->track_set_path(i, str_path);
+		}
+		info->extra.set(converted_paths_from_3_x, true);
+	}
+
+	p_player->set_current_animation(*p_anim_names.begin());
+	p_player->advance(0);
+	p_player->set_current_animation(current_animation);
+	if (!current_animation.is_empty()) {
+		p_player->seek(current_pos);
+	}
+}
+
+void GLBExporterInstance::convert_animation_tracks_to_v4_for_player(AnimationPlayer *p_player) {
+	LocalVector<StringName> anim_lib_names;
+	p_player->get_animation_library_list(&anim_lib_names);
+	for (auto &anim_lib_name : anim_lib_names) {
+		Ref<AnimationLibrary> anim_lib = p_player->get_animation_library(anim_lib_name);
+		if (anim_lib.is_valid()) {
+			LocalVector<StringName> anim_names;
+			anim_lib->get_animation_list(&anim_names);
+			recompute_animation_tracks_for_library(p_player, anim_lib, anim_names);
+		}
+	}
+}
+
 Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
+	bool current_thread_safe_for_nodes = is_current_thread_safe_for_nodes();
+	set_current_thread_safe_for_nodes(true);
 	root_type = root->get_class();
 	root_name = root->get_name();
 
@@ -1481,6 +1603,13 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 	HashMap<Ref<ShaderMaterial>, Ref<BaseMaterial3D>> shader_material_to_base_material_map;
 
 	HashSet<Ref<Mesh>> meshes_in_mesh_instances;
+	auto cache_material = [&shader_material_to_base_material_map](const Ref<ShaderMaterial> &shader_material, const Ref<BaseMaterial3D> &base_material, Pair<bool, bool> used_textures_and_is_instance) {
+		// We don't want to cache it if it has instance uniforms that were actually used,
+		// since they will need to be created per-instance
+		if (base_material.is_valid() && !used_textures_and_is_instance.second) {
+			shader_material_to_base_material_map[shader_material] = base_material;
+		}
+	};
 
 	auto process_mesh_instance = [&](MeshInstance3D *mesh_instance) {
 		auto skin = mesh_instance->get_skin();
@@ -1497,6 +1626,20 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 			}
 		}
 		if (replace_shader_materials && mesh.is_valid()) {
+			if (Ref<ShaderMaterial> shader_mat_override = mesh_instance->get_material_override(); shader_mat_override.is_valid()) {
+				auto [base_material, used_textures_and_is_instance] = ShaderMaterialConverter::convert_shader_material_to_base_material(shader_mat_override, mesh_instance);
+				if (base_material.is_valid()) {
+					mesh_instance->set_material_override(base_material);
+				}
+				cache_material(shader_mat_override, base_material, used_textures_and_is_instance);
+			}
+			if (Ref<ShaderMaterial> shader_mat_overlay = mesh_instance->get_material_overlay(); shader_mat_overlay.is_valid()) {
+				auto [base_material, used_textures_and_is_instance] = ShaderMaterialConverter::convert_shader_material_to_base_material(shader_mat_overlay, mesh_instance);
+				if (base_material.is_valid()) {
+					mesh_instance->set_material_overlay(base_material);
+				}
+				cache_material(shader_mat_overlay, base_material, used_textures_and_is_instance);
+			}
 			for (int surface_i = 0; surface_i < mesh->get_surface_count(); surface_i++) {
 				Ref<ShaderMaterial> shader_material;
 				Ref<Material> active_surface_material = mesh_instance->get_active_material(surface_i);
@@ -1507,13 +1650,13 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 					if (shader_material_to_base_material_map.has(shader_material)) {
 						base_material = shader_material_to_base_material_map[shader_material];
 					} else {
-						Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> base_material_pair = convert_shader_material_to_base_material(shader_material, mesh_instance);
+						Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> base_material_pair = ShaderMaterialConverter::convert_shader_material_to_base_material(shader_material, mesh_instance);
 						if (!base_material_pair.second.first) {
 							base_material = surface_material;
 							if (!base_material.is_valid()) {
 								Ref<ShaderMaterial> surface_shader_material = surface_material;
 								if (surface_shader_material.is_valid() && surface_shader_material != shader_material) {
-									auto new_material_pair = convert_shader_material_to_base_material(surface_shader_material);
+									auto new_material_pair = ShaderMaterialConverter::convert_shader_material_to_base_material(surface_shader_material);
 									if (new_material_pair.second.first) {
 										shader_material = surface_shader_material;
 										base_material_pair = new_material_pair;
@@ -1524,11 +1667,7 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 						if (!base_material.is_valid()) {
 							base_material = base_material_pair.first;
 						}
-						// We don't want to cache it if it has instance uniforms that were actually used,
-						// since they will need to be created per-instance
-						if (base_material.is_valid() && !base_material_pair.second.second) {
-							shader_material_to_base_material_map[shader_material] = base_material;
-						}
+						cache_material(shader_material, base_material, base_material_pair.second);
 					}
 					if (base_material.is_valid()) {
 						mesh_instance->set_surface_override_material(surface_i, base_material);
@@ -1579,7 +1718,7 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 		meshes_in_mesh_instances.insert(mesh);
 		return mesh_instance;
 	};
-	std::function<void(Node *)> process_node = [&](Node *node) {
+	std::function<bool(Node *)> process_node = [&](Node *node) -> bool {
 		ScriptInstance *si = node->get_script_instance();
 		List<PropertyInfo> properties;
 		HashSet<MeshInstance3D *> mis_generated_from_scripts;
@@ -1598,63 +1737,93 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 						// create a new mesh instance
 						auto mesh_instance = generate_mesh_instance(node, mesh);
 						mis_generated_from_scripts.insert(mesh_instance);
-						node->add_child(mesh_instance);
 					}
 				}
 			}
-			for (auto &mesh_instance : mis_generated_from_scripts) {
-				bool set_skin = false;
-				bool set_skeleton = false;
-				for (auto &prop : properties) {
-					Variant value;
-					if (si->get(prop.name, value) && !skins.has(value) && !skeleton_paths.has(value)) {
-						Ref<Skin> skin = value;
-						if (skin.is_valid() && !set_skin) {
-							mesh_instance->set_skin(skin);
-							set_skin = true;
-							skins.insert(skin);
-						} else if (!set_skeleton) {
-							NodePath skeleton_path = value;
-							if (!skeleton_path.is_empty()) {
-								// we need to check to see if this is actually a skeleton
-								Node *skeleton = node->get_node(skeleton_path);
-								Skeleton3D *skeleton3d = skeleton ? Object::cast_to<Skeleton3D>(skeleton) : nullptr;
-								if (skeleton3d) {
-									NodePath actual_path = skeleton_path;
-									if (!skeleton_path.is_absolute()) {
-										actual_path = mesh_instance->get_path_to(skeleton3d);
+			if (!mis_generated_from_scripts.is_empty()) {
+				std::function<void()> add_mesh_instances = [&]() {
+					for (auto &mesh_instance : mis_generated_from_scripts) {
+						node->add_child(mesh_instance);
+						bool set_skin = false;
+						bool set_skeleton = false;
+						for (auto &prop : properties) {
+							Variant value;
+							if (si->get(prop.name, value) && !skins.has(value) && !skeleton_paths.has(value)) {
+								Ref<Skin> skin = value;
+								if (skin.is_valid() && !set_skin) {
+									mesh_instance->set_skin(skin);
+									set_skin = true;
+									skins.insert(skin);
+								} else if (!set_skeleton) {
+									NodePath skeleton_path = value;
+									if (!skeleton_path.is_empty()) {
+										// we need to check to see if this is actually a skeleton
+										Node *skeleton = node->get_node(skeleton_path);
+										Skeleton3D *skeleton3d = skeleton ? Object::cast_to<Skeleton3D>(skeleton) : nullptr;
+										if (skeleton3d) {
+											NodePath actual_path = skeleton_path;
+											if (!skeleton_path.is_absolute()) {
+												actual_path = mesh_instance->get_path_to(skeleton3d);
+											}
+											mesh_instance->set_skeleton_path(actual_path);
+											set_skeleton = true;
+											skeleton_paths.insert(skeleton_path);
+										}
 									}
-									mesh_instance->set_skeleton_path(actual_path);
-									set_skeleton = true;
-									skeleton_paths.insert(skeleton_path);
 								}
 							}
+							if (set_skin && set_skeleton) {
+								break;
+							}
+						}
+						process_mesh_instance(mesh_instance);
+						if (updating_import_info) {
+							node_options[get_node_path(mesh_instance).operator String()] = { { "import/skip_import", true } };
 						}
 					}
-					if (set_skin && set_skeleton) {
-						break;
-					}
-				}
-				process_mesh_instance(mesh_instance);
-				if (updating_import_info) {
-					node_options[get_node_path(mesh_instance).operator String()] = { { "import/skip_import", true } };
+				};
+				if (!TaskManager::get_singleton()->dispatch_to_main_thread(add_mesh_instances).has_value()) {
+					return false; // cancelled
 				}
 			}
 		}
 		Node *original_node = nullptr;
-		auto replace_with_mi = [&](Ref<ArrayMesh> mesh) {
+		std::function<void(Ref<ArrayMesh>)> replace_with_mi = [&](Ref<ArrayMesh> mesh) {
 			auto mesh_instance = generate_mesh_instance(node, mesh, node);
 			mesh_instance->set_name(node->get_name());
+			mesh_instance->set_scene_file_path(node->get_scene_file_path());
 			process_mesh_instance(mesh_instance);
 			replaced_node_names.push_back(get_node_path(node).operator String() + ":" + node->get_class());
 			auto node3d = Object::cast_to<Node3D>(node);
 			auto transform = node3d ? node3d->get_transform() : Transform3D();
 			auto script = node->get_script();
+			original_node = node;
+			String original_class = node->get_class();
+			List<PropertyInfo> properties;
+			node->get_property_list(&properties);
+			//VisualInstance3D, CollisionObject3D, NavigationRegion3D
+			//E.usage == PROPERTY_USAGE_CATEGORY && E.name == "BaseMaterial3D"
+			const HashSet<StringName> original_classes = { "VisualInstance3D", "CollisionObject3D", "NavigationRegion3D" };
+			bool hit_node_3d_category = false;
+			for (auto &E : properties) {
+				// setting any of the Node or Object properties will screw this up
+				if ((E.usage & PROPERTY_USAGE_CATEGORY) && E.name == "Node3D") {
+					hit_node_3d_category = true;
+				}
+				if (!hit_node_3d_category) {
+					continue;
+				}
+				if ((E.usage & PROPERTY_USAGE_CATEGORY) && !mesh_instance->is_class(E.name)) {
+					break;
+				}
+				if (E.usage & PROPERTY_USAGE_STORAGE) {
+					mesh_instance->set(E.name, node->get(E.name));
+				}
+			}
 			node->replace_by(mesh_instance);
 			mesh_instance->set_transform(transform);
 			mesh_instance->set_script(script);
 
-			original_node = node;
 			node = mesh_instance;
 			if (original_node == root) {
 				root = node;
@@ -1684,18 +1853,17 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 		// replace NavMesh/Occluder/Area3D-only nodes with mesh instances
 		// e.g. the original mesh will have been replaced by a NavMesh/Occluder/Area3D node by the importer, so we have to put it back.
 		if (!is_auto_generated_node(node) && node != root) {
+			Ref<ArrayMesh> replacement_mesh;
 			if (auto navigation_region = Object::cast_to<NavigationRegion3D>(node); navigation_region) {
 				if (Ref<NavigationMesh> navmesh = navigation_region->get_navigation_mesh(); navmesh.is_valid()) {
-					auto debug_mesh = get_nav_array_debug_mesh(navmesh);
-					replace_with_mi(debug_mesh);
+					replacement_mesh = get_nav_array_debug_mesh(navmesh);
 				}
 			} else if (auto occluder_instance = Object::cast_to<OccluderInstance3D>(node); occluder_instance) {
 				if (Ref<Occluder3D> occluder = occluder_instance->get_occluder(); occluder.is_valid()) {
-					replace_with_mi(occluder->get_debug_mesh());
+					replacement_mesh = occluder->get_debug_mesh();
 				}
 			} else if (auto area_3d = Object::cast_to<Area3D>(node); area_3d) {
 				Vector<Ref<ArrayMesh>> meshes;
-				Ref<ArrayMesh> mesh;
 				for (auto &E : area_3d->get_children()) {
 					if (auto collision_shape = Object::cast_to<CollisionShape3D>(E.operator Object *()); collision_shape && collision_shape->get_shape().is_valid()) {
 						meshes.push_back(collision_shape->get_shape()->get_debug_mesh());
@@ -1712,12 +1880,14 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 							}
 						}
 					}
-					mesh = surface_tool.commit();
+					replacement_mesh = surface_tool.commit();
 				} else if (meshes.size() == 1) {
-					mesh = meshes[0];
+					replacement_mesh = meshes[0];
 				}
-				if (mesh.is_valid()) {
-					replace_with_mi(mesh);
+			}
+			if (replacement_mesh.is_valid()) {
+				if (!TaskManager::get_singleton()->dispatch_to_main_thread(replace_with_mi, replacement_mesh).has_value()) {
+					return false; // cancelled
 				}
 			}
 		}
@@ -1736,31 +1906,49 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 		for (auto &E : node->get_children()) {
 			auto child = Object::cast_to<Node>(E.operator Object *());
 			if (!mis_generated_from_scripts.has(Object::cast_to<MeshInstance3D>(child))) {
-				process_node(child);
+				if (!process_node(child)) {
+					return false; // cancelled
+				}
 			}
 		}
+		return true;
 	};
-	process_node(root);
+	if (!process_node(root)) {
+		return nullptr; // cancelled
+	}
 	if (replaced_node_names.size() > 0) {
 		auto thingy = String(", ").join(replaced_node_names);
 		print_line(vformat("%s: replaced nodes with mesh instances: %s", scene_name, thingy));
-#ifdef DEBUG_ENABLED
-		if (true) {
+		if (GDREConfig::get_singleton()->get_setting("Exporter/Scene/GLTF/debug_copies", false)) {
 			auto new_dest = "res://.tscn_manip/" + report->get_import_info()->get_export_dest().trim_prefix("res://.assets/").trim_prefix("res://").get_basename() + ".tscn";
 			auto new_dest_path = output_dir.path_join(new_dest.replace_first("res://", ""));
 			Ref<PackedScene> scene = memnew(PackedScene);
 			scene->pack(root);
 			ResourceCompatLoader::save_custom(scene, new_dest_path, GODOT_VERSION_MAJOR, GODOT_VERSION_MINOR);
 		}
-#endif
 	}
 
 	Vector<int64_t> fps_values;
+
+	if (ver_major <= 3) {
+		std::function<void()> convert_all_players_to_v4 = [&]() {
+			for (int32_t node_i = 0; node_i < animation_player_nodes.size(); node_i++) {
+				AnimationPlayer *player = Object::cast_to<AnimationPlayer>(animation_player_nodes[node_i]);
+				ERR_CONTINUE(!player);
+				convert_animation_tracks_to_v4_for_player(player);
+			}
+		};
+		if (!TaskManager::get_singleton()->dispatch_to_main_thread(convert_all_players_to_v4).has_value()) {
+			return nullptr; // cancelled
+		}
+	}
+
 	for (int32_t node_i = 0; node_i < animation_player_nodes.size(); node_i++) {
+		AnimationPlayer *player = Object::cast_to<AnimationPlayer>(animation_player_nodes[node_i]);
+		ERR_CONTINUE(!player);
 		bool any_compressed = false;
 		// Force re-compute animation tracks.
 		Vector<Ref<AnimationLibrary>> anim_libs;
-		AnimationPlayer *player = Object::cast_to<AnimationPlayer>(animation_player_nodes[node_i]);
 		LocalVector<StringName> anim_lib_names;
 		player->get_animation_library_list(&anim_lib_names);
 		for (auto &lib_name : anim_lib_names) {
@@ -1769,54 +1957,10 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 				anim_libs.push_back(lib);
 			}
 		}
-		ERR_CONTINUE(!player);
-		auto current_anmation = player->get_current_animation();
-		auto current_pos = current_anmation.is_empty() ? 0 : player->get_current_animation_position();
 		int64_t max_fps = -1;
 		for (auto &anim_lib : anim_libs) {
 			LocalVector<StringName> anim_names;
 			anim_lib->get_animation_list(&anim_names);
-			if (ver_major <= 3 && anim_names.size() > 0) {
-				Ref<RegEx> mesh_surface_re = RegEx::create_from_string(":mesh:surface_(\\d+)");
-				// force re-compute animation tracks.
-				for (auto &anim_name : anim_names) {
-					Ref<Animation> anim = anim_lib->get_animation(anim_name);
-					auto info = ResourceInfo::get_info_from_resource(anim);
-					ERR_CONTINUE(!info.is_valid());
-					constexpr const char *converted_paths_from_3_x = "converted_paths_from_3.x";
-					if (info->extra.get(converted_paths_from_3_x, false)) {
-						continue;
-					}
-					size_t num_tracks = anim->get_track_count();
-					for (size_t i = 0; i < num_tracks; i++) {
-						String str_path = String(anim->track_get_path(i));
-						if (str_path.contains(":mesh:surface_")) {
-							// replace the number after surface_ with one lower (surface properties are 1-indexed in 3.x, but 0-indexed in 4.0)
-							Ref<RegExMatch> match = mesh_surface_re->search(str_path);
-							if (match.is_valid()) {
-								int surface_index = match->get_string(1).to_int();
-								surface_index--;
-								str_path = mesh_surface_re->sub(str_path, ":mesh:surface_" + String::num_int64(surface_index));
-							}
-						}
-						if (str_path.contains(":material/")) {
-							str_path = str_path.replace(":material/", ":surface_material_override/");
-						}
-						if (str_path.contains(":shader_param/")) {
-							str_path = str_path.replace(":shader_param/", ":shader_parameter/");
-						}
-						anim->track_set_path(i, str_path);
-					}
-					info->extra.set(converted_paths_from_3_x, true);
-				}
-
-				player->set_current_animation(*anim_names.begin());
-				player->advance(0);
-				player->set_current_animation(current_anmation);
-				if (!current_anmation.is_empty()) {
-					player->seek(current_pos);
-				}
-			}
 			for (auto &anim_name : anim_names) {
 				double shortest_frame_duration = 1000.0;
 
@@ -1898,6 +2042,7 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 			baked_fps = MIN(max_fps, 120);
 		}
 	}
+	set_current_thread_safe_for_nodes(current_thread_safe_for_nodes);
 	return root;
 }
 
@@ -1923,464 +2068,6 @@ void GLBExporterInstance::_silence_errors(bool p_silence) {
 			return cancel_err;                                                                                     \
 		}                                                                                                          \
 	}
-
-static const HashSet<String> shader_param_names = {
-	"albedo",
-	"specular",
-	"metallic",
-	"roughness",
-	"emission",
-	"emission_energy",
-	"normal_scale",
-	"rim",
-	"rim_tint",
-	"clearcoat",
-	"clearcoat_roughness",
-	"anisotropy",
-	"heightmap_scale",
-	"subsurface_scattering_strength",
-	"transmittance_color",
-	"transmittance_depth",
-	"transmittance_boost",
-	"backlight",
-	"refraction",
-	"point_size",
-	"uv1_scale",
-	"uv1_offset",
-	"uv2_scale",
-	"uv2_offset",
-	"particles_anim_h_frames",
-	"particles_anim_v_frames",
-	"particles_anim_loop",
-	"heightmap_min_layers",
-	"heightmap_max_layers",
-	"heightmap_flip",
-	"uv1_blend_sharpness",
-	"uv2_blend_sharpness",
-	"grow",
-	"proximity_fade_distance",
-	"msdf_pixel_range",
-	"msdf_outline_size",
-	"distance_fade_min",
-	"distance_fade_max",
-	"ao_light_affect",
-	"metallic_texture_channel",
-	"ao_texture_channel",
-	"clearcoat_texture_channel",
-	"rim_texture_channel",
-	"heightmap_texture_channel",
-	"refraction_texture_channel",
-	"alpha_scissor_threshold",
-	"alpha_hash_scale",
-	"alpha_antialiasing_edge",
-	"albedo_texture_size",
-	"z_clip_scale",
-	"fov_override",
-};
-
-bool set_param_not_in_property_list(Ref<BaseMaterial3D> p_base_material, const String &p_param_name, const Variant &p_value) {
-	// if the param is not in the property list, but it does have a setter, we can set it
-	if (p_base_material->has_method(vformat("set_%s", p_param_name))) {
-		if (p_base_material->has_method(vformat("get_%s", p_param_name))) {
-			String method_name = vformat("get_%s", p_param_name);
-			// check the method signature
-			List<MethodInfo> method_list;
-			p_base_material->get_method_list(&method_list);
-			for (auto &E : method_list) {
-				if (E.name == method_name) {
-					if (E.arguments.size() != 0) {
-						return false;
-					}
-					break;
-				}
-			}
-			Variant base_material_val = p_base_material->call(method_name);
-			if (base_material_val.get_type() != p_value.get_type()) {
-				return false;
-			}
-		}
-		p_base_material->call(vformat("set_%s", p_param_name), p_value);
-		return true;
-	} else if (p_param_name == "metallness" && p_value.get_type() == Variant::FLOAT) {
-		p_base_material->set_metallic(p_value);
-		return true;
-	}
-	return false;
-}
-struct UniformInfo {
-	String scope;
-	String type;
-	String name;
-	String hint;
-};
-
-Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> GLBExporterInstance::convert_shader_material_to_base_material(Ref<ShaderMaterial> p_shader_material, Node *p_parent) {
-	// we need to manually create a BaseMaterial3D from the shader material
-	// We do this by getting the shader uniforms and then mapping them to the BaseMaterial3D properties
-	// We also need to handle the texture parameters and features
-	ERR_FAIL_COND_V_MSG(p_shader_material.is_null(), {}, "ShaderMaterial is NULL");
-	List<StringName> list;
-	Ref<Shader> shader = p_shader_material->get_shader();
-	ERR_FAIL_COND_V_MSG(shader.is_null(), {}, "Shader on ShaderMaterial is NULL: " + p_shader_material->get_path());
-	List<PropertyInfo> prop_list;
-	List<PropertyInfo> uniform_list;
-	HashSet<String> shader_uniforms;
-	shader->get_shader_uniform_list(&uniform_list, false);
-	for (auto &E : uniform_list) {
-		shader_uniforms.insert(E.name);
-	}
-	HashSet<String> global_uniforms;
-	HashSet<String> instance_uniforms;
-	//(global|instance)?\s*uniform\s+(\w+)\s+(\w+)\s*(?:\:\s+(\w+))?
-
-	String shader_code = shader->get_code();
-	Ref<RegEx> re = RegEx::create_from_string(R"((global|instance)?\s*uniform\s+(?:(?:lowp|mediump|highp)\s+)?(\w+)\s+(\w+)\s*(?:\:((?:\s*\w+\s*,)*\s*\w+))?)");
-	// Don't match "normal" or "form"
-	Ref<RegEx> orm_re = RegEx::create_from_string("(^ORM|[^NF]ORM[a-z_]|[a-z_]ORM|^orm|_orm|[^NnFf]orm_|Orm).*");
-	auto is_orm = [&](const String &p_param_name) {
-		return p_param_name == "orm" || orm_re->search(p_param_name).is_valid();
-	};
-	auto matches = re->search_all(shader_code);
-	bool has_orm = false;
-	HashMap<String, UniformInfo> uniform_infos;
-	for (auto &E : matches) {
-		Ref<RegExMatch> match = E;
-		UniformInfo info;
-		String param_name = match->get_string(3);
-
-		info.scope = match->get_string(1);
-		info.type = match->get_string(2);
-		info.name = match->get_string(3);
-		info.hint = match->get_string(4).strip_edges();
-		uniform_infos[info.name] = info;
-		shader_uniforms.insert(param_name);
-		if (info.scope == "global") {
-			global_uniforms.insert(param_name);
-		} else if (info.scope == "instance") {
-			instance_uniforms.insert(param_name);
-		}
-		if (info.type == "sampler2D") {
-			if (is_orm(param_name)) {
-				has_orm = true;
-			}
-		}
-	}
-
-	p_shader_material->get_property_list(&prop_list, false);
-	for (auto &E : prop_list) {
-		if (E.usage == PROPERTY_USAGE_CATEGORY || E.usage == PROPERTY_USAGE_GROUP || E.usage == PROPERTY_USAGE_SUBGROUP) {
-			continue;
-		}
-		if (E.name.begins_with("shader_parameter/")) {
-			shader_uniforms.insert(E.name.trim_prefix("shader_parameter/"));
-		}
-	}
-
-	Ref<BaseMaterial3D> base_material = memnew(BaseMaterial3D(has_orm));
-
-	// this is initialized with the 3.x params that are still valid in 4.x (`_set()` handles the remapping) but won't show up in the property list
-	HashSet<String> base_material_params = {
-		"flags_use_shadow_to_opacity",
-		"flags_use_shadow_to_opacity",
-		"flags_no_depth_test",
-		"flags_use_point_size",
-		"flags_fixed_size",
-		"flags_albedo_tex_force_srgb",
-		"flags_do_not_receive_shadows",
-		"flags_disable_ambient_light",
-		"params_diffuse_mode",
-		"params_specular_mode",
-		"params_blend_mode",
-		"params_cull_mode",
-		"params_depth_draw_mode",
-		"params_point_size",
-		"params_billboard_mode",
-		"params_billboard_keep_scale",
-		"params_grow",
-		"params_grow_amount",
-		"params_alpha_scissor_threshold",
-		"params_alpha_hash_scale",
-		"params_alpha_antialiasing_edge",
-		"depth_scale",
-		"depth_deep_parallax",
-		"depth_min_layers",
-		"depth_max_layers",
-		"depth_flip_tangent",
-		"depth_flip_binormal",
-		"depth_texture",
-		"emission_energy",
-		"flags_transparent",
-		"flags_unshaded",
-		"flags_vertex_lighting",
-		"params_use_alpha_scissor",
-		"params_use_alpha_hash",
-		"depth_enabled",
-	};
-	List<PropertyInfo> base_material_prop_list;
-	base_material->get_property_list(&base_material_prop_list);
-	bool hit_base_material_group = false;
-	for (auto &E : base_material_prop_list) {
-		if (E.usage == PROPERTY_USAGE_CATEGORY && E.name == "BaseMaterial3D") {
-			hit_base_material_group = true;
-		}
-		if (!hit_base_material_group) {
-			continue;
-		}
-		if (E.usage == PROPERTY_USAGE_CATEGORY || E.usage == PROPERTY_USAGE_GROUP || E.usage == PROPERTY_USAGE_SUBGROUP) {
-			if (E.name != "StandardMaterial3D") {
-				continue;
-			}
-			break;
-		}
-		base_material_params.insert(E.name);
-	}
-
-	static const HashMap<String, BaseMaterial3D::TextureParam> texture_param_map = {
-		{ "albedo_texture", BaseMaterial3D::TEXTURE_ALBEDO },
-		{ "orm_texture", BaseMaterial3D::TEXTURE_ORM },
-		{ "metallic_texture", BaseMaterial3D::TEXTURE_METALLIC },
-		{ "roughness_texture", BaseMaterial3D::TEXTURE_ROUGHNESS },
-		{ "emission_texture", BaseMaterial3D::TEXTURE_EMISSION },
-		{ "normal_texture", BaseMaterial3D::TEXTURE_NORMAL },
-		{ "bent_normal_texture", BaseMaterial3D::TEXTURE_BENT_NORMAL },
-		{ "rim_texture", BaseMaterial3D::TEXTURE_RIM },
-		{ "clearcoat_texture", BaseMaterial3D::TEXTURE_CLEARCOAT },
-		{ "anisotropy_flowmap", BaseMaterial3D::TEXTURE_FLOWMAP },
-		{ "ao_texture", BaseMaterial3D::TEXTURE_AMBIENT_OCCLUSION },
-		{ "heightmap_texture", BaseMaterial3D::TEXTURE_HEIGHTMAP },
-		{ "subsurf_scatter_texture", BaseMaterial3D::TEXTURE_SUBSURFACE_SCATTERING },
-		{ "subsurf_scatter_transmittance_texture", BaseMaterial3D::TEXTURE_SUBSURFACE_TRANSMITTANCE },
-		{ "backlight_texture", BaseMaterial3D::TEXTURE_BACKLIGHT },
-		{ "refraction_texture", BaseMaterial3D::TEXTURE_REFRACTION },
-		{ "detail_mask", BaseMaterial3D::TEXTURE_DETAIL_MASK },
-		{ "detail_albedo", BaseMaterial3D::TEXTURE_DETAIL_ALBEDO },
-		{ "detail_normal", BaseMaterial3D::TEXTURE_DETAIL_NORMAL },
-		{ "depth_texture", BaseMaterial3D::TEXTURE_HEIGHTMAP }, // old 3.x name for heightmap texture
-		{ "orm_texture", BaseMaterial3D::TEXTURE_ORM },
-	};
-
-	static const HashMap<BaseMaterial3D::TextureParam, BaseMaterial3D::Feature> feature_to_enable_map = {
-		{ BaseMaterial3D::TEXTURE_NORMAL, BaseMaterial3D::FEATURE_NORMAL_MAPPING },
-		{ BaseMaterial3D::TEXTURE_BENT_NORMAL, BaseMaterial3D::FEATURE_BENT_NORMAL_MAPPING },
-		{ BaseMaterial3D::TEXTURE_EMISSION, BaseMaterial3D::FEATURE_EMISSION },
-		{ BaseMaterial3D::TEXTURE_RIM, BaseMaterial3D::FEATURE_RIM },
-		{ BaseMaterial3D::TEXTURE_CLEARCOAT, BaseMaterial3D::FEATURE_CLEARCOAT },
-		{ BaseMaterial3D::TEXTURE_FLOWMAP, BaseMaterial3D::FEATURE_ANISOTROPY },
-		{ BaseMaterial3D::TEXTURE_AMBIENT_OCCLUSION, BaseMaterial3D::FEATURE_AMBIENT_OCCLUSION },
-		{ BaseMaterial3D::TEXTURE_HEIGHTMAP, BaseMaterial3D::FEATURE_HEIGHT_MAPPING },
-		{ BaseMaterial3D::TEXTURE_SUBSURFACE_SCATTERING, BaseMaterial3D::FEATURE_SUBSURFACE_SCATTERING },
-		{ BaseMaterial3D::TEXTURE_SUBSURFACE_TRANSMITTANCE, BaseMaterial3D::FEATURE_SUBSURFACE_TRANSMITTANCE },
-		{ BaseMaterial3D::TEXTURE_BACKLIGHT, BaseMaterial3D::FEATURE_BACKLIGHT },
-		{ BaseMaterial3D::TEXTURE_REFRACTION, BaseMaterial3D::FEATURE_REFRACTION },
-		{ BaseMaterial3D::TEXTURE_DETAIL_MASK, BaseMaterial3D::FEATURE_DETAIL },
-		{ BaseMaterial3D::TEXTURE_DETAIL_ALBEDO, BaseMaterial3D::FEATURE_DETAIL },
-		{ BaseMaterial3D::TEXTURE_DETAIL_NORMAL, BaseMaterial3D::FEATURE_DETAIL },
-	};
-
-	Vector<String> lines = shader_code.split("\n");
-	bool set_texture = false;
-	HashMap<BaseMaterial3D::TextureParam, Vector<Pair<String, Ref<Texture>>>> base_material_texture_candidates;
-	for (int i = 0; i < BaseMaterial3D::TEXTURE_MAX; i++) {
-		base_material_texture_candidates[BaseMaterial3D::TextureParam(i)] = Vector<Pair<String, Ref<Texture>>>();
-	}
-	HashMap<String, Variant> set_params;
-	HashMap<String, Variant> non_set_params;
-	auto add_orm_texture_candidate = [&](const String &param_name, const Ref<Texture> &tex) {
-		String lparam_name = param_name.to_lower();
-		bool did_set = true;
-		if (lparam_name.contains("metallic") || lparam_name.contains("metalness")) {
-			base_material_texture_candidates[BaseMaterial3D::TEXTURE_METALLIC].push_back(Pair<String, Ref<Texture>>(param_name, tex));
-		} else if (lparam_name.contains("roughness") || lparam_name.contains("rough")) {
-			base_material_texture_candidates[BaseMaterial3D::TEXTURE_ROUGHNESS].push_back(Pair<String, Ref<Texture>>(param_name, tex));
-		} else if (lparam_name.contains("ao") || lparam_name.contains("occlusion") || lparam_name.contains("ambient_occlusion")) {
-			base_material_texture_candidates[BaseMaterial3D::TEXTURE_AMBIENT_OCCLUSION].push_back(Pair<String, Ref<Texture>>(param_name, tex));
-		} else if (is_orm(param_name)) {
-			base_material_texture_candidates[BaseMaterial3D::TEXTURE_ORM].push_back(Pair<String, Ref<Texture>>(param_name, tex));
-		} else {
-			did_set = false;
-		}
-		return did_set;
-	};
-	auto add_texture_candidate = [&](const String &param_name, const String &hint, const Ref<Texture> &tex) {
-		String lparam_name = param_name.to_lower();
-		if (lparam_name.contains("albedo")) {
-			base_material_texture_candidates[BaseMaterial3D::TEXTURE_ALBEDO].push_back(Pair<String, Ref<Texture>>(param_name, tex));
-		} else if (lparam_name.contains("normal") && !hint.contains("roughness_normal")) {
-			base_material_texture_candidates[BaseMaterial3D::TEXTURE_NORMAL].push_back(Pair<String, Ref<Texture>>(param_name, tex));
-		} else if (lparam_name.contains("emissive") || lparam_name.contains("emission")) {
-			base_material_texture_candidates[BaseMaterial3D::TEXTURE_EMISSION].push_back(Pair<String, Ref<Texture>>(param_name, tex));
-		} else {
-			return add_orm_texture_candidate(param_name, tex);
-		}
-		return true;
-	};
-	Vector<Pair<Pair<String, String>, Ref<Texture>>> unknown_texture_candidates;
-	for (auto &E : shader_uniforms) {
-		String param_name = E.trim_prefix("shader_parameter/");
-		Variant val = p_shader_material->get_shader_parameter(param_name);
-
-		bool did_set = false;
-		if (base_material_params.has(param_name)) {
-			Variant base_material_val;
-			if (global_uniforms.has(param_name)) {
-				base_material_val = ProjectSettings::get_singleton()->get_setting("shader_globals/" + param_name);
-			} else if (instance_uniforms.has(param_name) && p_parent) {
-				bool valid = false;
-				Variant parent_val = p_parent->get(param_name, &valid);
-				if (valid) {
-					base_material_val = parent_val;
-				}
-			} else {
-				base_material_val = base_material->get(param_name);
-			}
-
-			if (base_material_val.get_type() == val.get_type()) {
-				base_material->set(param_name, val);
-				did_set = true;
-				set_params[param_name] = val;
-			}
-		} else if (set_param_not_in_property_list(base_material, param_name, val)) {
-			did_set = true;
-			set_params[param_name] = val;
-		}
-		if (!did_set) {
-			non_set_params[param_name] = val;
-		}
-
-		Ref<Texture> tex = val;
-		if (!tex.is_valid()) {
-			continue;
-		}
-		if (did_set) {
-			set_texture = true;
-			auto param = texture_param_map.has(param_name) ? texture_param_map.get(param_name) : BaseMaterial3D::TEXTURE_MAX;
-			if (param != BaseMaterial3D::TEXTURE_MAX) {
-				base_material_texture_candidates[param].push_back(Pair<String, Ref<Texture>>(param_name, tex));
-			} else {
-				WARN_PRINT(vformat("Unknown texture parameter: %s", param_name));
-			}
-			continue;
-		}
-
-		String hint;
-		// trying to capture "uniform sampler2D emissive_texture : hint_black;"
-		if (uniform_infos.has(param_name)) {
-			hint = uniform_infos[param_name].hint;
-		}
-
-		// renames from 3.x to 4.x
-		// { "hint_albedo", "source_color" },
-		// { "hint_aniso", "hint_anisotropy" },
-		// { "hint_black", "hint_default_black" },
-		// { "hint_black_albedo", "hint_default_black" },
-		// { "hint_color", "source_color" },
-		// { "hint_white", "hint_default_white" },
-		auto lparam_name = param_name.to_lower();
-
-		if (hint.contains("hint_albedo") || hint.contains("source_color")) {
-			base_material_texture_candidates[BaseMaterial3D::TEXTURE_ALBEDO].push_back(Pair<String, Ref<Texture>>(param_name, tex));
-		} else if (hint.contains("hint_white") || hint.contains("hint_default_white")) {
-			add_orm_texture_candidate(param_name, tex);
-		} else if (hint.contains("hint_normal")) {
-			base_material_texture_candidates[BaseMaterial3D::TEXTURE_NORMAL].push_back(Pair<String, Ref<Texture>>(param_name, tex));
-		} else if (hint.contains("hint_black") || hint.contains("hint_default_black")) {
-			// if (param_name.contains("emissive") || param_name.contains("emission")) {
-			// 	base_material_texture_candidates[BaseMaterial3D::TEXTURE_EMISSION].push_back(Pair<String, Ref<Texture>>(param_name, tex));
-			// } else {
-			// 	default_textures[param_name.trim_prefix("shader_parameter/")] = tex;
-			// }
-			base_material_texture_candidates[BaseMaterial3D::TEXTURE_EMISSION].push_back(Pair<String, Ref<Texture>>(param_name, tex));
-		} else {
-			unknown_texture_candidates.push_back({ { param_name, hint }, tex });
-		}
-	}
-	for (auto &E : unknown_texture_candidates) {
-		add_texture_candidate(E.first.first, E.first.second, E.second);
-	}
-	for (int i = 0; i < BaseMaterial3D::TEXTURE_MAX; i++) {
-		auto &candidates = base_material_texture_candidates[BaseMaterial3D::TextureParam(i)];
-		auto existing_tex = base_material->get_texture(BaseMaterial3D::TextureParam(i));
-
-		bool should_not_set = candidates.is_empty() && !existing_tex.is_valid();
-		if (should_not_set) {
-			continue;
-		}
-
-		if (feature_to_enable_map.has(BaseMaterial3D::TextureParam(i))) {
-			base_material->set_feature(feature_to_enable_map[BaseMaterial3D::TextureParam(i)], true);
-		}
-
-		if (existing_tex.is_valid()) {
-			continue;
-		}
-		if (candidates.size() == 1) {
-			base_material->set_texture(BaseMaterial3D::TextureParam(i), candidates[0].second);
-			set_texture = true;
-			set_params[candidates[0].first] = candidates[0].second;
-			continue;
-		}
-		bool set_this_texture = false;
-		if (i == BaseMaterial3D::TEXTURE_ALBEDO) {
-			for (auto &E : candidates) {
-				if (E.first.contains("albedo")) {
-					base_material->set_texture(BaseMaterial3D::TEXTURE_ALBEDO, E.second);
-					set_texture = true;
-					set_this_texture = true;
-					set_params[E.first] = E.second;
-				} else if (E.first.contains("emissi") && set_this_texture) {
-					// push this back to the emission candidates
-					base_material_texture_candidates[BaseMaterial3D::TEXTURE_EMISSION].push_back(E);
-				}
-			}
-		} else if (i == BaseMaterial3D::TEXTURE_NORMAL) {
-			for (auto &E : candidates) {
-				if (E.first.contains("normal")) {
-					base_material->set_texture(BaseMaterial3D::TEXTURE_NORMAL, E.second);
-					set_texture = true;
-					set_this_texture = true;
-					set_params[E.first] = E.second;
-				}
-			}
-		}
-		if (!set_this_texture) {
-			// just use the first one
-			base_material->set_texture(BaseMaterial3D::TextureParam(i), candidates[0].second);
-			set_texture = true;
-			set_params[candidates[0].first] = candidates[0].second;
-		}
-	}
-	if (shader_uniforms.has("brightness") && p_shader_material->get_shader_parameter("brightness").get_type() == Variant::FLOAT) {
-		float brightness = p_shader_material->get_shader_parameter("brightness");
-		Color get_emission = base_material->get_emission();
-		if (get_emission == Color()) {
-			get_emission = base_material->get_albedo();
-		}
-		base_material->set_emission(get_emission * brightness);
-	}
-	if (shader_uniforms.has("alpha")) {
-		Variant alpha_val = p_shader_material->get_shader_parameter("alpha");
-		if (alpha_val.get_type() == Variant::FLOAT) {
-			base_material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA);
-			base_material->set_alpha_antialiasing(BaseMaterial3D::ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE);
-			Color albedo = base_material->get_albedo();
-			albedo.a = alpha_val;
-			base_material->set_albedo(albedo);
-		}
-	}
-	base_material->set_name(p_shader_material->get_name());
-	// set the path to the shader material's path so that we can add it to the external deps found if necessary
-	base_material->set_path_cache(p_shader_material->get_path());
-	base_material->merge_meta_from(p_shader_material.ptr());
-
-	bool set_instance_uniforms = false;
-	for (auto &E : set_params) {
-		if (instance_uniforms.has(E.key)) {
-			set_instance_uniforms = true;
-			break;
-		}
-	}
-	return { base_material, { set_texture, set_instance_uniforms } };
-}
 
 // TODO: handle Godot version <= 4.2 image naming scheme?
 String GLBExporterInstance::demangle_name(const String &name) {
@@ -2518,7 +2205,7 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 				WARN_PRINT("Skinned meshes have physics nodes, but still exporting as non-single-root.");
 			}
 		}
-		if (after_4_4 || force_require_KHR_node_visibility) {
+		if (force_require_KHR_node_visibility) {
 			doc->set_visibility_mode(GLTFDocument::VisibilityMode::VISIBILITY_MODE_INCLUDE_REQUIRED);
 		} else {
 			doc->set_visibility_mode(GLTFDocument::VisibilityMode::VISIBILITY_MODE_INCLUDE_OPTIONAL);
@@ -2553,8 +2240,7 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 			GDRE_SCN_EXP_FAIL_V_MSG(ERR_FILE_CANT_WRITE, "Failed to serialize glTF document");
 		}
 
-#if MAKE_GLTF_COPY
-		{
+		if (GDREConfig::get_singleton()->get_setting("Exporter/Scene/GLTF/debug_copies", false)) {
 			// save a gltf copy for debugging
 			Dictionary gltf_asset = state->get_json().get("asset", Dictionary());
 			gltf_asset["generator"] = "GDRE Tools";
@@ -2566,7 +2252,6 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 			_serialize_file(state, gltf_path, buffer_paths, !use_double_precision);
 		}
 		GDRE_SCN_EXP_CHECK_CANCEL();
-#endif
 		auto check_unique = [&](String &name, HashSet<String> &image_map) {
 			if (name.is_empty()) {
 				return;
@@ -2729,7 +2414,6 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 						Ref<Mesh> instance_mesh = mesh_path_to_instance_map[path]->get_mesh();
 						Ref<ArrayMesh> arr_mesh = instance_mesh;
 						mesh_info.has_shadow_meshes = arr_mesh.is_valid() ? arr_mesh->get_shadow_mesh().is_valid() : mesh_info.has_shadow_meshes;
-						mesh_info.has_lightmap_uv2 = instance_mesh->get_lightmap_size_hint() != default_light_map_size;
 
 						auto gi_mode = mesh_path_to_instance_map[path]->get_gi_mode();
 						if (gi_mode == GeometryInstance3D::GI_MODE_DISABLED) {
@@ -2792,9 +2476,8 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 
 			json["asset"] = gltf_asset;
 		}
-#if MAKE_GLTF_COPY
 		GDRE_SCN_EXP_CHECK_CANCEL();
-		if (p_dest_path.get_extension() == "glb") {
+		if (p_dest_path.get_extension() == "glb" && GDREConfig::get_singleton()->get_setting("Exporter/Scene/GLTF/debug_copies", false)) {
 			// save a gltf copy for debugging
 			auto rel_path = p_dest_path.begins_with(output_dir) ? p_dest_path.trim_prefix(output_dir).simplify_path().trim_prefix("/") : p_dest_path.get_file();
 			if (iinfo.is_valid()) {
@@ -2809,7 +2492,6 @@ Error GLBExporterInstance::_export_instanced_scene(Node *root, const String &p_d
 			Vector<String> buffer_paths;
 			_serialize_file(state, gltf_path, buffer_paths, !use_double_precision);
 		}
-#endif
 		GDRE_SCN_EXP_CHECK_CANCEL();
 		Vector<String> buffer_paths;
 		err = _serialize_file(state, p_dest_path, buffer_paths, !use_double_precision);
@@ -3077,7 +2759,16 @@ void GLBExporterInstance::_update_import_params(const String &p_dest_path) {
 		for (auto &E : node_options) {
 			// If we're not removing physics bodies, we don't want the editor to re-generate them when re-importing.
 			if (!remove_physics_bodies && E.value.get("generate/physics", false)) {
-				E.value["generate/physics"] = false;
+				SceneExporterEnums::BodyType body_type = (SceneExporterEnums::BodyType)E.value.get("physics/body_type", (int)SceneExporterEnums::BODY_TYPE_STATIC);
+				if (body_type != SceneExporterEnums::BODY_TYPE_AREA) {
+					E.value["generate/physics"] = false;
+				}
+			}
+			if (E.value.has("physics/physics_material_override")) {
+				Ref<Resource> physics_material_override = E.value["physics/physics_material_override"];
+				if (physics_material_override.is_valid() && !physics_material_override->is_built_in()) {
+					external_deps_updated.insert(physics_material_override->get_path());
+				}
 			}
 			for (auto &key : E.value.keys()) {
 				if (default_node_options.has(key) && E.value.get(key, Variant()) == default_node_options.get(key, Variant())) {
@@ -3132,7 +2823,13 @@ Node *GLBExporterInstance::_instantiate_scene(Ref<PackedScene> scene) {
 		_silence_errors(true);
 	}
 #endif
-	Node *root = scene->instantiate();
+	auto result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Node *()>)[&scene]() -> Node * {
+		return scene->instantiate();
+	});
+	if (!result.has_value()) {
+		return nullptr; // cancelled
+	}
+	Node *root = result.value();
 #ifndef DEBUG_ENABLED
 	if (ver_major <= 3) {
 		_silence_errors(false);
@@ -3165,12 +2862,21 @@ Error GLBExporterInstance::_load_scene(Ref<PackedScene> &r_scene) {
 		_silence_errors(true);
 	}
 #endif
+	std::optional<Ref<PackedScene>> result;
 	// For some reason, scenes with meshes fail to load without the load done by ResourceLoader::load, possibly due to notification shenanigans.
-	if (ResourceCompatLoader::is_globally_available() && using_threaded_load()) {
-		r_scene = ResourceLoader::load(source_path, "PackedScene", ResourceFormatLoader::CACHE_MODE_REUSE, &err);
+	if (ResourceCompatLoader::is_globally_available()) {
+		result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<PackedScene>()>)[&]() -> Ref<PackedScene> {
+			return ResourceLoader::load(source_path, "PackedScene", ResourceFormatLoader::CACHE_MODE_REUSE, &err);
+		});
 	} else {
-		r_scene = ResourceCompatLoader::custom_load(source_path, "PackedScene", mode_type, &err, using_threaded_load(), ResourceFormatLoader::CACHE_MODE_REUSE);
+		result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<PackedScene>()>)[&]() -> Ref<PackedScene> {
+			return ResourceCompatLoader::custom_load(source_path, "PackedScene", mode_type, &err, using_threaded_load(), ResourceFormatLoader::CACHE_MODE_REUSE);
+		});
 	}
+	if (!result.has_value()) {
+		return ERR_SKIP;
+	}
+	r_scene = result.value();
 #ifndef DEBUG_ENABLED
 	if (ver_major <= 3) {
 		_silence_errors(false);
@@ -3208,7 +2914,19 @@ Error GLBExporterInstance::_get_return_error() {
 	// if we've set all the external resources (including custom animations),
 	// then this isn't an error.
 	bool removed_all_errors = true;
-	if (gltf_serialization_error_messages.size() > 0 && animation_deps_needed.size() > 0 && (!updating_import_info || animation_deps_updated.size() == animation_deps_needed.size())) {
+	static constexpr const char *const ANIMATION_ERROR_PATTERN = R"((?:glTF: Cannot export empty property\. No property was specified in the NodePath: |glTF: Cannot get node(?: index)? for animated track using path: )(.*))";
+	Ref<RegEx> animation_error_re = RegEx::create_from_string(ANIMATION_ERROR_PATTERN);
+
+	static const Vector<String> errors_to_ignore = {
+		"A node was animated, but it wasn't found in the GLTFState", // animation track not found because it's not exported
+		"Parameter \"p_target_object\" is null.", // object property animated by track not found because it's not exportable by the exporter
+		"Image width specified (0 pixels) must be greater than 0 pixels", // texture export failure caused by zero-sized source images
+		"Image width must be greater than 0", // texture export failure caused by zero-sized source images
+		"Cannot generate mipmaps with width or height equal to 0", // texture export failure caused by zero-sized source images
+		"Condition \"p_texture->get_image().is_null()\" is true. Returning: -1", // texture export failure caused by zero-sized source images
+	};
+	String last_error_message;
+	if (gltf_serialization_error_messages.size() > 0) {
 		Vector<int64_t> error_messages_to_remove;
 		bool removed_last_error = false;
 		for (int64_t i = 0; i < gltf_serialization_error_messages.size(); i++) {
@@ -3221,15 +2939,29 @@ Error GLBExporterInstance::_get_return_error() {
 				continue;
 			}
 			removed_last_error = false;
+
+			// If the exact same error message is emitted twice in a row, we can ignore the second one
+			if (message == last_error_message) {
+				error_messages_to_remove.push_back(i);
+				removed_last_error = true;
+				continue;
+			}
+			last_error_message = message;
+			if (message.contains("but the track in the Godot AnimationPlayer is using a different interpolation.")) {
+				// lots of spurious warnings from this one
+				error_messages_to_remove.push_back(i);
+				removed_last_error = true;
+				continue;
+			}
+
 			if (message.begins_with("WARNING:")) {
 				// don't count it, but don't remove it either
 				continue;
 			}
-			if (message.contains("glTF:")) {
-				if (message.contains("Cannot export empty property. No property was specified in the NodePath:") || message.contains("animated track using path")) {
-					NodePath path = message.substr(message.find("ath:") + 4).strip_edges();
+			if (message.contains("glTF:") && (!updating_import_info || animation_deps_updated.size() == animation_deps_needed.size())) {
+				if (auto match = animation_error_re->search(message); match.is_valid()) {
+					NodePath path = match->get_string(1).strip_edges();
 					if (!updating_import_info || (!path.is_empty() && external_animation_nodepaths.has(path))) {
-						// pop off the error message and the stack traces
 						error_messages_to_remove.push_back(i);
 						removed_last_error = true;
 						continue;
@@ -3242,6 +2974,18 @@ Error GLBExporterInstance::_get_return_error() {
 					continue;
 				}
 			}
+
+			for (auto &e : errors_to_ignore) {
+				if (message.contains(e)) {
+					error_messages_to_remove.push_back(i);
+					removed_last_error = true;
+					break;
+				}
+			}
+			if (removed_last_error) {
+				continue;
+			}
+
 			// Otherwise, we haven't removed all the errors
 			removed_all_errors = false;
 		}
@@ -3291,16 +3035,23 @@ Error SceneExporter::export_file(const String &p_dest_path, const String &p_src_
 Error SceneExporter::export_file_to_obj(const String &p_dest_path, const String &p_src_path, Ref<ImportInfo> iinfo) {
 	Error err;
 	Ref<PackedScene> scene;
-	bool using_threaded_load = !SceneExporter::can_multithread;
 	int ver_major = iinfo.is_valid() ? iinfo->get_ver_major() : get_ver_major(p_src_path);
 	if (ver_major < MINIMUM_GODOT_VER_SUPPORTED) {
 		return ERR_UNAVAILABLE;
 	}
 	// For some reason, scenes with meshes fail to load without the load done by ResourceLoader::load, possibly due to notification shenanigans.
-	if (ResourceCompatLoader::is_globally_available() && using_threaded_load) {
-		scene = ResourceLoader::load(p_src_path, "PackedScene", ResourceFormatLoader::CACHE_MODE_REUSE, &err);
+	std::optional<Ref<PackedScene>> result;
+	if (ResourceCompatLoader::is_globally_available()) {
+		result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<PackedScene>()>)[&]() -> Ref<PackedScene> {
+			return ResourceLoader::load(p_src_path, "PackedScene", ResourceFormatLoader::CACHE_MODE_REUSE, &err);
+		});
 	} else {
-		scene = ResourceCompatLoader::custom_load(p_src_path, "PackedScene", ResourceCompatLoader::get_default_load_type(), &err, !using_threaded_load, ResourceFormatLoader::CACHE_MODE_REUSE);
+		result = TaskManager::get_singleton()->dispatch_to_main_thread((std::function<Ref<PackedScene>()>)[&]() -> Ref<PackedScene> {
+			return ResourceCompatLoader::custom_load(p_src_path, "PackedScene", ResourceCompatLoader::get_default_load_type(), &err, true, ResourceFormatLoader::CACHE_MODE_REUSE);
+		});
+	}
+	if (!result.has_value()) {
+		return ERR_SKIP; // cancelled
 	}
 	ERR_FAIL_COND_V_MSG(err, ERR_FILE_CANT_READ, "Failed to load scene " + p_src_path);
 	return export_scene_to_obj(scene, p_dest_path, iinfo, ver_major);
@@ -3543,6 +3294,7 @@ struct BatchExportToken : public TaskRunnerStruct {
 		}
 
 		if (is_text_output()) {
+			after_preload();
 			return false;
 		}
 		err = _check_cancelled();
@@ -3570,36 +3322,37 @@ struct BatchExportToken : public TaskRunnerStruct {
 			_scene = scene;
 			if (!is_obj_output()) {
 				root = instance._instantiate_scene(scene);
+				if (root) {
+					root = instance._set_stuff_from_instanced_scene(root);
+				}
 				if (!root) {
 					_scene = nullptr;
-					err = ERR_CANT_ACQUIRE_RESOURCE;
+					err = _check_cancelled();
+					if (err == OK) {
+						err = ERR_CANT_ACQUIRE_RESOURCE;
+					}
 					report->set_error(err);
 					after_preload();
 					return false;
 				}
-				root = instance._set_stuff_from_instanced_scene(root);
 			}
 		}
 
-		constexpr uint64_t MAX_MESHES_ON_WORKER_THREAD = 15;
-		if (instance.is_batch_export) {
-			auto meshes = get_meshes(_scene, ver_major, true);
-			if (meshes.size() > MAX_MESHES_ON_WORKER_THREAD) {
-				// disabling for now; can't figure out what the x factor is for why certain scenes take forever
-				// do_on_main_thread = true;
-			}
-			surface_count = get_total_surface_count(meshes);
-		}
 		// print_line("Preloaded scene " + p_src_path);
 		after_preload();
 		return do_on_main_thread;
 	}
 
 	void after_preload() {
-		if (Thread::is_main_thread() && _scene.is_valid()) {
+		if (_scene.is_valid()) {
 			// We have to flush the message queue after the scene is loaded;
 			// Certain resources like NoiseTexture2D can queue up deferred calls that will cause crashes if not flushed before the scene is manipulated or freed
-			GDRESettings::main_iteration();
+			if (!TaskManager::get_singleton()->dispatch_to_main_thread((std::function<void()>)[]() {
+												 GDREMainLoop::iteration(true);
+											 })
+							.has_value()) {
+				err = ERR_SKIP;
+			}
 		}
 		preload_done = true;
 	}
@@ -3648,13 +3401,11 @@ struct BatchExportToken : public TaskRunnerStruct {
 			if (err == OK) {
 				report->set_saved_path(p_dest_path);
 			}
-#ifdef DEBUG_ENABLED // export a text copy so we can see what went wrong
-			if (true) {
+			if (GDREConfig::get_singleton()->get_setting("Exporter/Scene/GLTF/debug_copies", false)) {
 				auto new_dest = "res://.tscn_copy/" + report->get_import_info()->get_export_dest().trim_prefix("res://.assets/").trim_prefix("res://").get_basename() + ".tscn";
 				auto new_dest_path = output_dir.path_join(new_dest.replace_first("res://", ""));
 				ResourceCompatLoader::to_text(p_src_path, new_dest_path);
 			}
-#endif
 		}
 		_scene = nullptr;
 		// print_line("Finished exporting scene " + p_src_path);
@@ -3797,8 +3548,22 @@ Ref<ExportReport> SceneExporter::export_file_with_options(const String &out_path
 	return token->report;
 }
 
+void SceneExporter::prebatch_export() {
+	bool remove_physics_bodies = GDREConfig::get_singleton()->get_setting("Exporter/Scene/GLTF/remove_physics_bodies", false);
+	if (remove_physics_bodies) {
+		unregister_physics_extension();
+	}
+}
+
+void SceneExporter::postbatch_export() {
+	bool remove_physics_bodies = GDREConfig::get_singleton()->get_setting("Exporter/Scene/GLTF/remove_physics_bodies", false);
+	if (remove_physics_bodies) {
+		register_physics_extension();
+	}
+}
+
 Ref<ExportReport> SceneExporter::export_resource(const String &output_dir, Ref<ImportInfo> iinfo) {
-	BatchExportToken token(output_dir, iinfo);
+	BatchExportToken token(output_dir, iinfo, {}, true);
 	token.batch_preload();
 	token.batch_export_instanced_scene();
 	token.post_export();
@@ -3883,298 +3648,4 @@ Error GLBExporterInstance::_batch_export_instanced_scene(Node *root, const Strin
 	err = _get_return_error();
 
 	return err;
-}
-// void do_batch_export_instanced_scene(int i, BatchExportToken *tokens);
-void SceneExporter::do_batch_export_instanced_scene(int i, std::shared_ptr<BatchExportToken> *tokens) {
-	std::shared_ptr<BatchExportToken> token = tokens[i];
-	token->batch_export_instanced_scene();
-}
-
-void SceneExporter::do_single_threaded_batch_export_instanced_scene(int i, std::shared_ptr<BatchExportToken> *tokens) {
-	std::shared_ptr<BatchExportToken> token = tokens[i];
-	token->batch_preload();
-	token->batch_export_instanced_scene();
-}
-
-String SceneExporter::get_batch_export_description(int i, std::shared_ptr<BatchExportToken> *tokens) const {
-	return "Exporting scene " + tokens[i]->p_src_path;
-}
-
-struct BatchExportTokenSort {
-	bool operator()(const std::shared_ptr<BatchExportToken> &a, const std::shared_ptr<BatchExportToken> &b) const {
-		return a->export_end_time - a->export_start_time > b->export_end_time - b->export_start_time;
-	}
-};
-
-size_t SceneExporter::get_vram_usage() {
-	List<RenderingServerTypes::MeshInfo> mesh_info;
-	RS::get_singleton()->mesh_debug_usage(&mesh_info);
-	List<RenderingServerTypes::TextureInfo> tinfo;
-	RS::get_singleton()->texture_debug_usage(&tinfo);
-
-	size_t total_vmem = 0;
-
-	for (const RenderingServerTypes::MeshInfo &E : mesh_info) {
-		total_vmem += E.vertex_buffer_size + E.attribute_buffer_size + E.skin_buffer_size + E.index_buffer_size + E.blend_shape_buffer_size + E.lod_index_buffers_size;
-	}
-	for (const RenderingServerTypes::TextureInfo &E : tinfo) {
-		total_vmem += E.bytes;
-	}
-	return total_vmem;
-}
-
-inline uint64_t get_average_delta(const Vector<uint64_t> &deltas) {
-	uint64_t total_delta = 0;
-	for (auto &delta : deltas) {
-		total_delta += delta;
-	}
-	return total_delta / (deltas.size() > 0 ? deltas.size() : 1);
-}
-
-#ifdef DEBUG_ENABLED
-#define perf_print(...) print_line(__VA_ARGS__)
-#define perf_print_verbose(...) print_verbose(__VA_ARGS__)
-#else
-#define perf_print(...) print_verbose(__VA_ARGS__)
-#define perf_print_verbose(...) (void)(0)
-#endif
-
-Vector<Ref<ExportReport>> SceneExporter::batch_export_files(const String &output_dir, const Vector<Ref<ImportInfo>> &scenes) {
-	Vector<std::shared_ptr<BatchExportToken>> tokens;
-	HashMap<String, int> export_dest_to_iinfo;
-	Vector<Ref<ExportReport>> reports;
-	for (auto &scene : scenes) {
-		Ref<ExportReport> report = ResourceExporter::_check_for_existing_resources(scene);
-		if (report.is_valid()) {
-			// No extant resources to export
-			report->set_exporter(get_name());
-			reports.push_back(report);
-			continue;
-		}
-		String ext = scene->get_export_dest().get_extension().to_lower();
-		if (_check_unsupported(scene->get_ver_major(), ext == "escn" || ext == "tscn")) {
-			// Unsupported version
-			report = memnew(ExportReport(scene, get_name()));
-			_set_unsupported(report, scene->get_ver_major(), ext == "obj");
-			reports.push_back(report);
-			continue;
-		}
-
-		tokens.push_back(std::make_shared<BatchExportToken>(output_dir, scene, Dictionary(), true));
-		int idx = tokens.size() - 1;
-		auto &token = tokens[idx];
-		token->instance.image_path_to_data_hash = Dictionary();
-		String export_dest = token->get_export_dest();
-		if (export_dest_to_iinfo.has(export_dest)) {
-			int other_i = export_dest_to_iinfo[export_dest];
-			auto &other_token = tokens.write[other_i];
-			if (other_token->original_export_dest.get_file() != other_token->get_export_dest().get_file()) {
-				other_token->append_original_ext_to_export_dest();
-				export_dest_to_iinfo.erase(export_dest);
-			}
-		}
-		if (export_dest_to_iinfo.has(export_dest)) {
-			if (token->original_export_dest.get_file() != token->get_export_dest().get_file()) {
-				token->append_original_ext_to_export_dest();
-			} else {
-				token->set_export_dest(export_dest.get_basename() + "_" + itos(idx) + "." + export_dest.get_extension());
-			}
-		} else {
-			export_dest_to_iinfo[export_dest] = idx;
-		}
-	}
-
-	if (tokens.is_empty()) {
-		return reports;
-	}
-
-	bool remove_physics_bodies = GDREConfig::get_singleton()->get_setting("Exporter/Scene/GLTF/remove_physics_bodies", false);
-	if (remove_physics_bodies) {
-		unregister_physics_extension();
-	}
-
-	static constexpr int64_t ONE_MB = 1024LL * 1024LL;
-	static constexpr int64_t ONE_GB = 1024LL * ONE_MB;
-	static constexpr int64_t EIGHT_GB = 8LL * ONE_GB;
-
-	BatchExportToken::in_progress = 0;
-	Dictionary mem_info = OS::get_singleton()->get_memory_info();
-	int64_t current_memory_usage = OS::get_singleton()->get_static_memory_usage();
-	// available memory does not include disk cache, so we should take the larger of this or peak memory usage (i.e. the most we've allocated)
-	int64_t total_mem_available = MAX((int64_t)mem_info["available"], (int64_t)OS::get_singleton()->get_static_memory_peak_usage() - current_memory_usage);
-	int64_t max_usage = TaskManager::maximum_memory_usage;
-	size_t current_vram_usage = get_vram_usage();
-	size_t peak_vram_usage = current_vram_usage;
-	// TODO: get the real available VRAM; right now we assume 4GB
-	const int64_t MAX_VRAM = EIGHT_GB / 2;
-	// 75% of the default thread pool size; we can't saturate the thread pool because some loaders may make use of them and we'll cause a deadlock.
-	const int64_t default_num_threads = OS::get_singleton()->get_default_thread_pool_size() * 0.75;
-	// The smaller of either the above value, or the amount of memory available to us, divided by 256MB (conservative estimate of 256MB per scene)
-	const int64_t number_of_threads = MIN(default_num_threads, max_usage / (ONE_GB / 4));
-
-	print_line("\nExporting scenes...");
-	perf_print(vformat("Current memory usage: %.02fMB, Total memory available: %.02fMB", (double)current_memory_usage / (double)ONE_MB, (double)total_mem_available / (double)ONE_MB));
-	perf_print(vformat("VRAM usage: %.02fMB", (double)current_vram_usage / (double)ONE_MB));
-	perf_print(vformat("Default thread pool size: %d", OS::get_singleton()->get_default_thread_pool_size()));
-	perf_print(vformat("Number of threads to use for scene export: %d\n", (int64_t)number_of_threads));
-
-	Vector<uint64_t> deltas;
-	Vector<uint64_t> abnormal_deltas;
-	Vector<uint64_t> resync_deltas;
-	constexpr size_t MAX_DELTA_COUNT = 1000000;
-	constexpr uint64_t DRAW_DELTA_THRESHOLD = 50000;
-	resync_deltas.reserve(MAX_DELTA_COUNT);
-
-	auto average_out_delta = [&](Vector<uint64_t> &deltas) {
-		if (deltas.size() >= MAX_DELTA_COUNT) {
-			auto avg = get_average_delta(deltas);
-			deltas.clear();
-			deltas.resize(100);
-			deltas.fill(avg);
-			deltas.reserve(MAX_DELTA_COUNT);
-		}
-	};
-	auto resync_rendering_server = [&]() {
-		auto start_tick = OS::get_singleton()->get_ticks_usec();
-		RS::get_singleton()->sync();
-		auto current_tick = OS::get_singleton()->get_ticks_usec();
-		auto delta = current_tick - start_tick;
-		resync_deltas.push_back(delta);
-		if (delta > 1) {
-			abnormal_deltas.push_back(delta);
-		}
-		average_out_delta(resync_deltas);
-	};
-	auto _get_vram_usage = [&]() {
-#if 0 // RS::get_singleton()->texture_debug_usage() is causing segfaults if we have the export thread pool running, so disabling for now
-		auto start_tick = OS::get_singleton()->get_ticks_usec();
-		current_vram_usage = SceneExporter::get_vram_usage();
-		peak_vram_usage = MAX(peak_vram_usage, current_vram_usage);
-		auto current_tick = OS::get_singleton()->get_ticks_usec();
-		if (current_tick - last_print_time > 1000000) {
-			perf_print_verbose(vformat("VRAM usage: %.02fMB", (double)current_vram_usage / (double)ONE_MB));
-			last_print_time = current_tick;
-		}
-		auto delta = current_tick - start_tick;
-		deltas.push_back(delta);
-		if (delta > 10000 && current_tick - last_warn_time > 1000000) {
-			perf_print("Took " + itos(delta / 1000) + "ms to get VRAM usage!!");
-			last_warn_time = current_tick;
-		}
-		average_out_delta(deltas);
-#endif
-		return current_vram_usage;
-	};
-
-	Error err = OK;
-	auto export_start_time = OS::get_singleton()->get_ticks_msec();
-	auto last_update_time = export_start_time;
-
-	auto ensure_progress = [&]() {
-		auto current_time = OS::get_singleton()->get_ticks_usec();
-		if (current_time - last_update_time >= DRAW_DELTA_THRESHOLD) {
-			last_update_time = current_time;
-			return TaskManager::get_singleton()->update_progress_bg(true);
-		}
-		resync_rendering_server();
-		return false;
-	};
-	if (number_of_threads <= 1 || GDREConfig::get_singleton()->get_setting("force_single_threaded", false)) {
-		print_line("Forcing single-threaded scene export...");
-		err = TaskManager::get_singleton()->run_group_task_on_current_thread(
-				this,
-				&SceneExporter::do_single_threaded_batch_export_instanced_scene,
-				tokens.ptrw(),
-				tokens.size(),
-				&SceneExporter::get_batch_export_description,
-				"Exporting scenes",
-				"Exporting scenes",
-				true);
-	} else {
-		auto task_id = TaskManager::get_singleton()->add_group_task(
-				this,
-				&SceneExporter::do_batch_export_instanced_scene,
-				tokens.ptrw(),
-				tokens.size(),
-				&SceneExporter::get_batch_export_description,
-				"Exporting scenes",
-				"Exporting scenes",
-				true,
-				number_of_threads,
-				true);
-
-		int starve_count = 0;
-		for (int64_t i = 0; i < tokens.size(); i++) {
-			auto &token = tokens[i];
-			if (token->batch_preload()) {
-				// we need to do the export on the main thread
-				token->batch_export_instanced_scene();
-			}
-			// Don't load more than the current number of tasks being processed
-			_get_vram_usage();
-			auto start_wait = OS::get_singleton()->get_ticks_msec();
-			auto last_warn_time = 0;
-			while (BatchExportToken::in_progress >= number_of_threads ||
-					(BatchExportToken::in_progress > 0 &&
-							(TaskManager::is_memory_usage_too_high() ||
-									current_vram_usage > MAX_VRAM))) {
-				if (ensure_progress()) {
-					break;
-				}
-				_get_vram_usage();
-				if (start_wait + 10000 < OS::get_singleton()->get_ticks_msec()) {
-					if (last_warn_time == 0) {
-						perf_print(vformat("\n*** STALL WARNING %d ***", ++starve_count));
-					}
-					if (last_warn_time + 1000 < OS::get_singleton()->get_ticks_msec()) {
-						perf_print(vformat("Scene export stalled: %d/%d threads running, memory starved: %s", BatchExportToken::in_progress + 0, number_of_threads, TaskManager::is_memory_usage_too_high() ? "yes" : "no"));
-						last_warn_time = OS::get_singleton()->get_ticks_msec();
-					}
-				}
-				OS::get_singleton()->delay_usec(1000);
-			}
-			// calling update_progress_bg serves three purposes:
-			// 1) updating the progress bar
-			// 2) checking if the task was cancelled
-			// 3) allowing the main loop to iterate so that the command queue is flushed
-			// Without flushing the command queue, GLTFDocument::append_from_scene will hang
-			if (TaskManager::get_singleton()->update_progress_bg(true)) {
-				break;
-			}
-		}
-		while (!TaskManager::get_singleton()->is_current_task_completed(task_id)) {
-			_get_vram_usage();
-			if (ensure_progress()) {
-				break;
-			}
-			OS::get_singleton()->delay_usec(1000);
-		}
-		err = TaskManager::get_singleton()->wait_for_task_completion(task_id);
-
-		// get the average delta
-		uint64_t average_delta = get_average_delta(deltas);
-		uint64_t average_resync_delta = get_average_delta(resync_deltas);
-		perf_print(vformat("Average time to resync rendering server: %.02fms", (double)average_resync_delta / 1000.0));
-		perf_print(vformat("Average time to get VRAM usage: %.02fms", (double)average_delta / 1000.0));
-		perf_print(vformat("Peak VRAM usage: %.02fMB", (double)peak_vram_usage / (double)ONE_MB));
-	}
-	perf_print("\n");
-	auto export_end_time = OS::get_singleton()->get_ticks_msec();
-	tokens.sort_custom<BatchExportTokenSort>();
-#if PRINT_PERF_CSV
-	perf_print("scene,time,surface_count");
-	for (auto &token : tokens) {
-		perf_print(vformat("%s,%.02f,%d", token->get_export_dest(), (double)(token->export_end_time - token->export_start_time) / 1000.0, (int64_t)token->surface_count));
-	}
-#endif
-	for (auto &token : tokens) {
-		token->post_export(err);
-		reports.push_back(token->report);
-	}
-
-	print_line(vformat("*** Exporting %d scenes took %.02fs\n", tokens.size(), (double)(export_end_time - export_start_time) / 1000.0));
-	if (remove_physics_bodies) {
-		register_physics_extension();
-	}
-	return reports;
 }

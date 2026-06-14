@@ -11,12 +11,12 @@ class GDScriptDecomp_48f1d02 : public GDScriptDecomp {
 	GDCLASS(GDScriptDecomp_48f1d02, GDScriptDecomp);
 protected:
 	static void _bind_methods(){};
-	static constexpr int bytecode_version = 5;
+	static constexpr int bytecode_version = 4;
 	static constexpr int bytecode_rev = 0x48f1d02;
 	static constexpr int engine_ver_major = 2;
 	static constexpr int variant_ver_major = 2;
 	static constexpr const char *bytecode_rev_str = "48f1d02";
-	static constexpr const char *engine_version = "2.0-dev1";
+	static constexpr const char *engine_version = "2.0-dev0";
 	static constexpr const char *max_engine_version = "";
 	static constexpr const char *date = "2015-06-24";
 	static constexpr int parent = 0x65d48d6;

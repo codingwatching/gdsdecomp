@@ -36,10 +36,12 @@
 #include "scene/gui/file_dialog.h"
 #include "scene/main/scene_tree.h"
 #include "servers/display/display_server.h"
-#include "utility/gdre_logger.h"
 
+#include "main/gdre_main_loop.h"
+#include "utility/gdre_logger.h"
 #include <utility/gd_parallel_queue.h>
 #include <utility/gdre_settings.h>
+
 #ifdef TOOLS_ENABLED
 #include "editor/editor_interface.h"
 #include "editor/editor_node.h"
@@ -137,7 +139,7 @@ void GDREProgressDialog::_update_ui() {
 	// Run main loop for two frames.
 	if (is_inside_tree()) {
 		DisplayServer::get_singleton()->process_events();
-		GDRESettings::main_iteration();
+		GDREMainLoop::iteration();
 	}
 }
 
@@ -228,7 +230,7 @@ bool GDREProgressDialog::Task::update() {
 	constexpr uint64_t REDRAW_THRESHOLD = 1000000 / 60;
 	auto curr_time_us = OS::get_singleton()->get_ticks_usec();
 	if (!should_redraw(curr_time_us)) {
-		if (!is_headless && !(curr_time_us - last_progress_tick >= REDRAW_THRESHOLD && (progress->get_value() != current_step.step || state->get_text() != current_step.state || indeterminate != progress->is_indeterminate() || steps != progress->get_max()))) {
+		if (!is_headless && !(curr_time_us - last_progress_tick >= REDRAW_THRESHOLD && (indeterminate || (progress->get_value() != current_step.step || state->get_text() != current_step.state || indeterminate != progress->is_indeterminate() || steps != progress->get_max())))) {
 			return false;
 		}
 	}
@@ -245,6 +247,9 @@ bool GDREProgressDialog::Task::update() {
 			if (progress->get_value() != current_step.step) {
 				progress->set_value(current_step.step);
 			}
+		} else {
+			// this forces the indeterminate progress bar to redraw
+			progress->notification(NOTIFICATION_INTERNAL_PROCESS);
 		}
 		if (state->get_text() != current_step.state) {
 			state->set_text(current_step.state);
@@ -345,6 +350,7 @@ void GDREProgressDialog::_reparent_and_show() {
 
 void GDREProgressDialog::_hide() {
 	hide();
+	_update_ui();
 	// 	if (GodotREEditorStandalone::get_singleton()) {
 	// 		GodotREEditorStandalone::get_singleton()->set_process_input(false);
 	// 	}

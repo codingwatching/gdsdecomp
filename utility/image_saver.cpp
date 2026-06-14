@@ -48,7 +48,9 @@ bool is_supported_format_for_exr(Image::Format p_format) {
 	}
 }
 
-Error ImageSaver::save_image(const String &dest_path, const Ref<Image> &img, bool lossy, float quality, bool duplicate) {
+Error ImageSaver::save_image(const String &dest_path, const Ref<Image> &p_img, bool lossy, float quality, bool duplicate) {
+	ERR_FAIL_COND_V_MSG(p_img.is_null(), ERR_FILE_CORRUPT, "Image is null for texture " + dest_path);
+	Ref<Image> img = duplicate ? (Ref<Image>)p_img->duplicate() : p_img;
 	ERR_FAIL_COND_V_MSG(img->is_empty(), ERR_FILE_EOF, "Image data is empty for texture " + dest_path + ", not saving");
 	Error err = gdre::ensure_dir(dest_path.get_base_dir());
 	ERR_FAIL_COND_V_MSG(err != OK, err, "Failed to create dirs for " + dest_path);
@@ -64,9 +66,9 @@ Error ImageSaver::save_image(const String &dest_path, const Ref<Image> &img, boo
 	} else if (dest_ext == "png") {
 		err = img->save_png(dest_path);
 	} else if (dest_ext == "tga") {
-		err = ImageSaver::save_image_as_tga(dest_path, img, duplicate);
+		err = ImageSaver::save_image_as_tga(dest_path, img, false);
 	} else if (dest_ext == "svg") {
-		err = ImageSaver::save_image_as_svg(dest_path, img, duplicate);
+		err = ImageSaver::save_image_as_svg(dest_path, img, false);
 	} else if (dest_ext == "dds") {
 		err = img->save_dds(dest_path);
 	} else if (dest_ext == "exr") {
@@ -82,11 +84,11 @@ Error ImageSaver::save_image(const String &dest_path, const Ref<Image> &img, boo
 		}
 		err = img->save_exr(dest_path);
 	} else if (dest_ext == "bmp") {
-		err = ImageSaver::save_image_as_bmp(dest_path, img, duplicate);
+		err = ImageSaver::save_image_as_bmp(dest_path, img, false);
 	} else if (dest_ext == "gif") {
-		err = ImageSaver::save_image_as_gif(dest_path, img, duplicate);
+		err = ImageSaver::save_image_as_gif(dest_path, img, false);
 	} else if (dest_ext == "hdr") {
-		err = ImageSaver::save_image_as_hdr(dest_path, img, duplicate);
+		err = ImageSaver::save_image_as_hdr(dest_path, img, false);
 	} else {
 		ERR_FAIL_V_MSG(ERR_FILE_BAD_PATH, "Invalid file name: " + dest_path);
 	}

@@ -353,4 +353,21 @@ static public class Lib
 		}
 		return arrayPtr;
 	}
+
+	[UnmanagedCallersOnly(EntryPoint = "GodotMonoDecomp_CheckFileIsAssembly")]
+	public static bool AOTCheckFileIsAssembly(
+		IntPtr file
+	)
+	{
+		var fileStr = Marshal.PtrToStringAnsi(file) ?? string.Empty;
+		try
+		{
+			var assemblyName = System.Reflection.AssemblyName.GetAssemblyName(fileStr);
+			return !string.IsNullOrEmpty(assemblyName.Name);
+		}
+		catch
+		{
+			return false;
+		}
+	}
 }

@@ -1,8 +1,20 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="ImportInfo" inherits="RefCounted" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+<class name="ImportInfo" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
+		Metadata about an imported resource file in a loaded Godot project.
 	</brief_description>
 	<description>
+		[ImportInfo] describes a single imported resource in a loaded Godot project. It stores the source file path, the engine-side destination paths, import parameters, and metadata read from [code].import[/code] files or embedded resource headers. GDRE uses [ImportInfo] objects internally to drive resource export - you can retrieve them from [GDRESettings] (via [method GDRESettings.get_import_info_by_source] or [method GDRESettings.get_import_files]) or load them directly from [code].import[/code] files with [method load_from_file].
+		[codeblock]
+		var info = ImportInfo.load_from_file("res://textures/player.png.import", 4, 3)
+		if info == null:
+		    push_error("Failed to load import info")
+		    return
+		print("Source: ", info.source_file)
+		print("Importer: ", info.get_importer())
+		print("Type: ", info.type)
+		print("Dest files: ", info.dest_files)
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -11,23 +23,27 @@
 			<return type="String" />
 			<param index="0" name="full" type="bool" default="true" />
 			<description>
+				Returns a human-readable string representation of this import entry. Set [param full] to [code]false[/code] for a compact summary.
 			</description>
 		</method>
 		<method name="copy" qualifiers="static">
 			<return type="ImportInfo" />
 			<param index="0" name="import_info" type="ImportInfo" />
 			<description>
+				Returns a deep copy of [param import_info].
 			</description>
 		</method>
 		<method name="from_json" qualifiers="static">
 			<return type="ImportInfo" />
 			<param index="0" name="json" type="Dictionary" />
 			<description>
+				Reconstructs an [ImportInfo] from a [Dictionary] in the format produced by [method to_json]. Returns [code]null[/code] if the dictionary is malformed.
 			</description>
 		</method>
 		<method name="get_compat_type" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the compatibility resource type string for this import entry. This is the resource type as it would be understood by the originating engine version, which may differ from Godot's current type for the same data.
 			</description>
 		</method>
 		<method name="get_iinfo_val" qualifiers="const">
@@ -35,59 +51,70 @@
 			<param index="0" name="p_section" type="String" />
 			<param index="1" name="p_prop" type="String" />
 			<description>
+				Returns the value of property [param p_prop] inside section [param p_section] of the [code].import[/code] file. Returns [code]null[/code] if the property does not exist.
 			</description>
 		</method>
 		<method name="get_iitype" qualifiers="const">
 			<return type="int" enum="ImportInfo.IInfoType" />
 			<description>
+				Returns the internal type of this [ImportInfo] object - see [enum IInfoType] - indicating which import format it represents (Godot 2, modern Godot 3/4, remap, GDExtension, etc.).
 			</description>
 		</method>
 		<method name="get_importer" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the importer name used to import this resource (e.g. [code]"texture"[/code], [code]"ogg_vorbis"[/code], [code]"scene"[/code]).
 			</description>
 		</method>
 		<method name="get_param" qualifiers="const">
 			<return type="Variant" />
 			<param index="0" name="key" type="String" />
 			<description>
+				Returns the value of the import parameter named [param key], as stored in the [code][params][/code] section of the [code].import[/code] file.
 			</description>
 		</method>
 		<method name="get_uid" qualifiers="const">
 			<return type="String" />
 			<description>
+				Returns the UID string for this resource if one is stored in the import metadata, or an empty string otherwise.
 			</description>
 		</method>
 		<method name="get_ver_major" qualifiers="const">
 			<return type="int" />
 			<description>
+				Returns the major engine version associated with this import entry.
 			</description>
 		</method>
 		<method name="get_ver_minor" qualifiers="const">
 			<return type="int" />
 			<description>
+				Returns the minor engine version associated with this import entry.
 			</description>
 		</method>
 		<method name="has_dest_file" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="dest_file" type="String" />
 			<description>
+				Returns [code]true[/code] if [param dest_file] is one of the engine-side destination paths produced by this import.
 			</description>
 		</method>
 		<method name="has_param" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="key" type="String" />
 			<description>
+				Returns [code]true[/code] if an import parameter named [param key] exists.
 			</description>
 		</method>
 		<method name="is_auto_converted" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] if this resource was automatically converted by the Godot editor (for example, a text resource converted to binary at export time) rather than imported from an external source file.
 			</description>
 		</method>
 		<method name="is_import" qualifiers="const">
 			<return type="bool" />
 			<description>
+				Returns [code]true[/code] if this entry represents a proper imported resource (backed by a [code].import[/code] file or embedded import metadata), as opposed to a remap or a plain resource.
 			</description>
 		</method>
 		<method name="load_from_file" qualifiers="static">
@@ -96,12 +123,14 @@
 			<param index="1" name="ver_major" type="int" default="0" />
 			<param index="2" name="ver_minor" type="int" default="0" />
 			<description>
+				Loads import metadata from [param path] (a [code].import[/code] file or an imported resource path). Provide [param ver_major] and [param ver_minor] to disambiguate format differences between engine versions; pass [code]0[/code] to auto-detect. Returns [code]null[/code] on failure.
 			</description>
 		</method>
 		<method name="save_to">
 			<return type="int" enum="Error" />
 			<param index="0" name="p_path" type="String" />
 			<description>
+				Writes the import metadata to a [code].import[/code] file at [param p_path]. Returns [code]OK[/code] on success.
 			</description>
 		</method>
 		<method name="set_iinfo_val">
@@ -110,6 +139,7 @@
 			<param index="1" name="p_prop" type="String" />
 			<param index="2" name="p_val" type="Variant" />
 			<description>
+				Sets the value of property [param p_prop] inside section [param p_section] of the [code].import[/code] file to [param p_val].
 			</description>
 		</method>
 		<method name="set_param">
@@ -117,60 +147,84 @@
 			<param index="0" name="key" type="String" />
 			<param index="1" name="value" type="Variant" />
 			<description>
+				Sets the import parameter [param key] to [param value].
 			</description>
 		</method>
 		<method name="to_json" qualifiers="const">
 			<return type="Dictionary" />
 			<description>
+				Serializes all import metadata to a [Dictionary], suitable for round-tripping with [method from_json].
 			</description>
 		</method>
 	</methods>
 	<members>
 		<member name="additional_sources" type="PackedStringArray" setter="set_additional_sources" getter="get_additional_sources" default="PackedStringArray()">
+			Additional source files referenced by this import entry (e.g. normal-map companions for a texture importer).
 		</member>
 		<member name="dest_files" type="PackedStringArray" setter="set_dest_files" getter="get_dest_files" default="PackedStringArray()">
+			The engine-side destination paths produced by the importer (e.g. [code].ctex[/code], [code].stex[/code] files).
 		</member>
 		<member name="export_dest" type="String" setter="set_export_dest" getter="get_export_dest" default="&quot;&quot;">
+			The target output path that [ImportExporter] uses when recovering this resource.
 		</member>
 		<member name="export_lossless_copy" type="String" setter="set_export_lossless_copy" getter="get_export_lossless_copy" default="&quot;&quot;">
+			Path to a lossless copy of the exported resource, if one is produced alongside a lossy export.
 		</member>
 		<member name="import_md_path" type="String" setter="set_import_md_path" getter="get_import_md_path" default="&quot;&quot;">
+			Path to the [code].import[/code] metadata file on disk.
 		</member>
 		<member name="metadata_prop" type="Dictionary" setter="set_metadata_prop" getter="get_metadata_prop" default="{}">
+			Additional metadata properties stored alongside the import configuration (typically the [code][remap][/code] and other auxiliary sections).
 		</member>
 		<member name="params" type="Dictionary" setter="set_params" getter="get_params" default="{}">
+			All import parameters from the [code][params][/code] section of the [code].import[/code] file.
 		</member>
 		<member name="preferred_import_path" type="String" setter="set_preferred_resource_path" getter="get_path" default="&quot;&quot;">
+			The preferred [code]res://[/code] path for this resource when exporting.
 		</member>
 		<member name="source_file" type="String" setter="set_source_file" getter="get_source_file" default="&quot;&quot;">
+			The [code]res://[/code]-rooted path to the original source file (e.g. [code]"res://textures/icon.png"[/code]).
 		</member>
 		<member name="source_md5" type="String" setter="set_source_md5" getter="get_source_md5" default="&quot;&quot;">
+			MD5 checksum of the source file, as recorded in the [code].import[/code] file.
 		</member>
 		<member name="type" type="String" setter="set_type" getter="get_type" default="&quot;&quot;">
+			The resource type string (e.g. [code]"Texture2D"[/code], [code]"AudioStreamOGGVorbis"[/code]).
 		</member>
 	</members>
 	<constants>
 		<constant name="UNKNOWN" value="-1" enum="LossType">
+			Loss type could not be determined.
 		</constant>
 		<constant name="LOSSLESS" value="0" enum="LossType">
+			Resource can be recovered without quality loss.
 		</constant>
 		<constant name="STORED_LOSSY" value="1" enum="LossType">
+			Resource is stored in a lossy format inside the pack.
 		</constant>
 		<constant name="IMPORTED_LOSSY" value="2" enum="LossType">
+			Resource was imported with lossy settings.
 		</constant>
 		<constant name="STORED_AND_IMPORTED_LOSSY" value="3" enum="LossType">
+			Resource was imported with lossy settings [i]and[/i] stored in a lossy format.
 		</constant>
 		<constant name="BASE" value="0" enum="IInfoType">
+			Generic base import info.
 		</constant>
 		<constant name="V2" value="1" enum="IInfoType">
+			Godot 2.x import format.
 		</constant>
 		<constant name="MODERN" value="2" enum="IInfoType">
+			Godot 3.x / 4.x [code].import[/code] file format.
 		</constant>
 		<constant name="DUMMY" value="3" enum="IInfoType">
+			Placeholder for resources with no real import data.
 		</constant>
 		<constant name="REMAP" value="4" enum="IInfoType">
+			A resource remap entry (no external source file).
 		</constant>
 		<constant name="GDEXT" value="5" enum="IInfoType">
+			GDExtension resource.
 		</constant>
 	</constants>
 </class>

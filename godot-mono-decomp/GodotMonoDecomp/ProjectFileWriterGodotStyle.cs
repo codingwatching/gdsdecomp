@@ -178,13 +178,14 @@ namespace GodotMonoDecomp
 				}
 
 			}
-			if (settings.WriteNuGetPackageReferences && depInfo != null){
+			HashSet<DotNetCoreDepInfo> includedDeps = [];
+			if (depInfo != null){
 				PlaceIntoTag("ItemGroup", xml,
-					() => WritePackageReferences(xml, module, project, projectType, depInfo, settings));
+					() => includedDeps = WritePackageReferences(xml, module, project, projectType, depInfo, settings));
 			}
 
 			PlaceIntoTag("ItemGroup", xml,
-				() => WriteReferences(xml, module, project, projectType, depInfo, settings));
+				() => WriteReferences(xml, module, project, projectType, depInfo, settings, includedDeps));
 
 			xml.WriteEndElement();
 		}
@@ -196,13 +197,20 @@ namespace GodotMonoDecomp
 			       ImplicitGodotReferences.Contains(name);
 		}
 
-		static void WritePackageReferences(XmlTextWriter xml, MetadataFile module, IProjectInfoProvider project,
+		static HashSet<DotNetCoreDepInfo> WritePackageReferences(XmlTextWriter xml, MetadataFile module, IProjectInfoProvider project,
 			ProjectType projectType, DotNetCoreDepInfo? deps, GodotMonoDecompSettings settings)
 		{
 			List<DotNetCoreDepInfo> excludedDepsToComment = new List<DotNetCoreDepInfo>();
 			List<DotNetCoreDepInfo> nonNuGetOrgDepsToComment = new List<DotNetCoreDepInfo>();
-			List<DotNetCoreDepInfo> includedDeps = new List<DotNetCoreDepInfo>();
+			HashSet<DotNetCoreDepInfo> includedDeps = [];
 			HashSet<DotNetCoreDepInfo> includeWarningComment = [];
+
+			if (deps == null || deps.deps.Length == 0)
+			{
+				return [];
+			}
+
+			HashSet<DotNetCoreDepInfo> depsToAdd = [];
 
 			foreach (var dep in deps?.deps ?? [])
 			{
@@ -217,13 +225,19 @@ namespace GodotMonoDecomp
 				if (dep.HasNoRuntimeComponent)
 				{
 					// double check to see if the module has a reference to this
-					if (module.AssemblyReferences.Any(r => r.Name == dep.Name))
+					if (module.AssemblyReferences.Any(r => dep.Matches(r)))
 					{
 						includeWarningComment.Add(dep);
 						includedDeps.Add(dep);
 						continue;
 					}
 					excludedDepsToComment.Add(dep);
+					if (dep.HashMatchesNugetOrgStatus == DotNetCoreDepInfo.HashMatchesNugetOrg.NoMatch)
+					{
+						continue;
+					}
+					// check if it has any dependencies that do have runtime components that the module has a reference to
+					depsToAdd.AddRange(dep.deps.Where(d => !IsImplicitReference(d.Name) && !d.HasNoRuntimeComponent && d.IsAvailableOnNuget && module.AssemblyReferences.Any(r => d.Matches(r))));
 					continue;
 				}
 
@@ -234,6 +248,7 @@ namespace GodotMonoDecomp
 				}
 				includedDeps.Add(dep);
 			}
+			includedDeps.AddRange(depsToAdd.Where(d => !includedDeps.Any(d2 => d2.HasDep(d.AssemblyRef, "package", settings.CreateAdditionalProjectsForProjectReferences))));
 
 			void WritePackageRef(XmlTextWriter xml, DotNetCoreDepInfo dep)
 			{
@@ -256,10 +271,6 @@ namespace GodotMonoDecomp
 				}
 			}
 
-			if (deps == null || deps.deps.Length == 0)
-			{
-				return;
-			}
 
 			if (settings.WriteNuGetPackageReferences)
 			{
@@ -279,6 +290,11 @@ namespace GodotMonoDecomp
 			{
 				writeSeriesOfLineComments(xml, (newXml) => WritePackageRefs(newXml, nonNuGetOrgDepsToComment),
 					"The following packages are not from nuget.org and may not be available. Including these may cause build errors.");
+			}
+			if (settings.WriteNuGetPackageReferences){
+				return includedDeps;
+			} else {
+				return [];
 			}
 		}
 
@@ -595,7 +611,7 @@ namespace GodotMonoDecomp
 		}
 
 		static void WriteReferences(XmlTextWriter xml, MetadataFile module, IGodotProjectWithSettingsProvider project,
-			ProjectType projectType, DotNetCoreDepInfo? deps, GodotMonoDecompSettings settings)
+			ProjectType projectType, DotNetCoreDepInfo? deps, GodotMonoDecompSettings settings, HashSet<DotNetCoreDepInfo> writtenPackageDeps)
 		{
 			string copyToDir = Path.Combine(project.TargetDirectory, "_mono_referenced_assemblies");
 			// hashset of copied assemblies
@@ -728,7 +744,7 @@ namespace GodotMonoDecomp
 
 			bool DepExistsInPackages(IAssemblyReference reference)
 			{
-				return settings.WriteNuGetPackageReferences && deps != null && deps.HasDep(reference, "package", true);
+				return writtenPackageDeps.Any(d2 => d2.Matches(reference));
 			}
 
 			HashSet<IAssemblyReference> GetAdditionalRefsToWrite(DotNetCoreDepInfo? deps){

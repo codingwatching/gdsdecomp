@@ -55,6 +55,8 @@ public:
 	static Ref<ResourceInfo> get_info_from_resource(Ref<Resource> res);
 	static bool resource_has_info(Ref<Resource> res);
 
+	static Pair<int, int> get_ver_major_minor(Ref<Resource> res);
+
 	int get_ver_major() const;
 	int get_ver_minor() const;
 	int get_ver_format() const;

@@ -122,6 +122,7 @@ public:
 		bool suspect_version = false;
 		bool has_cs_files = false;
 		bool detected_csharp = false;
+		bool detected_godotsteam_usage = false;
 		String non_standard_header;
 		String assembly_path;
 		Ref<GodotMonoDecompWrapper> decompiler;
@@ -139,6 +140,7 @@ private:
 	Array import_files;
 	HashMap<String, Ref<ImportInfoRemap>> remap_iinfo;
 	String gdre_resource_path = "";
+	String v2_remap_setting = "remap/all";
 
 	struct UID_Cache {
 		CharString cs;
@@ -169,6 +171,7 @@ private:
 	ParallelFlatHashMap<String, ResourceUID::ID> path_to_uid;
 	HashMap<String, Dictionary> script_cache;
 	Vector<Ref<Script>> cached_scripts;
+	HashMap<String, Variant> shader_globals;
 
 	Vector<uint8_t> enc_key;
 	String custom_decryption_script_path;
@@ -440,12 +443,15 @@ public:
 	static String get_home_dir();
 	// ResourceUID does not provide a way to get a UID for a given path, so we have to do it ourselves
 	ResourceUID::ID get_uid_for_path(const String &p_path) const;
+	Dictionary get_uid_cache() const;
 	String get_game_name() const;
 
 	// Get the game's declared version from the project config
 	String get_game_app_version() const;
 	// the reverse of `get_remap()`; gets the source path for the given destination path
 	String get_remapped_source_path(const String &p_dst) const;
+
+	Variant get_shader_global(const String &p_name) const;
 
 	Vector<String> get_errors();
 
@@ -476,13 +482,11 @@ public:
 	// or a "stringdump" file (i.e. a dump of all the strings that were found in the project during `load_all_resource_strings()`)
 	Error load_translation_key_hint_file(const String &p_path);
 
-	static bool main_iteration();
-#ifdef TESTS_ENABLED
+	// Returns whether we detected GodotSteam usage in the project
+	bool detected_godotsteam_usage() const;
 
-	static bool testing;
-	static void set_is_testing(bool p_is_testing);
-	static bool is_testing();
-#endif
+	bool requires_double_precision() const;
+
 	GDRESettings();
 	~GDRESettings();
 };

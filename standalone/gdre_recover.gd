@@ -588,7 +588,10 @@ func set_assembly_good(good: bool) -> void:
 	else:
 		%AssemblyLabel.text = "C# Assembly ⚠️"
 		if FileAccess.file_exists(%Assembly.text):
-			%AssemblyLabel.tooltip_text = "File is not a valid .NET IL assembly"
+			if GodotMonoDecompWrapper.is_file_assembly(%Assembly.text):
+				%AssemblyLabel.tooltip_text = "File is NativeAOT assembly, not supported by GDRE Tools"
+			else:
+				%AssemblyLabel.tooltip_text = "File is not a valid .NET IL assembly (corrupt?)"
 		else:
 			%AssemblyLabel.tooltip_text = "File does not exist"
 

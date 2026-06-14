@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="Glob" inherits="Object" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+<class name="Glob" inherits="Object" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
+		Filesystem glob and filename pattern matching utilities.
 	</brief_description>
 	<description>
+		[Glob] is a static utility class that provides Python-style glob and [code]fnmatch[/code] pattern matching. GDRE uses it internally to implement the [code]--include[/code] and [code]--exclude[/code] filters on several CLI commands, and it is exposed to GDScript so exporters and custom tooling can apply the same matching rules.
+		All methods are static. Patterns support [code]*[/code], [code]?[/code], character classes, and the recursive [code]**[/code] segment.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -12,6 +15,7 @@
 			<param index="0" name="names" type="PackedStringArray" />
 			<param index="1" name="dirs" type="PackedStringArray" />
 			<description>
+				Returns the entries of [param dirs] that are ancestor directories of any path in [param names]. Useful for pruning empty parent directories from an export set.
 			</description>
 		</method>
 		<method name="fnmatch" qualifiers="static">
@@ -19,6 +23,7 @@
 			<param index="0" name="name" type="String" />
 			<param index="1" name="pattern" type="String" />
 			<description>
+				Returns [code]true[/code] if [param name] matches [param pattern] using Unix shell-style wildcards. Matching is case-sensitive on Unix and case-insensitive on Windows, mirroring Python's [code]fnmatch.fnmatch[/code].
 			</description>
 		</method>
 		<method name="fnmatch_list" qualifiers="static">
@@ -27,6 +32,7 @@
 			<param index="1" name="patterns" type="PackedStringArray" />
 			<param index="2" name="exclude_matches" type="bool" default="false" />
 			<description>
+				Returns the subset of [param names] that match any pattern in [param patterns]. When [param exclude_matches] is [code]true[/code], returns names that match [i]none[/i] of the patterns instead.
 			</description>
 		</method>
 		<method name="glob" qualifiers="static">
@@ -34,6 +40,7 @@
 			<param index="0" name="pathname" type="String" />
 			<param index="1" name="hidden" type="bool" default="false" />
 			<description>
+				Returns the filesystem paths that match the glob pattern [param pathname] (non-recursive, except where [code]**[/code] is used). When [param hidden] is [code]true[/code], dot-files are included.
 			</description>
 		</method>
 		<method name="glob_list" qualifiers="static">
@@ -41,6 +48,7 @@
 			<param index="0" name="pathnames" type="PackedStringArray" />
 			<param index="1" name="hidden" type="bool" default="false" />
 			<description>
+				Runs [method glob] against each entry in [param pathnames] and returns the accumulated results.
 			</description>
 		</method>
 		<method name="names_in_dirs" qualifiers="static">
@@ -48,6 +56,7 @@
 			<param index="0" name="names" type="PackedStringArray" />
 			<param index="1" name="dirs" type="PackedStringArray" />
 			<description>
+				Returns the entries of [param names] that live inside any directory in [param dirs].
 			</description>
 		</method>
 		<method name="pattern_match_list" qualifiers="static">
@@ -55,6 +64,7 @@
 			<param index="0" name="names" type="PackedStringArray" />
 			<param index="1" name="patterns" type="PackedStringArray" />
 			<description>
+				Returns the subset of [param names] that match any pattern in [param patterns]. Equivalent to [method fnmatch_list] with [code]exclude_matches[/code] left at [code]false[/code].
 			</description>
 		</method>
 		<method name="rglob" qualifiers="static">
@@ -62,6 +72,7 @@
 			<param index="0" name="pathname" type="String" />
 			<param index="1" name="hidden" type="bool" default="false" />
 			<description>
+				Recursive variant of [method glob]: returns every path under the given directory tree that matches [param pathname].
 			</description>
 		</method>
 		<method name="rglob_list" qualifiers="static">
@@ -69,6 +80,7 @@
 			<param index="0" name="pathnames" type="PackedStringArray" />
 			<param index="1" name="hidden" type="bool" default="false" />
 			<description>
+				Runs [method rglob] against each entry in [param pathnames] and returns the accumulated results.
 			</description>
 		</method>
 	</methods>

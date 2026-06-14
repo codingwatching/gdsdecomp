@@ -18,6 +18,7 @@ protected:
 
 public:
 	static PluginBin get_plugin_bin(const String &path, const SharedObject &obj);
+	static String get_unsigned_sha256(const String &path);
 
 	virtual String get_plugin_name();
 	virtual Vector<Pair<int64_t, int64_t>> get_plugin_version_numbers(const String &plugin_name, Error &r_connection_error);

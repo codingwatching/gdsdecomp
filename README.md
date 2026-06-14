@@ -63,8 +63,10 @@ Main commands:
 --bin-to-txt=<FILE>                           Convert binary scene or resource files to text-based format (can be repeated)
 --patch-translations=<CSV_FILE>=<SRC_PATH>    Patch translations with the specified CSV file and source path
                                                  (e.g. "/path/to/translation.csv=res://translations/translation.csv") (can be repeated)
---gdre-help                                   Print the help message and exit
---gdre-version                                Print the version of GDRE tools and exit
+--godot-version                               Print the version of Godot engine and exit
+--godot-help                                  Print the help message of Godot engine and exit
+--help, --gdre-help                           Print this help message and exit
+--version, --gdre-version                     Print this version of GDRE tools and exit
 
 Recover/Extract Options:
 
@@ -141,15 +143,19 @@ Support has yet to be implemented for converting the following resources:
 Clone this repository into Godot's `modules` subfolder as `gdsdecomp`.
 Rebuild Godot engine as described in https://docs.godotengine.org/en/latest/development/compiling/index.html.
 
-You will also need [rustup](https://rustup.rs) and [dotnet 9 sdk](https://dotnet.microsoft.com/en-us/download/dotnet/9.0).
+You will also need [rustup](https://rustup.rs) and [dotnet 10 sdk](https://dotnet.microsoft.com/en-us/download/dotnet/10.0).
 
 For ease of bootstrapping development, we have included launch, build, and settings templates for vscode in the .vscode directory. Once you have read the instructions for compiling Godot above and set up your build environment: put these in the .vscode folder in the Godot directory (not gdsdecomp), remove the ".template" from each, and launch vscode from the Godot directory.
 
-Note: Make sure to build the editor build first, and to launch the editor to edit the project in the `standalone` directory at least once so that resources are imported before running.
+Make sure to build the editor build first, and to launch the editor to edit the project in the `standalone` directory at least once so that resources are imported before running.
+
+### Note:
+
+During SCons configure, the module auto-applies the patches under `modules/gdsdecomp/patches/` to Godot core files (currently just `main/main.cpp`, to hook `gdre::modify_cli_args` into CLI parsing). The application is idempotent: re-running `scons` is a no-op once patched. If you remove the module or want to restore the originals, revert the affected files manually with `git checkout -- main/main.cpp`.
 
 ### Requirements
 
-[Our fork of godot](https://github.com/nikitalita/godot) @ branch `gdre-wb-babc272d44e`
+[Our fork of godot](https://github.com/nikitalita/godot) @ branch `gdre-wb-a8643700ce8`
 
 - Support for building on 3.x has been dropped and no new features are being pushed
   - Godot RE Tools still retains the ability to decompile 3.x and 2.x projects, however.

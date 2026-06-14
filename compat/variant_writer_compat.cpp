@@ -7,6 +7,7 @@
 
 #include "image_parser_v2.h"
 #include "input_event_parser_v2.h"
+#include "utility/common.h"
 
 namespace {
 Error parse_uid_and_path(VariantParser::Stream *p_stream, VariantParser::Token &token, int &line, String &r_err_str, String &uid_string, String &path) {
@@ -796,7 +797,7 @@ namespace {
 const static String comma_string = ", ";
 
 template <class T>
-static constexpr _ALWAYS_INLINE_ uint64_t max_integer_str_len() {
+static constexpr _ALWAYS_INLINE_ int64_t max_integer_str_len() {
 	// ensure that this is an integral type, and also not a char type
 	static_assert(std::is_integral_v<T> &&
 					(!std::is_same_v<T, char> &&
@@ -966,8 +967,8 @@ struct VarWriter {
 	template <class T>
 	static void _ALWAYS_INLINE_ _write_packed_elements_integer(const Vector<T> &data, VariantWriterCompat::StoreStringFunc p_store_string_func, void *p_store_string_ud) {
 		static_assert(std::is_same_v<T, uint8_t> || std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>, "Unsupported _write_packed_elements_integer type");
-		int len = data.size();
-		const uint64_t str_size = len * (max_integer_str_len<T>() + 2) + 1;
+		int64_t len = data.size();
+		const int64_t str_size = len * (max_integer_str_len<T>() + 2) + 1;
 		const T *ptr = data.ptr();
 
 		// In the unlikely case that the projected size is larger than INT32_MAX
@@ -1037,11 +1038,7 @@ struct VarWriter {
 	static Error write_compat_v2_v3(const Variant &p_variant, VariantWriterCompat::StoreStringFunc p_store_string_func, void *p_store_string_ud, VariantWriterCompat::EncodeResourceFunc p_encode_res_func, void *p_encode_res_ud);
 	static Error write_compat_v4(const Variant &p_variant, VariantWriterCompat::StoreStringFunc p_store_string_func, void *p_store_string_ud, VariantWriterCompat::EncodeResourceFunc p_encode_res_func, void *p_encode_res_ud, int p_recursion_count);
 
-	static const HashSet<String> float_special_values;
 }; // struct VariantWriterCompatInstance
-
-template <int ver_major, bool is_pcfg, bool is_script, bool p_compat, bool after_4_4>
-const HashSet<String> VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::float_special_values = { "-inf", "inf", "inf_neg", "nan", "NAN", "INF", "-INF" };
 
 template <int ver_major, bool is_pcfg, bool is_script, bool p_compat, bool after_4_4>
 Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compat_v4(const Variant &p_variant, VariantWriterCompat::StoreStringFunc p_store_string_func, void *p_store_string_ud, VariantWriterCompat::EncodeResourceFunc p_encode_res_func, void *p_encode_res_ud, int p_recursion_count) {
@@ -1057,10 +1054,8 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 		} break;
 		case Variant::FLOAT: {
 			String s = rtosfix(p_variant.operator double());
-			if (!float_special_values.has(s)) {
-				if (!s.contains(".") && !s.contains("e")) {
-					s += ".0";
-				}
+			if (gdre::base10_float_string_needs_trailing_zero(s)) {
+				s += ".0";
 			}
 			p_store_string_func(p_store_string_ud, s);
 		} break;
@@ -1440,7 +1435,7 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 		case Variant::PACKED_BYTE_ARRAY: {
 			p_store_string_func(p_store_string_ud, "PackedByteArray(");
 			Vector<uint8_t> data = p_variant;
-			if (p_compat) {
+			if constexpr (p_compat) {
 				write_packed_elements(data, p_store_string_func, p_store_string_ud);
 			} else if (data.size() > 0) {
 				p_store_string_func(p_store_string_ud, "\"");
@@ -1544,10 +1539,8 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 		} break;
 		case Variant::FLOAT: { // "REAL" in v2 and v3
 			String s = rtosfix(p_variant.operator double());
-			if (!float_special_values.has(s)) {
-				if (s.find(".") == -1 && s.find("e") == -1) {
-					s += ".0";
-				}
+			if (gdre::base10_float_string_needs_trailing_zero(s)) {
+				s += ".0";
 			}
 			p_store_string_func(p_store_string_ud, s);
 		} break;
@@ -1636,7 +1629,7 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 		} break;
 		case Variant::COLOR: {
 			Color c = p_variant;
-			if (ver_major == 2 && is_pcfg) {
+			if constexpr (ver_major == 2 && is_pcfg) {
 				p_store_string_func(p_store_string_ud, "#" + c.to_html());
 			} else {
 				p_store_string_func(p_store_string_ud, "Color( " + rtosfix(c.r) + ", " + rtosfix(c.g) + ", " + rtosfix(c.b) + ", " + rtosfix(c.a) + " )");
@@ -1771,7 +1764,7 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 		} break;
 
 		case Variant::PACKED_BYTE_ARRAY: { // v2 ByteArray, v3 POOL_BYTE_ARRAY
-			if (ver_major == 2 && is_pcfg) {
+			if constexpr (ver_major == 2 && is_pcfg) {
 				p_store_string_func(p_store_string_ud, array_start);
 			} else {
 				p_store_string_func(p_store_string_ud, ver_major == 2 ? "ByteArray( " : "PoolByteArray( ");
@@ -1779,14 +1772,14 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 			String s;
 			Vector<uint8_t> data = p_variant;
 			write_packed_elements(data, p_store_string_func, p_store_string_ud);
-			if (ver_major == 2 && is_pcfg) {
+			if constexpr (ver_major == 2 && is_pcfg) {
 				p_store_string_func(p_store_string_ud, array_end);
 			} else {
 				p_store_string_func(p_store_string_ud, " )");
 			}
 		} break;
 		case Variant::PACKED_INT32_ARRAY: { // v2 IntArray, v3 POOL_INT_ARRAY
-			if (ver_major == 2 && is_pcfg) {
+			if constexpr (ver_major == 2 && is_pcfg) {
 				p_store_string_func(p_store_string_ud, array_start);
 			} else {
 				p_store_string_func(p_store_string_ud, ver_major == 2 ? "IntArray( " : "PoolIntArray( ");
@@ -1794,7 +1787,7 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 			Vector<int> data = p_variant;
 			write_packed_elements(data, p_store_string_func, p_store_string_ud);
 
-			if (ver_major == 2 && is_pcfg) {
+			if constexpr (ver_major == 2 && is_pcfg) {
 				p_store_string_func(p_store_string_ud, array_end);
 			} else {
 				p_store_string_func(p_store_string_ud, " )");
@@ -1803,7 +1796,7 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 		} break;
 		//case Variant::PACKED_INT64_ARRAY: { // v2 and v3 did not have 64-bit ints
 		case Variant::PACKED_FLOAT32_ARRAY: { // v2 FloatArray, v3 POOL_REAL_ARRAY
-			if (ver_major == 2 && is_pcfg) {
+			if constexpr (ver_major == 2 && is_pcfg) {
 				p_store_string_func(p_store_string_ud, array_start);
 			} else {
 				p_store_string_func(p_store_string_ud, ver_major == 2 ? "FloatArray( " : "PoolRealArray( ");
@@ -1812,7 +1805,7 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 			Vector<real_t> data = p_variant;
 			write_packed_elements(data, p_store_string_func, p_store_string_ud);
 
-			if (ver_major == 2 && is_pcfg) {
+			if constexpr (ver_major == 2 && is_pcfg) {
 				p_store_string_func(p_store_string_ud, array_end);
 			} else {
 				p_store_string_func(p_store_string_ud, " )");
@@ -1821,7 +1814,7 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 		} break;
 		//case Variant::PACKED_FLOAT64_ARRAY: { // v2 and v3 did not have 64-bit floats
 		case Variant::PACKED_STRING_ARRAY: { // v2 StringArray, v3 POOL_STRING_ARRAY
-			if (ver_major == 2 && is_pcfg) {
+			if constexpr (ver_major == 2 && is_pcfg) {
 				p_store_string_func(p_store_string_ud, array_start);
 			} else {
 				p_store_string_func(p_store_string_ud, ver_major == 2 ? "StringArray( " : "PoolStringArray( ");
@@ -1829,7 +1822,7 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 			Vector<String> data = p_variant;
 			write_packed_elements(data, p_store_string_func, p_store_string_ud);
 
-			if (ver_major == 2 && is_pcfg) {
+			if constexpr (ver_major == 2 && is_pcfg) {
 				p_store_string_func(p_store_string_ud, array_end);
 			} else {
 				p_store_string_func(p_store_string_ud, " )");
@@ -1885,6 +1878,11 @@ static Error _write_to_str(void *ud, const String &p_string) {
 Error VariantWriterCompat::write_to_string_script(const Variant &p_variant, String &r_string, const uint32_t ver_major, const uint32_t ver_minor, EncodeResourceFunc p_encode_res_func, void *p_encode_res_ud, bool p_compat_4x_force_v3) {
 	r_string = String();
 	switch (ver_major) {
+		case 0:
+			if (ver_minor == 0) {
+				ERR_FAIL_V_MSG(ERR_INVALID_PARAMETER, "Invalid version");
+			}
+			// else fall through
 		case 1:
 		case 2: {
 			return VarWriter<2, false, true>::write_compat_v2_v3(p_variant, _write_to_str, &r_string, p_encode_res_func, p_encode_res_ud);
@@ -1920,6 +1918,11 @@ Error VariantWriterCompat::write_to_string_script(const Variant &p_variant, Stri
 Error VariantWriterCompat::write_to_string_pcfg(const Variant &p_variant, String &r_string, const uint32_t ver_major, const uint32_t ver_minor, EncodeResourceFunc p_encode_res_func, void *p_encode_res_ud, bool p_compat_4x_force_v3) {
 	r_string = String();
 	switch (ver_major) {
+		case 0:
+			if (ver_minor == 0) {
+				ERR_FAIL_V_MSG(ERR_INVALID_PARAMETER, "Invalid version");
+			}
+			// else fall through to the next case
 		case 1:
 		case 2: {
 			return VarWriter<2, true, false>::write_compat_v2_v3(p_variant, _write_to_str, &r_string, p_encode_res_func, p_encode_res_ud);
@@ -1952,6 +1955,12 @@ Error VariantWriterCompat::write_to_string_pcfg(const Variant &p_variant, String
 Error VariantWriterCompat::write_to_string(const Variant &p_variant, String &r_string, const uint32_t ver_major, const uint32_t ver_minor, EncodeResourceFunc p_encode_res_func, void *p_encode_res_ud, bool p_compat_4x_force_v3) {
 	r_string = String();
 	switch (ver_major) {
+		case 0:
+			if (ver_minor == 0) {
+				ERR_FAIL_V_MSG(ERR_INVALID_PARAMETER, "Invalid version");
+			}
+			// else fall through to the next case
+			[[fallthrough]];
 		case 1:
 		case 2: {
 			return VarWriter<2, false, false>::write_compat_v2_v3(p_variant, _write_to_str, &r_string, p_encode_res_func, p_encode_res_ud);

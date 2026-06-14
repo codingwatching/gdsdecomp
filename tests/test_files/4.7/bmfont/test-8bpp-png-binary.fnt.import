@@ -1,0 +1,17 @@
+[remap]
+
+importer="font_data_bmfont"
+type="FontFile"
+uid="uid://dxik7o5kmwl12"
+path="res://.godot/imported/test-8bpp-png-binary.fnt-cc83d11ff8bb8210ea6264a65c1797f2.fontdata"
+
+[deps]
+
+source_file="res://test-8bpp-png-binary.fnt"
+dest_files=["res://.godot/imported/test-8bpp-png-binary.fnt-cc83d11ff8bb8210ea6264a65c1797f2.fontdata"]
+
+[params]
+
+fallbacks=[]
+compress=true
+scaling_mode=2

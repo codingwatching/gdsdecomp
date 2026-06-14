@@ -732,8 +732,10 @@ var MAIN_CMD_NOTES = """Main commands:
 --patch-translations=<CSV_FILE>=<SRC_PATH>    Patch translations with the specified CSV file and source path
                                                 (e.g. "/path/to/translation.csv=res://translations/translation.csv") (can be repeated)
 --setting=<SETTING_NAME>=<VALUE>   Set a configuration value for this session (can be repeated)
---gdre-help                        Print the help message and exit
---gdre-version                     Print the version of GDRE tools and exit
+--godot-version                    Print the version of Godot engine and exit
+--godot-help                       Print the help message of Godot engine and exit
+--help, --gdre-help                Print this help message and exit
+--version, --gdre-version          Print this version of GDRE tools and exit
 """
 
 var GLOB_NOTES = """Notes on Include/Exclude globs:
@@ -907,10 +909,6 @@ func recovery(  input_files:PackedStringArray,
 			return 1
 		if input_file.get_extension().to_lower() == "app":
 			is_dir = false
-		elif !da.dir_exists(input_file.path_join(".import")) && !da.dir_exists(input_file.path_join(".godot")):
-			print_usage()
-			print("Error: " + input_file + " does not appear to be a project directory")
-			return 1
 		else:
 			parent_dir = input_file
 			is_dir = true
@@ -1483,6 +1481,11 @@ func handle_cli(args: PackedStringArray) -> bool:
 	var test_recovery: bool = false
 	var test_output_dir: String = ""
 	if (args.size() == 0):
+		if GDRESettings.is_headless():
+			print_usage()
+			print("ERROR: no command specified")
+			ret_code = 1
+			return true
 		return false
 	var any_commands = false
 	for i in range(args.size()):
@@ -1524,6 +1527,7 @@ func handle_cli(args: PackedStringArray) -> bool:
 			scripts_only = true
 		elif arg.begins_with("--key"):
 			enc_key = get_arg_value(arg)
+			set_setting = true
 		elif arg.begins_with("--custom-decryption-script"):
 			var decryptor_script_path = get_cli_abs_path(get_arg_value(arg))
 			if decryptor_script_path.is_empty():
@@ -1672,6 +1676,8 @@ func handle_cli(args: PackedStringArray) -> bool:
 			test_recovery = true
 			if arg.contains("="):
 				test_output_dir = get_cli_abs_path(get_arg_value(arg))
+		elif !arg.begins_with("--"):
+			pass
 		else:
 			print_usage()
 			print("ERROR: invalid option '" + arg + "'")
@@ -1689,20 +1695,37 @@ func handle_cli(args: PackedStringArray) -> bool:
 		ret_code = 1
 		return true
 
-	if set_setting and main_cmds.size() == 0:
+	if main_cmds.size() == 0:
+		if (GDRESettings.is_headless() or not set_setting):
+			print_usage()
+			print("ERROR: no command specified")
+			ret_code = 1
+			return true
+		if !enc_key.is_empty():
+			if GDRESettings.set_encryption_key_string(enc_key) != OK:
+				print_usage()
+				print("Invalid key! Key must be a hex string with 64 characters")
+				ret_code = 1
+				return true
 		return false
 
 	had_main = true
 	deferred_calls.push_back(func():
 		if prepop.size() > 0:
-			var start_time = Time.get_ticks_msec()
-			var err = PluginManager.prepop_cache(prepop)
-			if err != OK:
-				print("Error: failed to prepop plugin cache: " + str(err))
+			var output_path = output_dir
+			if output_path.is_empty():
+				print("Error: --output is required for --plcache")
 				ret_code = 1
-			var end_time = Time.get_ticks_msec()
-			var secs_taken = (end_time - start_time) / 1000
-			print("Prepop complete in %02dm%02ds" % [(secs_taken) / 60, (secs_taken) % 60])
+				return true
+			else:
+				var start_time = Time.get_ticks_msec()
+				var err = PluginManager.prepop_cache(prepop, output_path)
+				if err != OK:
+					print("Error: failed to prepop plugin cache: " + str(err))
+					ret_code = 1
+				var end_time = Time.get_ticks_msec()
+				var secs_taken = (end_time - start_time) / 1000
+				print("Prepop complete in %02dm%02ds" % [(secs_taken) / 60, (secs_taken) % 60])
 		elif main_cmds.has("list-files"):
 			ret_code = list_files(input_file)
 		elif compile_files.size() > 0:

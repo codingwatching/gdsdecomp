@@ -24,6 +24,8 @@ public:
 	virtual String get_default_export_extension(const String &res_path) const;
 	virtual Vector<String> get_export_extensions(const String &res_path) const;
 	virtual Error test_export(const Ref<ExportReport> &export_report, const String &original_project_dir) const;
+	virtual void prebatch_export();
+	virtual void postbatch_export();
 
 	static Ref<ExportReport> _check_for_existing_resources(const Ref<ImportInfo> &iinfo);
 };

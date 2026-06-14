@@ -5,6 +5,7 @@
 #include "core/io/config_file.h"
 #include "core/io/json.h"
 #include "core/object/class_db.h"
+#include "core/object/worker_thread_pool.h"
 #include "core/os/os.h"
 #include "gdre_logger.h"
 #include "gdre_settings.h"
@@ -339,7 +340,7 @@ Vector<Ref<GDREConfigSetting>> GDREConfig::_init_default_settings() {
 		memnew(GDREConfigSetting(
 				"Exporter/Scene/GLTF/force_require_KHR_node_visibility",
 				"Force require KHR_node_visibility extension",
-				"By default, the exporter will only require the KHR_node_visibility extension if the scenes are from Godot 4.5 or later.\nThis setting forces the exporter to require the extension regardless of engine version.",
+				"By default, the exporter will only set KHR_node_visibility as an optional extension.\nThis setting forces the exporter to require the extension regardless of engine version.",
 				false)),
 		memnew(GDREConfigSetting(
 				"Exporter/Scene/GLTF/ignore_missing_dependencies",
@@ -356,6 +357,12 @@ Vector<Ref<GDREConfigSetting>> GDREConfig::_init_default_settings() {
 				"Replace shader materials",
 				"Replaces shader materials with generated standard materials when exporting the scene.\nSolves issues with exported scenes not having any textures.\nWARNING: This is experimental and may result in inaccurate exports.",
 				false)),
+		memnew(GDREConfigSetting(
+				"Exporter/Scene/GLTF/debug_copies",
+				"Create debug copies",
+				"For development.",
+				false,
+				true)),
 		memnew(GDREConfigSetting(
 				"Exporter/Texture/create_lossless_copy",
 				"Create lossless copy",

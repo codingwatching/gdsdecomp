@@ -6,6 +6,8 @@
 #include "compat/fake_script.h"
 #include "core/io/image_loader.h"
 #include "core/object/class_db.h"
+#include "exporters/dialogue_exporter.h"
+#include "exporters/func_godot_exporter.h"
 #include "gui/gdre_audio_stream_preview.h"
 #include "gui/gdre_progress.h"
 #include "gui/gdre_standalone.h"
@@ -29,12 +31,14 @@
 #include "compat/oggstr_loader_compat.h"
 #include "compat/optimized_translation_extractor.h"
 #include "compat/resource_compat_binary.h"
+#include "compat/resource_compat_obdb.h"
 #include "compat/resource_compat_text.h"
 #include "compat/resource_loader_compat.h"
 #include "compat/sample_loader_compat.h"
 #include "compat/script_loader.h"
 #include "compat/texture_loader_compat.h"
 #include "compat/video_stream_compat.h"
+#include "compat/visual_shader_compat.h"
 #include "crypto/crypto_core_gdre_contexts.h"
 #include "crypto/custom_decryptor.h"
 #include "crypto/file_access_encrypted_custom.h"
@@ -56,9 +60,11 @@
 #include "exporters/translation_exporter.h"
 #include "gui/find_replace_bar.h"
 #include "gui/gdre_window.h"
+#include "gui/gdre_xml_highlighter.h"
 #include "gui/gui_icons.h"
 #include "gui/mesh_previewer.h"
 #include "gui/scene_previewer.h"
+#include "main/gdre_main_loop.h"
 #include "plugin_manager/asset_library_source.h"
 #include "plugin_manager/codeberg_source.h"
 #include "plugin_manager/github_source.h"
@@ -82,9 +88,11 @@ void gdsdecomp_init_callback() {
 	editor->add_child(memnew(GodotREEditor(editor)));
 	editor->add_child(memnew(GDREAudioStreamPreviewGeneratorNode));
 	editor->add_child(memnew(GDREProgressDialog));
+	GDREMainLoopNode::setup();
 }
 #endif
 
+static GDREMainLoop *gdre_main_loop = nullptr;
 static GDRESettings *gdre_singleton = nullptr;
 static GDREAudioStreamPreviewGenerator *audio_stream_preview_generator = nullptr;
 static TaskManager *task_manager = nullptr;
@@ -93,6 +101,7 @@ static GDREGuiIcons *gui_icons = nullptr;
 // TODO: move this to its own thing
 static Ref<ResourceFormatLoaderCompatText> text_loader = nullptr;
 static Ref<ResourceFormatLoaderCompatBinary> binary_loader = nullptr;
+static Ref<ResourceFormatLoaderCompatOBDB> obdb_loader = nullptr;
 static Ref<ResourceFormatLoaderCompatTexture2D> texture_loader = nullptr;
 static Ref<ResourceFormatLoaderCompatTexture3D> texture3d_loader = nullptr;
 static Ref<ResourceFormatLoaderCompatTextureLayered> texture_layered_loader = nullptr;
@@ -112,11 +121,15 @@ static Ref<LargeTextureConverterCompat> large_texture_converter = nullptr;
 static Ref<FakeScriptConverterCompat> fake_script_converter = nullptr;
 static Ref<TranslationConverterCompat> translation_converter = nullptr;
 static Ref<InputEventConverterCompat> input_event_converter = nullptr;
+static Ref<VisualShaderConverterCompat> visual_shader_converter = nullptr;
 
 //exporters
 static Ref<AutoConvertedExporter> auto_converted_exporter = nullptr;
 static Ref<CSharpExporter> csharp_exporter = nullptr;
 static Ref<DialogueExporter> dialogue_exporter = nullptr;
+static Ref<FuncGodotLmpExporter> func_godot_lmp_exporter = nullptr;
+static Ref<FuncGodotMapExporter> func_godot_map_exporter = nullptr;
+static Ref<FuncGodotWADExporter> func_godot_wad_exporter = nullptr;
 static Ref<FontFileExporter> fontfile_exporter = nullptr;
 static Ref<GDExtensionExporter> gdextension_exporter = nullptr;
 static Ref<GDScriptExporter> gdscript_exporter = nullptr;
@@ -153,6 +166,7 @@ void free_ver_regex() {
 void init_loaders() {
 	text_loader = memnew(ResourceFormatLoaderCompatText);
 	binary_loader = memnew(ResourceFormatLoaderCompatBinary);
+	obdb_loader = memnew(ResourceFormatLoaderCompatOBDB);
 	texture_loader = memnew(ResourceFormatLoaderCompatTexture2D);
 	texture3d_loader = memnew(ResourceFormatLoaderCompatTexture3D);
 	texture_layered_loader = memnew(ResourceFormatLoaderCompatTextureLayered);
@@ -169,7 +183,9 @@ void init_loaders() {
 	fake_script_converter = memnew(FakeScriptConverterCompat);
 	translation_converter = memnew(TranslationConverterCompat);
 	input_event_converter = memnew(InputEventConverterCompat);
+	visual_shader_converter = memnew(VisualShaderConverterCompat);
 	ResourceCompatLoader::add_resource_format_loader(binary_loader, true);
+	ResourceCompatLoader::add_resource_format_loader(obdb_loader, true);
 	ResourceCompatLoader::add_resource_format_loader(text_loader, true);
 	ResourceCompatLoader::add_resource_format_loader(image_texture_loader, true);
 	ResourceCompatLoader::add_resource_format_loader(texture_loader, true);
@@ -187,6 +203,7 @@ void init_loaders() {
 	ResourceCompatLoader::add_resource_object_converter(fake_script_converter, true);
 	ResourceCompatLoader::add_resource_object_converter(translation_converter, true);
 	ResourceCompatLoader::add_resource_object_converter(input_event_converter, true);
+	ResourceCompatLoader::add_resource_object_converter(visual_shader_converter, true);
 }
 
 void init_exporters() {
@@ -200,6 +217,9 @@ void init_exporters() {
 	scene_exporter = memnew(SceneExporter);
 	auto_converted_exporter = memnew(AutoConvertedExporter);
 	dialogue_exporter = memnew(DialogueExporter);
+	func_godot_lmp_exporter = memnew(FuncGodotLmpExporter);
+	func_godot_map_exporter = memnew(FuncGodotMapExporter);
+	func_godot_wad_exporter = memnew(FuncGodotWADExporter);
 	gdscript_exporter = memnew(GDScriptExporter);
 	csharp_exporter = memnew(CSharpExporter);
 	gdextension_exporter = memnew(GDExtensionExporter);
@@ -213,7 +233,9 @@ void init_exporters() {
 	Exporter::add_exporter(texture_exporter);
 	Exporter::add_exporter(obj_exporter);
 	Exporter::add_exporter(dialogue_exporter);
-
+	Exporter::add_exporter(func_godot_lmp_exporter);
+	Exporter::add_exporter(func_godot_map_exporter);
+	Exporter::add_exporter(func_godot_wad_exporter);
 	Exporter::add_exporter(translation_exporter);
 	Exporter::add_exporter(scene_exporter);
 	Exporter::add_exporter(gdscript_exporter);
@@ -301,6 +323,15 @@ void deinit_exporters() {
 	if (dialogue_exporter.is_valid()) {
 		Exporter::remove_exporter(dialogue_exporter);
 	}
+	if (func_godot_lmp_exporter.is_valid()) {
+		Exporter::remove_exporter(func_godot_lmp_exporter);
+	}
+	if (func_godot_map_exporter.is_valid()) {
+		Exporter::remove_exporter(func_godot_map_exporter);
+	}
+	if (func_godot_wad_exporter.is_valid()) {
+		Exporter::remove_exporter(func_godot_wad_exporter);
+	}
 	auto_converted_exporter = nullptr;
 	fontfile_exporter = nullptr;
 	gdextension_exporter = nullptr;
@@ -316,6 +347,9 @@ void deinit_exporters() {
 	csharp_exporter = nullptr;
 	spine_atlas_exporter = nullptr;
 	spine_skeleton_exporter = nullptr;
+	func_godot_lmp_exporter = nullptr;
+	func_godot_map_exporter = nullptr;
+	func_godot_wad_exporter = nullptr;
 }
 
 void deinit_loaders() {
@@ -324,6 +358,9 @@ void deinit_loaders() {
 	}
 	if (binary_loader.is_valid()) {
 		ResourceCompatLoader::remove_resource_format_loader(binary_loader);
+	}
+	if (obdb_loader.is_valid()) {
+		ResourceCompatLoader::remove_resource_format_loader(obdb_loader);
 	}
 	if (texture_loader.is_valid()) {
 		ResourceCompatLoader::remove_resource_format_loader(texture_loader);
@@ -373,8 +410,12 @@ void deinit_loaders() {
 	if (input_event_converter.is_valid()) {
 		ResourceCompatLoader::remove_resource_object_converter(input_event_converter);
 	}
+	if (visual_shader_converter.is_valid()) {
+		ResourceCompatLoader::remove_resource_object_converter(visual_shader_converter);
+	}
 	text_loader = nullptr;
 	binary_loader = nullptr;
+	obdb_loader = nullptr;
 	texture_loader = nullptr;
 	texture3d_loader = nullptr;
 	texture_layered_loader = nullptr;
@@ -391,6 +432,7 @@ void deinit_loaders() {
 	fake_script_converter = nullptr;
 	translation_converter = nullptr;
 	input_event_converter = nullptr;
+	visual_shader_converter = nullptr;
 }
 
 void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
@@ -443,10 +485,11 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<GDScriptExporter>();
 	ClassDB::register_class<GDExtensionExporter>();
 	ClassDB::register_class<ObjExporter>();
-	ClassDB::register_class<ResourceCompatLoader>();
+	ClassDB::register_class<CoreBind::ResourceCompatLoader>();
 	ClassDB::register_class<CompatFormatLoader>();
 	ClassDB::register_class<ResourceFormatLoaderCompatText>();
 	ClassDB::register_class<ResourceFormatLoaderCompatBinary>();
+	ClassDB::register_class<ResourceFormatLoaderCompatOBDB>();
 	ClassDB::register_class<ResourceFormatLoaderCompatTexture2D>();
 	ClassDB::register_class<ResourceFormatLoaderCompatTexture3D>();
 	ClassDB::register_class<ResourceFormatLoaderCompatTextureLayered>();
@@ -508,6 +551,7 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<ScenePreviewer2D>();
 	ClassDB::register_class<ScenePreviewer>();
 	ClassDB::register_class<GDREFindReplaceBar>();
+	ClassDB::register_class<GDREXMLHighlighter>();
 	ClassDB::register_class<GodotMonoDecompWrapper>();
 
 	ClassDB::register_class<GDREConfig>();
@@ -515,8 +559,11 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<ImageSaver>();
 
 	ClassDB::register_class<ConfigFileCompat>();
+	ClassDB::register_class<GDRESceneTree>();
 
 	gui_icons = memnew(GDREGuiIcons);
+	gdre_main_loop = memnew(GDREMainLoop);
+	Engine::get_singleton()->add_singleton(Engine::Singleton("GDREMainLoop", GDREMainLoop::get_singleton()));
 
 	init_plugin_manager_sources();
 	gdre_singleton = memnew(GDRESettings);
@@ -566,6 +613,10 @@ void uninitialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	}
 	deinit_plugin_manager_sources();
 	free_ver_regex();
+	if (gdre_main_loop) {
+		memdelete(gdre_main_loop);
+		gdre_main_loop = nullptr;
+	}
 	if (gui_icons) {
 		memdelete(gui_icons);
 		gui_icons = nullptr;

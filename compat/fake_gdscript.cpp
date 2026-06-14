@@ -51,8 +51,11 @@ Error FakeGDScript::_reload_from_file() {
 		FAKEGDSCRIPT_FAIL_COND_V_MSG(err != OK, err, "Error reading file: " + script_path);
 		is_binary = binary_buffer.size() >= 4 && binary_buffer[0] == 'G' && binary_buffer[1] == 'D' && binary_buffer[2] == 'S' && binary_buffer[3] == 'C';
 		if (!is_binary) {
-			err = source.append_utf8(reinterpret_cast<const char *>(binary_buffer.ptr()), binary_buffer.size());
-			FAKEGDSCRIPT_FAIL_COND_V_MSG(err != OK, err, "Error reading file: " + script_path);
+			// Empty text files are valid gdscripts (treated as `extends RefCounted`).
+			if (binary_buffer.size() > 0) {
+				err = source.append_utf8(reinterpret_cast<const char *>(binary_buffer.ptr()), binary_buffer.size());
+				FAKEGDSCRIPT_FAIL_COND_V_MSG(err != OK, err, "Error reading file: " + script_path);
+			}
 			binary_buffer.clear();
 		}
 	}
@@ -119,11 +122,6 @@ ScriptInstance *FakeGDScript::instance_create(Object *p_this) {
 PlaceHolderScriptInstance *FakeGDScript::placeholder_instance_create(Object *p_this) {
 	PlaceHolderScriptInstance *si = memnew(PlaceHolderScriptInstance(/*GDScriptLanguage::get_singleton()*/ nullptr, Ref<Script>(this), p_this));
 	return si;
-}
-
-bool FakeGDScript::instance_has(const Object *p_this) const {
-	// TODO?
-	return true;
 }
 
 void FakeGDScript::set_source_code(const String &p_code) {

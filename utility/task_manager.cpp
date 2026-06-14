@@ -1,10 +1,8 @@
 #include "task_manager.h"
 #include "core/object/message_queue.h"
 #include "gui/gdre_progress.h"
-#include "main/main.h"
-#include "servers/rendering/rendering_server.h"
+#include "main/gdre_main_loop.h"
 #include "utility/common.h"
-#include "utility/gdre_settings.h"
 
 static constexpr int64_t ONE_GB = 1024LL * 1024LL * 1024LL;
 static constexpr int64_t TWELVE_GB = 12 * ONE_GB;
@@ -101,7 +99,7 @@ bool TaskManager::BaseTemplateTaskData::wait_update_progress(bool p_force_refres
 		update_progress(false);
 	}
 	if (Thread::is_main_thread()) {
-		bg_ret = TaskManager::get_singleton()->wait_until_next_frame();
+		bg_ret = GDREMainLoop::wait_until_next_frame();
 	} else {
 		bg_ret = TaskManager::get_singleton()->is_current_task_canceled();
 		if (!bg_ret) {
@@ -183,7 +181,7 @@ bool TaskManager::BaseTemplateTaskData::wait_for_completion(uint64_t timeout_s_n
 		} else {
 			while (!started && !is_canceled()) {
 				if (is_main_thread) {
-					if (TaskManager::get_singleton()->wait_until_next_frame()) {
+					if (GDREMainLoop::wait_until_next_frame()) {
 						break;
 					}
 				} else {
@@ -293,42 +291,12 @@ Error TaskManager::wait_for_task_completion(TaskManagerID p_group_id, uint64_t t
 	return err;
 }
 
-bool TaskManager::wait_until_next_frame(int64_t p_time_usec) {
-	uint64_t curr_time = OS::get_singleton()->get_ticks_usec();
-	if (!Thread::is_main_thread()) {
-		OS::get_singleton()->delay_usec(p_time_usec);
-		return is_current_task_canceled();
+bool TaskManager::update_progress_bg(bool p_force_refresh, bool called_from_process, bool *r_did_redraw, bool *r_has_tasks) {
+	bool has_tasks = !group_id_to_description.empty();
+	if (r_has_tasks) {
+		*r_has_tasks = has_tasks;
 	}
-	process_main_thread_dispatch_queue_for(p_time_usec);
-	bool did_redraw = false;
-	if (update_progress_bg(true, false, &did_redraw)) {
-		cancel_main_thread_dispatch_queue();
-		return true;
-	}
-	if (!did_redraw) {
-		GDRESettings::main_iteration();
-	}
-	int64_t elapsed_time = OS::get_singleton()->get_ticks_usec() - curr_time;
-	constexpr int64_t SYNC_WAIT_TIME_US = 1000;
-	if (elapsed_time < p_time_usec) {
-		while (elapsed_time < p_time_usec) {
-			RS::get_singleton()->sync();
-			elapsed_time = OS::get_singleton()->get_ticks_usec() - curr_time;
-			if (p_time_usec - elapsed_time > SYNC_WAIT_TIME_US) {
-				OS::get_singleton()->delay_usec(SYNC_WAIT_TIME_US);
-			} else {
-				if (p_time_usec - elapsed_time > 0) {
-					OS::get_singleton()->delay_usec(p_time_usec - elapsed_time);
-				}
-				break;
-			}
-		}
-	}
-	return false;
-}
-
-bool TaskManager::update_progress_bg(bool p_force_refresh, bool called_from_process, bool *r_did_redraw) {
-	if (updating_bg || (group_id_to_description.empty() && !Thread::is_main_thread())) {
+	if (updating_bg || !has_tasks) {
 		if (r_did_redraw) {
 			*r_did_redraw = false;
 		}
@@ -360,14 +328,6 @@ bool TaskManager::update_progress_bg(bool p_force_refresh, bool called_from_proc
 		bool did_redraw = GDREProgressDialog::get_singleton()->main_thread_update();
 		if (r_did_redraw) {
 			*r_did_redraw = did_redraw;
-		}
-	}
-	// TODO: remove this, move it into main loop
-	// this should only be called if this wasn't called from `GodotREEditorStandalone::process()` and there are tasks in the queue and none of them have progress enabled
-	if (!called_from_process && !main_loop_iterating && Thread::is_main_thread() && !MessageQueue::get_singleton()->is_flushing() && group_id_to_description.size() > 0) {
-		GDRESettings::main_iteration();
-		if (r_did_redraw) {
-			*r_did_redraw = true;
 		}
 	}
 	updating_bg = false;
@@ -409,6 +369,10 @@ void TaskManager::process_main_thread_dispatch_queue_for(int64_t time_usec) {
 	if (!Thread::is_main_thread()) {
 		return;
 	}
+	if (processing_main_thread_dispatch_queue) {
+		return;
+	}
+	processing_main_thread_dispatch_queue = true;
 	int64_t start_time_usec = OS::get_singleton()->get_ticks_usec();
 	int64_t elapsed_time_usec = 0;
 	while (elapsed_time_usec < time_usec) {
@@ -425,6 +389,7 @@ void TaskManager::process_main_thread_dispatch_queue_for(int64_t time_usec) {
 		set_thread_task_id(previous_main_thread_task_id);
 		elapsed_time_usec = OS::get_singleton()->get_ticks_usec() - start_time_usec;
 	}
+	processing_main_thread_dispatch_queue = false;
 }
 
 void TaskManager::cancel_main_thread_dispatch_queue() {
@@ -435,6 +400,10 @@ void TaskManager::cancel_main_thread_dispatch_queue() {
 	while (main_thread_dispatch_queue.try_pop(data)) {
 		data->cancel();
 	}
+}
+
+TaskManager::DownloadTaskID TaskManager::add_fake_download_task(const String &p_download_url, const String &p_save_path) {
+	return download_thread.add_fake_download_task(p_download_url, p_save_path);
 }
 
 TaskManager::DownloadTaskID TaskManager::add_download_task(const String &p_download_url, const String &p_save_path, bool silent) {
@@ -534,8 +503,8 @@ void TaskManager::DownloadTaskData::start_internal() {
 	}
 }
 
-TaskManager::DownloadTaskData::DownloadTaskData(const String &p_download_url, const String &p_save_path, bool p_silent) :
-		download_url(p_download_url), save_path(p_save_path), silent(p_silent) {
+TaskManager::DownloadTaskData::DownloadTaskData(const String &p_download_url, const String &p_save_path, bool p_silent, bool p_fake) :
+		download_url(p_download_url), save_path(p_save_path), silent(p_silent), fake(p_fake) {
 	not_in_main_queue = true;
 	auto_start = false;
 }
@@ -583,6 +552,14 @@ void TaskManager::DownloadQueueThread::main_loop() {
 	}
 }
 
+TaskManager::DownloadTaskID TaskManager::DownloadQueueThread::add_fake_download_task(const String &p_download_url, const String &p_save_path) {
+	MutexLock lock(write_mutex);
+	DownloadTaskID task_id = ++current_task_id;
+	tasks.try_emplace(task_id, std::make_shared<DownloadTaskData>(p_download_url, p_save_path, true, true));
+	// Don't add it to the queue; it will never be actually run
+	return task_id;
+}
+
 TaskManager::DownloadTaskID TaskManager::DownloadQueueThread::add_download_task(const String &p_download_url, const String &p_save_path, bool silent) {
 	MutexLock lock(write_mutex);
 
@@ -597,20 +574,29 @@ Error TaskManager::DownloadQueueThread::wait_for_task_completion(DownloadTaskID 
 	std::shared_ptr<DownloadTaskData> task;
 	bool already_waiting = false;
 	bool is_main_thread = Thread::is_main_thread();
+	bool is_fake = false;
 	bool found = tasks.modify_if(p_task_id, [&](auto &v) {
 		task = v.second;
 		already_waiting = task->is_waiting;
+		is_fake = task->fake;
 		task->is_waiting = true; // is_main_thread;
 	});
 	if (!task || !found) {
+		waiting = false;
 		return ERR_INVALID_PARAMETER;
 	} else if (already_waiting) {
+		waiting = false;
 		return ERR_ALREADY_IN_USE;
+	}
+	if (is_fake) {
+		tasks.erase(p_task_id);
+		waiting = false;
+		return OK;
 	}
 	Error err = OK;
 	while (!task->is_started()) {
 		if (is_main_thread) {
-			if (TaskManager::get_singleton()->wait_until_next_frame()) {
+			if (GDREMainLoop::wait_until_next_frame()) {
 				err = ERR_SKIP;
 				break;
 			}
@@ -626,6 +612,7 @@ Error TaskManager::DownloadQueueThread::wait_for_task_completion(DownloadTaskID 
 		}
 	}
 	if (err) {
+		waiting = false;
 		return err;
 	}
 	if (task->wait_for_completion()) {

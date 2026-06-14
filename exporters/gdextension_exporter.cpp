@@ -206,30 +206,28 @@ Ref<ExportReport> GDExtensionExporter::export_resource(const String &output_dir,
 		HashSet<String> hashes;
 		HashSet<String> paths;
 		for (const auto &E : lib_paths) {
-			// TODO: come up with a way of consistently hashing signed macos binaries
-			if (E.key.tags.has("macos") || paths.has(E.value)) {
+			if (paths.has(E.value)) {
 				continue;
 			}
 			paths.insert(E.value);
-			auto md5 = gdre::get_md5(E.value, true);
+			auto md5 = PluginSource::get_unsigned_sha256(E.value);
 			if (!md5.is_empty()) {
 				hashes.insert(md5);
 			}
 		}
 		if (!hashes.is_empty()) {
-			Dictionary info = PluginManager::get_plugin_info(plugin_name, gdre::hashset_to_vector(hashes));
+			PluginVersion version = PluginManager::get_plugin_info(plugin_name, gdre::hashset_to_vector(hashes));
 			if (TaskManager::get_singleton()->is_current_task_canceled()) {
 				report->set_error(ERR_SKIP);
 				return report;
 			}
-			PluginVersion version = PluginVersion::from_json(info);
 			if (version.is_valid()) {
-				String url = version.release_info.download_url;
-				String zip_path = output_dir.path_join(".tmp").path_join(plugin_name + ".zip");
-				auto task_id = TaskManager::get_singleton()->add_download_task(url, zip_path);
+				String zip_path;
+				auto task_id = PluginManager::download_plugin(version, zip_path, err);
+				GDExt_ERR_FAIL_COND_V_MSG(err, report, "Failed to download plugin " + import_infos->get_import_md_path());
 				report->set_download_task_id(task_id);
 				report->set_saved_path(zip_path);
-				report->set_extra_info(info);
+				report->set_extra_info(version.to_json());
 				return report;
 			}
 		}

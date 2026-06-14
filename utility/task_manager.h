@@ -8,7 +8,12 @@
 #include "utility/gd_parallel_queue.h"
 #include "utility/gdre_config.h"
 
+#include <functional>
 #include <memory>
+#include <optional>
+#include <tuple>
+#include <type_traits>
+#include <utility>
 
 struct TaskRunnerStruct {
 	virtual bool pre_run() { return true; }
@@ -18,6 +23,8 @@ struct TaskRunnerStruct {
 	virtual void run(void *p_userdata) = 0;
 	virtual bool auto_close_progress_bar() { return false; }
 };
+
+class GDREMainLoop;
 
 class TaskManager : public Object {
 	GDCLASS(TaskManager, Object);
@@ -63,12 +70,45 @@ public:
 		}
 	};
 
+	template <typename R, bool IsVoid = std::is_void_v<R>>
+	class MainThreadDispatchResultStorage;
+
+	template <typename R>
+	class MainThreadDispatchResultStorage<R, false> {
+		std::optional<std::decay_t<R>> result;
+
+	public:
+		template <typename F>
+		void execute(F &&p_callback) {
+			result = std::forward<F>(p_callback)();
+		}
+
+		std::optional<std::decay_t<R>> take_result() {
+			return std::move(result);
+		}
+	};
+
+	template <typename R>
+	class MainThreadDispatchResultStorage<R, true> {
+	public:
+		template <typename F>
+		void execute(F &&p_callback) {
+			std::forward<F>(p_callback)();
+		}
+	};
+
+	template <typename R>
+	using MainThreadDispatchReturn = std::optional<std::conditional_t<std::is_void_v<R>, bool, std::decay_t<R>>>;
+
 	// This is a helper class to dispatch a callback to the main thread.
 	template <typename C, typename M, typename U>
 	class TemplateMainThreadDispatchData : public BaseMainThreadDispatchData {
+		using ReturnType = std::invoke_result_t<M, C *, U>;
+
 		C *instance;
 		M method;
 		U userdata;
+		MainThreadDispatchResultStorage<ReturnType> result_storage;
 
 	public:
 		TemplateMainThreadDispatchData(TaskManager::TaskManagerID p_calling_task_id, C *p_instance, M p_method, U p_userdata) :
@@ -77,23 +117,38 @@ public:
 				method(p_method),
 				userdata(p_userdata) {}
 		void callback_internal() override {
-			(instance->*method)(userdata);
+			result_storage.execute([this]() -> ReturnType {
+				return std::invoke(method, instance, userdata);
+			});
+		}
+
+		template <typename T = ReturnType, typename = std::enable_if_t<!std::is_void_v<T>>>
+		std::optional<std::decay_t<T>> take_result() {
+			return result_storage.take_result();
 		}
 	};
 
 	// This is a helper class to dispatch a callback to the main thread.
-	template <typename U>
+	template <typename R, typename... Args>
 	class FunctionMainThreadDispatchData : public BaseMainThreadDispatchData {
-		std::function<void(U)> function;
-		U userdata;
+		std::function<R(Args...)> function;
+		std::tuple<std::decay_t<Args>...> userdata;
+		MainThreadDispatchResultStorage<R> result_storage;
 
 	public:
-		FunctionMainThreadDispatchData(TaskManager::TaskManagerID p_calling_task_id, std::function<void(U)> p_function, U p_userdata) :
+		FunctionMainThreadDispatchData(TaskManager::TaskManagerID p_calling_task_id, std::function<R(Args...)> p_function, std::decay_t<Args>... p_userdata) :
 				BaseMainThreadDispatchData(p_calling_task_id),
-				function(p_function),
-				userdata(p_userdata) {}
+				function(std::move(p_function)),
+				userdata(std::move(p_userdata)...) {}
 		void callback_internal() override {
-			function(userdata);
+			result_storage.execute([this]() -> R {
+				return std::apply(function, userdata);
+			});
+		}
+
+		template <typename T = R, typename = std::enable_if_t<!std::is_void_v<T>>>
+		std::optional<std::decay_t<T>> take_result() {
+			return result_storage.take_result();
 		}
 	};
 
@@ -414,7 +469,8 @@ public:
 		virtual void wait_for_task_completion_internal() override;
 
 	public:
-		DownloadTaskData(const String &p_download_url, const String &p_save_path, bool p_silent = false);
+		bool fake = false;
+		DownloadTaskData(const String &p_download_url, const String &p_save_path, bool p_silent = false, bool p_fake = false);
 
 		virtual void run_on_current_thread() override;
 		virtual int get_current_task_step_value() override;
@@ -446,6 +502,7 @@ public:
 		static void worker_thread_func(void *p_userdata);
 
 	public:
+		DownloadTaskID add_fake_download_task(const String &p_download_url, const String &p_save_path);
 		DownloadTaskID add_download_task(const String &p_download_url, const String &p_save_path, bool silent = false);
 		Error wait_for_task_completion(DownloadTaskID p_task_id);
 		DownloadQueueThread();
@@ -462,7 +519,9 @@ protected:
 	TaskManagerID main_thread_task_id = -1;
 	LocalVector<Thread::ID> thread_index_to_thread_id;
 	LocalVector<TaskManagerID> thread_index_to_task_ids;
+	bool processing_main_thread_dispatch_queue = false;
 
+	friend class GDREMainLoop;
 	bool updating_bg = false;
 
 	void _set_thread_name_task(uint32_t i, void *p_userdata);
@@ -596,26 +655,42 @@ public:
 	}
 
 	template <typename C, typename M, typename U>
-	bool dispatch_to_main_thread(C *p_instance, M p_method, U p_userdata) {
-		std::shared_ptr<BaseMainThreadDispatchData> data = std::make_shared<TemplateMainThreadDispatchData<C, M, U>>(get_thread_task_id(), p_instance, p_method, p_userdata);
-		return _dispatch_to_main_thread(data);
+	MainThreadDispatchReturn<std::invoke_result_t<M, C *, U>> dispatch_to_main_thread(C *p_instance, M p_method, U p_userdata) {
+		using ReturnType = std::invoke_result_t<M, C *, U>;
+		auto data = std::make_shared<TemplateMainThreadDispatchData<C, M, U>>(get_thread_task_id(), p_instance, p_method, p_userdata);
+		bool canceled = _dispatch_to_main_thread(data);
+		if (canceled) {
+			return std::nullopt;
+		}
+		if constexpr (std::is_void_v<ReturnType>) {
+			return true;
+		} else {
+			return data->take_result();
+		}
 	}
 
-	template <typename U>
-	bool dispatch_to_main_thread(std::function<void(U)> func, U userdata) {
-		std::shared_ptr<BaseMainThreadDispatchData> data = std::make_shared<FunctionMainThreadDispatchData<U>>(get_thread_task_id(), func, userdata);
-		return _dispatch_to_main_thread(data);
+	template <typename R, typename... Args>
+	MainThreadDispatchReturn<R> dispatch_to_main_thread(std::function<R(Args...)> func, std::decay_t<Args>... userdata) {
+		auto data = std::make_shared<FunctionMainThreadDispatchData<R, Args...>>(get_thread_task_id(), std::move(func), std::move(userdata)...);
+		bool canceled = _dispatch_to_main_thread(data);
+		if (canceled) {
+			return std::nullopt;
+		}
+		if constexpr (std::is_void_v<R>) {
+			return true;
+		} else {
+			return data->take_result();
+		}
 	}
 
+	DownloadTaskID add_fake_download_task(const String &p_download_url, const String &p_save_path);
 	DownloadTaskID add_download_task(const String &p_download_url, const String &p_save_path, bool silent = false);
 	Error wait_for_download_task_completion(DownloadTaskID p_task_id);
 	Error wait_for_task_completion(TaskManagerID p_task_id, uint64_t timeout_s_no_progress = 0);
 	bool is_current_task_completed(TaskManagerID p_task_id) const;
 	bool is_current_task_canceled();
 	bool is_current_task_timed_out();
-	static constexpr int64_t FRAME_TIME_US = 10000;
-	bool wait_until_next_frame(int64_t p_time_usec = FRAME_TIME_US);
-	bool update_progress_bg(bool p_force_refresh = false, bool called_from_process = false, bool *r_did_redraw = nullptr);
+	bool update_progress_bg(bool p_force_refresh = false, bool called_from_process = false, bool *r_did_redraw = nullptr, bool *r_has_tasks = nullptr);
 	void set_thread_task_id(TaskManagerID p_task_manager_id);
 	TaskManagerID get_thread_task_id() const;
 	void cancel_all();

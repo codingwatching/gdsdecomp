@@ -50,6 +50,8 @@
 #include "utility/gdre_settings.h"
 #include "utility/resource_info.h"
 
+#include "resource_compat_obdb.h"
+
 //#define print_bl(m_what) print_line(m_what)
 #define print_bl(m_what) (void)(m_what)
 
@@ -1196,7 +1198,6 @@ void ResourceLoaderCompatBinary::open(Ref<FileAccess> p_f, bool p_no_resources, 
 	}
 
 	type = get_unicode_string();
-
 	print_bl("type: " + type);
 	md_at = f->get_position();
 	importmd_ofs = f->get_64();
@@ -1208,9 +1209,11 @@ void ResourceLoaderCompatBinary::open(Ref<FileAccess> p_f, bool p_no_resources, 
 		using_uids = true;
 	}
 	f->real_is_double = (flags & ResourceFormatSaverBinaryInstance::FORMAT_FLAG_REAL_T_IS_DOUBLE) != 0;
+#if !REAL_T_IS_DOUBLE
 	if (f->real_is_double) {
 		WARN_PRINT_ONCE("ResourceLoaderCompatBinary: Real type is double, this is not unsupported in this version of GDRE tools.");
 	}
+#endif
 	using_real_t_double = f->real_is_double;
 
 	if (using_uids) {
@@ -3488,6 +3491,10 @@ Error ResourceFormatLoaderCompatBinary::get_ver_major_minor(const String &p_path
 	if (err != OK || !f.is_valid()) {
 		return err != OK ? err : ERR_FILE_CANT_OPEN;
 	}
+	// Hack necessary for version detection when loading a project from non-pck
+	if (ResourceFormatLoaderCompatOBDB::is_obdb_resource_file(f)) {
+		return ResourceFormatLoaderCompatOBDB::get_ver_major_minor_file(f, r_ver_major, r_ver_minor, r_suspicious);
+	}
 	ResourceLoaderCompatBinary loader;
 	return loader.get_ver_major_minor(f, r_ver_major, r_ver_minor, r_suspicious) ? OK : loader.error;
 }
@@ -3649,10 +3656,11 @@ String ResourceFormatSaverCompatBinaryInstance::get_local_path(const String &p_p
 	return p_resource.is_valid() ? p_resource->get_path() : "";
 }
 
-Error ResourceFormatLoaderCompatBinary::test_writing_parsing_variant(Variant p_v, Variant &r_v, int ver_major, int ver_minor) {
+Error ResourceFormatLoaderCompatBinary::test_writing_parsing_variant(Variant p_v, Variant &r_v, int ver_major, int ver_minor, bool using_real_t_double) {
 	ResourceFormatSaverCompatBinaryInstance saver;
 	int format = ResourceFormatSaverCompatBinary::get_default_format_version(ver_major, ver_minor);
 	auto fa = FileAccessBuffer::create();
+	fa->real_is_double = using_real_t_double;
 	saver.ver_format = format;
 	saver.ver_major = ver_major;
 	saver.ver_minor = ver_minor;
@@ -3675,6 +3683,7 @@ Error ResourceFormatLoaderCompatBinary::test_writing_parsing_variant(Variant p_v
 	loader.ver_major = ver_major;
 	loader.ver_minor = ver_minor;
 	loader.using_named_scene_ids = false;
+	loader.using_real_t_double = using_real_t_double;
 	for (const auto &[k, v] : resource_map) {
 		loader.internal_index_cache["::" + itos(v)] = k;
 	}

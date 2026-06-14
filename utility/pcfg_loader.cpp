@@ -170,16 +170,16 @@ Error ProjectConfigLoader::load_cfb(const String path, uint32_t ver_major, uint3
 	ERR_FAIL_COND_V_MSG(f.is_null(), err, "Could not open " + path);
 	if (ext == "cfg" || ext == "godot") {
 		err = _load_settings_text(f, path, ver_major);
-		if (err == OK && ver_major == 0) {
+		if (err == OK && ver_major == 0 && ver_minor == 0) {
 			auto ret = get_ver_major_and_minor_for_config_version(config_version);
 			ver_major = ret.first;
 			ver_minor = ret.second;
 		}
 	} else {
-		if (ver_major == 0 && ext == "cfb") {
+		if (ver_major == 0 && ver_minor == 0 && ext == "cfb") {
 			ver_major = 2;
 		}
-		if (ver_major == 0) {
+		if (ver_major == 0 && ver_minor == 0) {
 			err = _try_load_binary_v3_or_v4(path, ver_major);
 		} else {
 			err = _load_settings_binary(f, path, ver_major, false);
@@ -198,7 +198,7 @@ Error ProjectConfigLoader::load_cfb(const String path, uint32_t ver_major, uint3
 Error ProjectConfigLoader::save_cfb(const String dir, uint32_t ver_major, uint32_t ver_minor) {
 	ERR_FAIL_COND_V_MSG(!loaded, ERR_INVALID_DATA, "Attempted to save project config when not loaded!");
 	String file;
-	if (ver_major == 0) {
+	if (ver_major == 0 && ver_minor == 0) {
 		ver_major = major;
 		ver_minor = minor;
 	}
@@ -471,7 +471,7 @@ Error ProjectConfigLoader::_save_settings_text_file(const Ref<FileAccess> &file,
 			value = props[key].variant;
 
 			String vstr;
-			VariantWriterCompat::write_to_string_pcfg(value, vstr, ver_major);
+			VariantWriterCompat::write_to_string_pcfg(value, vstr, ver_major, ver_minor);
 			file->store_string(F->get().property_name_encode() + "=" + vstr + "\n");
 		}
 	}
@@ -482,6 +482,8 @@ Error ProjectConfigLoader::_save_settings_binary(const String &p_file, const RBM
 	Error err;
 	Ref<FileAccess> file = FileAccess::open(p_file, FileAccess::WRITE, &err);
 	ERR_FAIL_COND_V_MSG(err != OK, err, vformat("Couldn't save project.binary at '%s'.", p_file));
+
+	bool real_t_is_double = requires_double_precision();
 
 	uint8_t hdr[4] = { 'E', 'C', 'F', 'G' };
 	file->store_buffer(hdr, 4);
@@ -499,13 +501,13 @@ Error ProjectConfigLoader::_save_settings_binary(const String &p_file, const RBM
 		file->store_pascal_string(key);
 
 		int len;
-		err = VariantDecoderCompat::encode_variant_compat(ver_major, p_custom_features, nullptr, len, false);
+		err = VariantDecoderCompat::encode_variant_compat(ver_major, p_custom_features, nullptr, len, false, real_t_is_double);
 		ERR_FAIL_COND_V(err != OK, err);
 
 		Vector<uint8_t> buff;
 		buff.resize(len);
 
-		err = VariantDecoderCompat::encode_variant_compat(ver_major, p_custom_features, buff.ptrw(), len, false);
+		err = VariantDecoderCompat::encode_variant_compat(ver_major, p_custom_features, buff.ptrw(), len, false, real_t_is_double);
 		ERR_FAIL_COND_V(err != OK, err);
 		file->store_32(uint32_t(len));
 		file->store_buffer(buff.ptr(), buff.size());
@@ -531,13 +533,13 @@ Error ProjectConfigLoader::_save_settings_binary(const String &p_file, const RBM
 			file->store_pascal_string(k);
 
 			int len;
-			err = VariantDecoderCompat::encode_variant_compat(ver_major, value, nullptr, len, true);
+			err = VariantDecoderCompat::encode_variant_compat(ver_major, value, nullptr, len, true, real_t_is_double);
 			ERR_FAIL_COND_V_MSG(err != OK, ERR_INVALID_DATA, "Error when trying to encode Variant.");
 
 			Vector<uint8_t> buff;
 			buff.resize(len);
 
-			err = VariantDecoderCompat::encode_variant_compat(ver_major, value, buff.ptrw(), len, true);
+			err = VariantDecoderCompat::encode_variant_compat(ver_major, value, buff.ptrw(), len, true, real_t_is_double);
 			ERR_FAIL_COND_V_MSG(err != OK, ERR_INVALID_DATA, "Error when trying to encode Variant.");
 			file->store_32(uint32_t(len));
 			file->store_buffer(buff.ptr(), buff.size());
@@ -566,6 +568,11 @@ String ProjectConfigLoader::get_project_settings_as_string(const String &p_path)
 	err = loader->load_cfb(p_path, ver_major, ver_minor);
 	ERR_FAIL_COND_V_MSG(err != OK, "", "Failed to load project.godot");
 	return loader->get_as_text();
+}
+
+bool ProjectConfigLoader::requires_double_precision() const {
+	PackedStringArray features = get_setting("application/config/features", PackedStringArray());
+	return features.has("Double Precision");
 }
 
 ProjectConfigLoader::ProjectConfigLoader() {

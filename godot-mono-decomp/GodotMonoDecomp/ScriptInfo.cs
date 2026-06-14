@@ -89,6 +89,9 @@ public class GodotScriptInfo
 	[JsonPropertyName("base_type_paths")]
 	public string[] BaseTypePaths { get; set; }
 
+	[JsonPropertyName("godot_sharp_base_type")]
+	public string? GodotSharpBaseType { get; set; }
+
 	[JsonPropertyName("properties")]
 	public PropertyInfo[] Properties { get; set; }
 	[JsonPropertyName("signals")]
@@ -111,7 +114,7 @@ public class GodotScriptInfo
 	[JsonPropertyName("script_text")]
 	public string ScriptText { get; set; }
 
-	public GodotScriptInfo(string path, string @namespace, string className, string[] baseClasses, string[] baseTypePaths,
+	public GodotScriptInfo(string path, string @namespace, string className, string[] baseClasses, string[] baseTypePaths, string? godotSharpBaseType,
 		PropertyInfo[] properties, MethodInfo[] signals, MethodInfo[] methods, bool isTool, bool isAbstract, bool isGlobalClass, string iconPath, string scriptText)
 	{
 		Path = path;
@@ -119,6 +122,7 @@ public class GodotScriptInfo
 		ClassName = className;
 		BaseClasses = baseClasses;
 		BaseTypePaths = baseTypePaths;
+		GodotSharpBaseType = godotSharpBaseType;
 		Properties = properties;
 		Signals = signals;
 		Methods = methods;

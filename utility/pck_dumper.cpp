@@ -55,11 +55,16 @@ void PckDumper::reset() {
 
 Error PckDumper::_check_md5_all_files(Vector<String> &broken_files, int &checked_files) {
 	reset();
-	auto ext = GDRESettings::get_singleton()->get_pack_type();
-	// uint64_t last_progress_upd = OS::get_singleton()->get_ticks_usec();
-
-	if (ext != GDRESettings::PackInfo::PCK && ext != GDRESettings::PackInfo::EXE) {
-		print_verbose("Not a pack file, skipping MD5 check...");
+	auto packs = GDRESettings::get_singleton()->get_pack_info_list();
+	bool no_packs = true;
+	for (Ref<GDRESettings::PackInfo> pack : packs) {
+		if (pack->get_type() == GDRESettings::PackInfo::PCK || pack->get_type() == GDRESettings::PackInfo::EXE) {
+			no_packs = false;
+			break;
+		}
+	}
+	if (no_packs) {
+		print_verbose("No PCK/EXE loaded, skipping MD5 check...");
 		return ERR_SKIP;
 	}
 	Error err = OK;

@@ -39,12 +39,29 @@ Error wpost_sync(const String &p_url, const Vector<uint8_t> &p_data, const Vecto
 Error rimraf(const String &dir);
 bool dir_is_empty(const String &dir);
 Error touch_file(const String &path);
-bool store_var_compat(Ref<FileAccess> f, const Variant &p_var, int ver_major, bool p_full_objects = false);
+bool store_var_compat(Ref<FileAccess> f, const Variant &p_var, int ver_major, bool p_full_objects = false, bool p_real_t_is_double = false);
 String get_full_path(const String &p_path, DirAccess::AccessType p_access);
 bool directory_has_any_of(const String &p_dir_path, const Vector<String> &p_files);
 Vector<String> get_files_at(const String &p_dir, const Vector<String> &wildcards, bool absolute = true);
 Vector<String> get_directories_at_recursive(const String &p_dir, bool absolute = true, bool include_hidden = true);
 Vector<String> get_dirs_at(const String &p_dir, const Vector<String> &wildcards, bool absolute = true);
+
+_ALWAYS_INLINE_ bool base10_float_string_needs_trailing_zero(const String &p_str) {
+	int length = p_str.length();
+	if (unlikely(length == 0)) {
+		return false;
+	}
+	auto data = p_str.ptr();
+	if (!is_digit(data[0]) && data[0] != '-' && data[0] != '+') {
+		return false;
+	}
+	for (int i = 1; i < length; i++) {
+		if (!is_digit(data[i])) {
+			return false;
+		}
+	}
+	return true;
+}
 
 String num_scientific(double p_num);
 String num_scientific(float p_num);

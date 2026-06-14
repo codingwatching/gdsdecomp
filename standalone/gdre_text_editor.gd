@@ -55,7 +55,8 @@ enum HighlightType {
 	INI_LIKE,
 	GDSHADER,
 	JSON_TEXT,
-	CSHARP
+	CSHARP,
+	XML
 }
 
 func _add_regions_to_gdscript_highlighter():
@@ -102,6 +103,14 @@ func _add_regions_to_gdscript_highlighter():
 		csharp_highlighter = val
 	get:
 		return csharp_highlighter
+
+@export var xml_highlighter: GDREXMLHighlighter = preload("res://gdre_xml_highlighter.tres"):
+	set(val):
+		if CODE_VIEWER.syntax_highlighter == xml_highlighter:
+			CODE_VIEWER.syntax_highlighter = val
+		xml_highlighter = val
+	get:
+		return xml_highlighter
 
 @export var default_highlighter: HighlightType = HighlightType.GDSCRIPT:
 	set(val):
@@ -314,9 +323,12 @@ func is_csharp_script(ext, p_type = ""):
 	return false
 
 func is_text(ext, p_type = ""):
-	if (ext == "txt" || ext == "xml" || ext == "csv" || ext == "html" || ext == "md" || ext == "yml" || ext == "yaml"):
+	if (ext == "txt" || ext == "csv" || ext == "html" || ext == "md" || ext == "yml" || ext == "yaml"):
 		return true
 	return false
+
+func is_xml(ext, p_type = ""):
+	return ext == "xml"
 
 func is_text_resource(ext, p_type = ""):
 	return ext == "tscn" || ext == "tres"
@@ -356,6 +368,8 @@ func recognize(path):
 		return HighlightType.INI_LIKE
 	elif (is_json(ext)):
 		return HighlightType.JSON_TEXT
+	elif (is_xml(ext)):
+		return HighlightType.XML
 	elif (is_text(ext)):
 		return HighlightType.TEXT
 	elif is_content_text(path):
@@ -376,6 +390,8 @@ func set_highlight_type(type: HighlightType):
 			set_resource_viewer_props()
 		HighlightType.JSON_TEXT:
 			set_json_viewer_props()
+		HighlightType.XML:
+			set_xml_viewer_props()
 		HighlightType.TEXT:
 			set_text_viewer_props()
 		_:
@@ -441,6 +457,16 @@ func set_json_viewer_props():
 	CODE_VIEWER.highlight_all_occurrences = true
 	CODE_VIEWER.highlight_current_line = true
 	CODE_VIEWER.draw_control_chars = true
+	CODE_VIEWER.draw_tabs = false
+	CODE_VIEWER.draw_spaces = false
+	CODE_VIEWER.delimiter_comments = []
+
+func set_xml_viewer_props():
+	CODE_VIEWER.syntax_highlighter = xml_highlighter
+	set_common_code_viewer_props(false)
+	CODE_VIEWER.highlight_all_occurrences = true
+	CODE_VIEWER.highlight_current_line = true
+	CODE_VIEWER.draw_control_chars = false
 	CODE_VIEWER.draw_tabs = false
 	CODE_VIEWER.draw_spaces = false
 	CODE_VIEWER.delimiter_comments = []

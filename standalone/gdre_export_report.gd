@@ -98,7 +98,11 @@ func add_ver_string(ver_string: String):
 	elif report.is_mono_detected():
 		ver_string += " (Mono)"
 	var custom_version_note := ""
-	if report.is_custom_version_detected():
+	if report.is_using_double_precision():
+		custom_version_note = ("[b]This Project requires a Godot engine built with double precision.[/b]\n" +
+								"You must build the engine with `precision=double` flag to edit this project.\n" +
+								"[url=https://docs.godotengine.org/en/stable/engine_details/development/compiling/index.html]See the Godot documentation[/url] for more information.\n")
+	elif report.is_custom_version_detected():
 		custom_version_note = "[b]Custom Godot engine version detected!\nYou may encounter errors when opening the project in the editor.[/b]\n" + custom_version_note
 	EDITOR_MESSAGE_LABEL.text = EDITOR_MESSAGE_LABEL.text.replace("<GODOT_VER>", "[url=" + get_url_for_tag(tag, report.is_steam_detected()) + "]"+ ver_string + "[/url]")
 	EDITOR_MESSAGE_LABEL.text = EDITOR_MESSAGE_LABEL.text.replace("<CUSTOM_VER_NOTE>", custom_version_note)

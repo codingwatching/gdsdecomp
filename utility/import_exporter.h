@@ -21,6 +21,7 @@ class ImportExporterReport : public RefCounted {
 	bool custom_version_detected = false;
 	bool exported_scenes = false;
 	bool show_headless_warning = false;
+	bool uses_double_precision = false;
 	int session_files_total = 0;
 	String gdre_version;
 	String game_name;
@@ -83,6 +84,7 @@ public:
 	bool is_steam_detected() const;
 	bool is_mono_detected() const;
 	bool is_custom_version_detected() const;
+	bool is_using_double_precision() const;
 
 	void print_report();
 	String get_gdre_version() const;

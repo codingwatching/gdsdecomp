@@ -1,8 +1,26 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="ImportExporter" inherits="RefCounted" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+<class name="ImportExporter" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
+		Export imported resources back to their original source formats.
 	</brief_description>
 	<description>
+		[ImportExporter] converts the imported, engine-optimized resources stored inside a Godot PCK archive back to their original editable source formats - for example, converting [code].ctex[/code] textures back to [code].png[/code], [code].oggstr[/code] audio back to [code].ogg[/code], and so on. It operates on a project that has already been loaded into [GDRESettings].
+		Load a project with [method GDRESettings.load_project] before calling any [ImportExporter] methods.
+		[codeblock]
+		var settings = Engine.get_singleton("GDRESettings")
+		var err = settings.load_project(PackedStringArray(["path/to/game.pck"]))
+		if err != OK:
+		    push_error("Failed to load project")
+		    return
+
+		var exporter = ImportExporter.new()
+		err = exporter.export_imports("/path/to/output_dir")
+		if err == OK:
+		    var report = exporter.get_report()
+		    print("Export complete: ", report)
+
+		settings.unload_project()
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -12,22 +30,28 @@
 			<param index="0" name="p_out_dir" type="String" />
 			<param index="1" name="files_to_export" type="PackedStringArray" default="PackedStringArray()" />
 			<description>
+				Exports imported resources to [param p_out_dir]. If [param files_to_export] is non-empty, only the listed [code]res://[/code]-rooted resource paths are exported; otherwise every importable resource in the loaded project is exported. Returns [code]OK[/code] on success. Retrieve a per-file summary with [method get_report].
 			</description>
 		</method>
 		<method name="get_report">
 			<return type="ImportExporterReport" />
 			<description>
+				Returns the [ImportExporterReport] describing the results of the most recent [method export_imports] call, including counts of successful exports, failed exports, and resources that could not be converted.
 			</description>
 		</method>
 		<method name="reset">
 			<return type="void" />
 			<description>
+				Resets the exporter state, clearing any cached report data. Call this before reusing the same [ImportExporter] instance for a new export session.
 			</description>
 		</method>
 		<method name="test_exported_project">
 			<return type="int" enum="Error" />
 			<param index="0" name="p_original_project_dir" type="String" />
 			<description>
+				Re-imports the files produced by the most recent [method export_imports] call and compares them against the originals in [param p_original_project_dir] (a directory or a [code].zip[/code] archive of the original project). The comparison results are stored on [method get_report]; inspect its [code]failed_tests[/code] field to see which files diverged.
+				If [param p_original_project_dir] is empty, the tests run without a comparison baseline and only sanity-check that the exported files can be re-imported.
+				[b]Note:[/b] the return value reflects only catastrophic errors (e.g. the export has not been run, no pack is loaded). It returns [code]OK[/code] even when individual file comparisons fail; always inspect the report for per-file results.
 			</description>
 		</method>
 	</methods>

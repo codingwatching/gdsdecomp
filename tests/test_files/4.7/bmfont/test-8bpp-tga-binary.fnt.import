@@ -1,0 +1,17 @@
+[remap]
+
+importer="font_data_bmfont"
+type="FontFile"
+uid="uid://bl25btfnlc0bp"
+path="res://.godot/imported/test-8bpp-tga-binary.fnt-59523dbb4a3d79dfebfc37a485fdb43e.fontdata"
+
+[deps]
+
+source_file="res://test-8bpp-tga-binary.fnt"
+dest_files=["res://.godot/imported/test-8bpp-tga-binary.fnt-59523dbb4a3d79dfebfc37a485fdb43e.fontdata"]
+
+[params]
+
+fallbacks=[]
+compress=true
+scaling_mode=2

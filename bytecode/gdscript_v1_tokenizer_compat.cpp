@@ -1199,6 +1199,9 @@ Vector<uint8_t> GDScriptV1TokenizerBufferCompat::parse_code_string(const String 
 	RBMap<uint32_t, int> line_map;
 	Vector<uint32_t> token_array;
 
+	// GDScriptV1TokenizerBufferCompat is only used for GDScript 1.0, (e.g. 3.x and below), which did not support double precision
+	constexpr bool real_t_is_double = false;
+
 	int variant_ver_major = p_decomp->get_variant_ver_major();
 
 	// compat: from 3.0 - 3.1.1, the tokenizer defaulted to storing full objects
@@ -1320,11 +1323,11 @@ Vector<uint8_t> GDScriptV1TokenizerBufferCompat::parse_code_string(const String 
 
 	for (RBMap<int, Variant>::Element *E = rev_constant_map.front(); E; E = E->next()) {
 		int len;
-		Error err = VariantDecoderCompat::encode_variant_compat(variant_ver_major, E->get(), nullptr, len, encode_full_objects);
+		Error err = VariantDecoderCompat::encode_variant_compat(variant_ver_major, E->get(), nullptr, len, encode_full_objects, real_t_is_double);
 		GDSDECOMP_FAIL_COND_V_MSG(err != OK, Vector<uint8_t>(), "Error when trying to encode Variant.");
 		int pos = buf.size();
 		buf.resize_initialized(pos + len);
-		VariantDecoderCompat::encode_variant_compat(variant_ver_major, E->get(), &buf.write[pos], len, encode_full_objects);
+		VariantDecoderCompat::encode_variant_compat(variant_ver_major, E->get(), &buf.write[pos], len, encode_full_objects, real_t_is_double);
 	}
 
 	for (RBMap<int, uint32_t>::Element *E = rev_line_map.front(); E; E = E->next()) {

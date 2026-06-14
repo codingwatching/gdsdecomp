@@ -8,6 +8,7 @@
 #include "scene/resources/mesh.h"
 #include "utility/common.h"
 #include "utility/gdre_logger.h"
+#include "utility/gdre_settings.h"
 #include "utility/import_info.h"
 
 #include <filesystem>
@@ -47,7 +48,7 @@ struct Triplet {
 
 struct TripletHasher {
 	static uint32_t hash(const Triplet &t) {
-		return HashMapHasherDefault::hash(t.v) ^ HashMapHasherDefault::hash(t.vt) ^ HashMapHasherDefault::hash(t.vn);
+		return HashMapHasherDefault::hash(t.v) ^ HashMapHasherDefault::hash(t.vt) ^ HashMapHasherDefault::hash(t.vn) ^ HashMapHasherDefault::hash(t.vc);
 	}
 };
 namespace {
@@ -65,11 +66,7 @@ inline bool has_shadow_mesh(const Ref<Mesh> &p_mesh) {
 }
 
 inline Array surface_get_arrays(const Ref<Mesh> &p_mesh, int p_surf_idx) {
-	Ref<Mesh> arr_mesh = p_mesh;
-	if (arr_mesh.is_valid()) {
-		return arr_mesh->surface_get_arrays(p_surf_idx);
-	}
-	return Array();
+	return p_mesh->surface_get_arrays(p_surf_idx);
 }
 
 inline String get_surface_name(const Ref<Mesh> &p_mesh, int p_surf_idx) {
@@ -119,9 +116,39 @@ inline Ref<Material> surface_get_material(const Ref<Mesh> &p_mesh, int p_surf_id
 	}
 	return Ref<Material>();
 }
+
+template <typename... VarArgs>
+static String format_obj_line(bool p_force_single_precision, const String &p_text, VarArgs... p_args) {
+	Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
+
+	for (int i = 0; i < sizeof...(p_args); i++) {
+		Variant &arg = args[i];
+
+		if (arg.get_type() == Variant::Type::FLOAT) {
+			String num_str;
+			if (p_force_single_precision || arg.operator float() == arg.operator double()) {
+				num_str = String::num_scientific(arg.operator float());
+			} else {
+				num_str = String::num_scientific(arg.operator double());
+			}
+			if (gdre::base10_float_string_needs_trailing_zero(num_str)) {
+				num_str += ".0";
+			}
+			args[i] = num_str;
+		}
+	}
+	bool error = false;
+	String fmt = p_text.replace("%.6f", "%s").sprintf(Span(args, sizeof...(p_args)), &error);
+
+	ERR_FAIL_COND_V_MSG(error, String(), String("Formatting error in string \"") + p_text + "\": " + fmt + ".");
+
+	return fmt;
+}
+
 } //namespace
 
 Error ObjExporter::_write_meshes_to_obj(const Vector<Ref<Mesh>> &p_meshes, const String &p_path, const String &p_output_dir, MeshInfo &r_mesh_info) {
+	ERR_FAIL_COND_V_MSG(p_meshes.is_empty(), ERR_INVALID_PARAMETER, "No meshes to export");
 	Error err;
 	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::WRITE, &err);
 	ERR_FAIL_COND_V_MSG(err != OK, err, "Cannot open file for writing: " + p_path);
@@ -136,9 +163,18 @@ Error ObjExporter::_write_meshes_to_obj(const Vector<Ref<Mesh>> &p_meshes, const
 	bool wrote_mtl_line = false;
 	String mtl_path = p_path.get_basename() + ".mtl";
 
+	bool force_single_precision = true;
+	if (GDRESettings::get_singleton()->is_pack_loaded()) {
+		force_single_precision = !GDRESettings::get_singleton()->requires_double_precision();
+	} else {
+		auto res_info = ResourceInfo::get_info_from_resource(p_meshes[0]);
+		force_single_precision = !(res_info.is_valid() && res_info->using_real_t_double);
+	}
+
 	// Build global triplet list and face indices
 	const Color default_color = Color(1.0, 1.0, 1.0);
 	for (auto p_mesh : p_meshes) {
+		ERR_CONTINUE_MSG(p_mesh.is_null(), "Mesh is null");
 		Vector<Triplet> global_triplets;
 		HashMap<Triplet, int, TripletHasher> triplet_to_index;
 		Vector<String> surface_material_names;
@@ -184,46 +220,34 @@ Error ObjExporter::_write_meshes_to_obj(const Vector<Ref<Mesh>> &p_meshes, const
 			surface_material_names.push_back(mat_name);
 
 			Vector<int> face_triplet_indices;
+			auto make_triplet = [&](int vi) {
+				Triplet t;
+				t.v = surface_vertices[vi];
+				if (has_uv) {
+					t.vt = surface_uvs[vi];
+					t.has_uv = true;
+				}
+				if (has_normal) {
+					t.vn = surface_normals[vi];
+					t.has_normal = true;
+				}
+				if (has_vertex_colors && surface_colors[vi] != default_color) {
+					t.vc = surface_colors[vi];
+					t.has_color = true;
+				}
+				if (!triplet_to_index.has(t)) {
+					triplet_to_index[t] = global_triplets.size();
+					global_triplets.push_back(t);
+				}
+				face_triplet_indices.push_back(triplet_to_index[t]);
+			};
 			if (!indices.is_empty()) {
 				for (int i = 0; i < indices.size(); i++) {
-					int vi = indices[i];
-					Triplet t;
-					t.v = surface_vertices[vi];
-					if (has_uv) {
-						t.vt = surface_uvs[vi];
-						t.has_uv = true;
-					}
-					if (has_normal) {
-						t.vn = surface_normals[vi];
-						t.has_normal = true;
-					}
-					if (!triplet_to_index.has(t)) {
-						triplet_to_index[t] = global_triplets.size();
-						global_triplets.push_back(t);
-					}
-					face_triplet_indices.push_back(triplet_to_index[t]);
+					make_triplet(indices[i]);
 				}
 			} else {
 				for (int vi = 0; vi < surface_vertices.size(); vi++) {
-					Triplet t;
-					t.v = surface_vertices[vi];
-					if (has_uv) {
-						t.vt = surface_uvs[vi];
-						t.has_uv = true;
-					}
-					if (has_normal) {
-						t.vn = surface_normals[vi];
-						t.has_normal = true;
-					}
-					if (has_vertex_colors && surface_colors[vi] != default_color) {
-						t.vc = surface_colors[vi];
-						t.has_color = true;
-					}
-					if (!triplet_to_index.has(t)) {
-						triplet_to_index[t] = global_triplets.size();
-						global_triplets.push_back(t);
-					}
-					face_triplet_indices.push_back(triplet_to_index[t]);
+					make_triplet(vi);
 				}
 			}
 			surface_face_triplet_indices.push_back(face_triplet_indices);
@@ -245,19 +269,19 @@ Error ObjExporter::_write_meshes_to_obj(const Vector<Ref<Mesh>> &p_meshes, const
 		for (int i = 0; i < global_triplets.size(); i++) {
 			const Triplet &t = global_triplets[i];
 			const Vector3 &v = t.v;
-			String v_line = vformat("v %.6f %.6f %.6f", v.x, v.y, v.z);
+			String v_line = format_obj_line(force_single_precision, "v %.6f %.6f %.6f", v.x, v.y, v.z);
 			if (t.has_color) {
-				v_line += vformat(" %.6f %.6f %.6f", t.vc.r, t.vc.g, t.vc.b);
+				v_line += format_obj_line(force_single_precision, " %.6f %.6f %.6f", t.vc.r, t.vc.g, t.vc.b);
 			}
 			f->store_line(v_line);
 			if (t.has_uv) {
 				const Vector2 &uv = t.vt;
-				f->store_line(vformat("vt %.6f %.6f", uv.x, 1.0 - uv.y));
+				f->store_line(format_obj_line(force_single_precision, "vt %.6f %.6f", uv.x, 1.0 - uv.y));
 				any_uv = true;
 			}
 			if (t.has_normal) {
 				const Vector3 &n = t.vn;
-				f->store_line(vformat("vn %.6f %.6f %.6f", n.x, n.y, n.z));
+				f->store_line(format_obj_line(force_single_precision, "vn %.6f %.6f %.6f", n.x, n.y, n.z));
 				any_normal = true;
 			}
 		}
@@ -292,7 +316,7 @@ Error ObjExporter::_write_meshes_to_obj(const Vector<Ref<Mesh>> &p_meshes, const
 		}
 	}
 	if (!materials.is_empty()) {
-		err = write_materials_to_mtl(materials, mtl_path, p_output_dir);
+		err = write_materials_to_mtl(materials, mtl_path, p_output_dir, force_single_precision);
 		if (err != OK) {
 			return err;
 		}
@@ -308,7 +332,7 @@ static String get_relative_path(const String &p_path, const String &p_base_path)
 	return String::utf8(relative_path.string().c_str()).simplify_path();
 }
 
-Error ObjExporter::write_materials_to_mtl(const HashMap<String, Ref<Material>> &p_materials, const String &p_path, const String &p_output_dir) {
+Error ObjExporter::write_materials_to_mtl(const HashMap<String, Ref<Material>> &p_materials, const String &p_path, const String &p_output_dir, bool force_single_precision) {
 	Error err;
 	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::WRITE, &err);
 	ERR_FAIL_COND_V_MSG(err != OK, err, "Cannot open MTL file for writing: " + p_path);
@@ -351,7 +375,9 @@ Error ObjExporter::write_materials_to_mtl(const HashMap<String, Ref<Material>> &
 					name = filebasename + "_" + suffix + ".png";
 				}
 				gdre::ensure_dir(base_dir);
-				tex->get_image()->save_png(base_dir.path_join(name));
+				Ref<Image> img = tex->get_image();
+				ERR_FAIL_COND_V_MSG(img.is_null(), String(), "Image is null for texture " + tex->get_path());
+				img->save_png(base_dir.path_join(name));
 				path = name;
 			}
 			return path;
@@ -370,23 +396,23 @@ Error ObjExporter::write_materials_to_mtl(const HashMap<String, Ref<Material>> &
 			// if (mat->get_flag(StandardMaterial3D::FLAG_SRGB_VERTEX_COLOR)) {
 			// 	albedo = albedo.linear_to_srgb();
 			// }
-			f->store_line(vformat("Kd %.6f %.6f %.6f", albedo.r, albedo.g, albedo.b));
+			f->store_line(format_obj_line(force_single_precision, "Kd %.6f %.6f %.6f", albedo.r, albedo.g, albedo.b));
 
 			float metallic = mat->get_metallic();
-			f->store_line(vformat("Ks %.6f %.6f %.6f", metallic, metallic, metallic));
+			f->store_line(format_obj_line(force_single_precision, "Ks %.6f %.6f %.6f", metallic, metallic, metallic));
 
 			// float roughness = mat->get_roughness();
-			// f->store_line(vformat("Ns %.6f", (1.0 - roughness) * 1000.0));
+			// f->store_line(format_obj_line(force_single_precision, "Ns %.6f", (1.0 - roughness) * 1000.0));
 
 			float alpha = mat->get_albedo().a;
 			if (alpha < 1.0) {
-				f->store_line(vformat("d %.6f", alpha));
+				f->store_line(format_obj_line(force_single_precision, "d %.6f", alpha));
 			}
 
 			//sharpness
 			float sharpness = 1.0 - mat->get_roughness();
 			if (sharpness != 0.0) {
-				f->store_line(vformat("sharpness %d", (int)(sharpness * 1000)));
+				f->store_line(format_obj_line(force_single_precision, "sharpness %d", (int)(sharpness * 1000)));
 			}
 
 			// Handle textures if present
@@ -505,6 +531,7 @@ Vector<Ref<Mesh>> load_meshes_as_fake_meshes(const HashSet<String> &p_paths, Ref
 			// }
 		}
 		mesh->set_path_cache(mr->get_path());
+		mesh->merge_meta_from(mr.ptr());
 
 		meshes.push_back(mesh);
 	}

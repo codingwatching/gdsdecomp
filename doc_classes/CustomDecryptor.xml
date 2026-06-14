@@ -1,8 +1,21 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="CustomDecryptor" inherits="RefCounted" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+<class name="CustomDecryptor" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
+		Base class for implementing custom decryption logic for non-standard encrypted PCK files.
 	</brief_description>
 	<description>
+		[CustomDecryptor] is the base class you extend to support games that use a non-standard encryption scheme for their PCK files. GDRE's built-in decryption handles the standard AES-256-CFB scheme used by Godot. If the game applies additional transformations to the key, uses a different cipher, or structures its encrypted file header differently, implement [method _parse_and_decrypt] in a GDScript subclass.
+		Register the subclass with GDRE using [method GDRESettings.set_custom_decryption_script] (passing a script path) or [method GDRESettings.set_custom_decryptor] (passing an instance). You can also pass [code]--custom-decryption-script=&lt;path&gt;[/code] on the command line.
+		[b]Warning:[/b] write a custom decryptor only after confirming the game genuinely does not use standard Godot encryption. Reverse-engineer the game binary to verify the encryption scheme first.
+		[b]Warning:[/b] do not include encryption keys, XOR keys, or other secrets in a decryptor script you intend to distribute. Distributing such secrets may violate the DMCA in the United States and similar laws elsewhere.
+		Most Godot encrypted files follow this layout:
+		[codeblock]
+		[magic:  4 bytes]  # only present if non_pack_file == true
+		[md5:   16 bytes]  # MD5 of the decrypted data
+		[length: 8 bytes]  # int64, length of the original (unpadded) data
+		[iv:    16 bytes]  # initialization vector
+		[data:  length bytes, padded to 16-byte alignment]
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -13,6 +26,14 @@
 			<param index="1" name="key" type="PackedByteArray" />
 			<param index="2" name="non_pack_file" type="bool" />
 			<description>
+				Virtual method to override. GDRE calls this for each encrypted file it needs to read.
+				[param file] is a [FileAccess] handle positioned at the start of the encrypted file data. When the file is stored inside a PCK, [code]file.get_length()[/code] returns the length of the entire PCK, not just this file's data.
+				[param key] is the decryption key provided by the user or CLI.
+				[param non_pack_file] is [code]false[/code] when the file is a slice inside a PCK (no magic number prefix) and [code]true[/code] when it is a standalone encrypted file that starts with a magic number.
+				The return [Dictionary] must contain the following keys:
+				- [code]error[/code] ([Error]): [code]OK[/code] on success, or an error code.
+				- [code]length[/code] ([int]): length of the decrypted data in bytes (not padded).
+				- [code]data[/code] ([PackedByteArray]): the decrypted bytes. [code]data.size()[/code] must equal [code]length[/code].
 			</description>
 		</method>
 		<method name="parse_and_decrypt">
@@ -21,6 +42,7 @@
 			<param index="1" name="key" type="PackedByteArray" />
 			<param index="2" name="non_pack_file" type="bool" />
 			<description>
+				Non-virtual wrapper that invokes [method _parse_and_decrypt]. Use this when calling the decryptor from other GDScript code.
 			</description>
 		</method>
 	</methods>

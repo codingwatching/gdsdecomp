@@ -250,6 +250,12 @@ Error GodotMonoDecompWrapper::set_settings(const GodotMonoDecompSettings &p_sett
 	return OK;
 }
 
+bool GodotMonoDecompWrapper::is_file_assembly(const String &file) {
+	CharString file_chrstr = file.utf8();
+	const char *file_c = file_chrstr.get_data();
+	return GodotMonoDecomp_CheckFileIsAssembly(file_c) != 0;
+}
+
 GodotMonoDecompWrapper::~GodotMonoDecompWrapper() {
 	if (decompilerHandle != nullptr) {
 		GodotMonoDecomp_FreeObjectHandle(decompilerHandle);
@@ -289,6 +295,9 @@ Dictionary GodotMonoDecompWrapper::get_language_versions() {
 }
 Error GodotMonoDecompWrapper::set_settings(const GodotMonoDecompSettings &p_settings) {
 	ERR_FAIL_V_MSG(ERR_UNAVAILABLE, GODOT_MONO_DECOMP_DISABLED_ERROR_MESSAGE);
+}
+bool GodotMonoDecompWrapper::is_file_assembly(const String &file) const {
+	ERR_FAIL_V_MSG(false, GODOT_MONO_DECOMP_DISABLED_ERROR_MESSAGE);
 }
 GodotMonoDecompWrapper::~GodotMonoDecompWrapper() {}
 #endif
@@ -340,4 +349,5 @@ void GodotMonoDecompWrapper::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_files_not_present_in_file_map"), &GodotMonoDecompWrapper::get_files_not_present_in_file_map);
 	ClassDB::bind_method(D_METHOD("get_files_in_file_map"), &GodotMonoDecompWrapper::get_files_in_file_map);
 	ClassDB::bind_method(D_METHOD("is_custom_version_detected"), &GodotMonoDecompWrapper::is_custom_version_detected);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("is_file_assembly", "file"), &GodotMonoDecompWrapper::is_file_assembly);
 }

@@ -3,6 +3,7 @@
 #include "core/io/file_access.h"
 #include "core/io/json.h"
 #include "core/os/os.h"
+#include "core/os/time.h"
 #include "core/string/ustring.h"
 #include "plugin_manager.h"
 #include "utility/common.h"
@@ -98,6 +99,50 @@ bool GitHubSource::should_skip_tag(const String &plugin_name, const String &tag)
 		return true;
 	}
 	return false;
+}
+
+String normalize_release_date(const String &p_datetime) {
+	if (p_datetime.ends_with("Z")) {
+		return p_datetime;
+	}
+	String time_splitter = p_datetime.find_char('T') > 0 ? "T" : "";
+	if (time_splitter.is_empty()) {
+		time_splitter = p_datetime.find_char(' ') > 0 ? " " : "";
+	}
+	if (time_splitter.is_empty()) {
+		return p_datetime;
+	}
+	auto parts = p_datetime.split(time_splitter, false);
+	const String &time = parts[1];
+	int64_t index_of_plus = time.rfind_char('+');
+	int64_t index_of_minus = time.rfind_char('-');
+	String santized_datetime = p_datetime;
+
+	if (index_of_plus > 0) {
+		santized_datetime = santized_datetime.substr(0, p_datetime.rfind_char('+'));
+	} else if (index_of_minus > 0) {
+		santized_datetime = santized_datetime.substr(0, p_datetime.rfind_char('-'));
+	}
+	int64_t unix_time = Time::get_singleton()->get_unix_time_from_datetime_string(p_datetime);
+	if (index_of_plus > 0) {
+		String offset = time.get_slice("+", 1);
+		int64_t offset_hours = offset.get_slice(":", 0).to_int();
+		int64_t offset_minutes = offset.get_slice(":", 1).to_int();
+		int64_t offset_seconds = offset.get_slice(":", 2).to_int();
+		int64_t offset_total = offset_hours * 3600 + offset_minutes * 60 + offset_seconds;
+		unix_time -= offset_total;
+	}
+	if (index_of_minus > 0) {
+		String offset = time.get_slice("-", 1);
+		int64_t offset_hours = offset.get_slice(":", 0).to_int();
+		int64_t offset_minutes = offset.get_slice(":", 1).to_int();
+		int64_t offset_seconds = offset.get_slice(":", 2).to_int();
+		int64_t offset_total = offset_hours * 3600 + offset_minutes * 60 + offset_seconds;
+		unix_time += offset_total;
+	}
+
+	String ret = Time::get_singleton()->get_datetime_string_from_unix_time(unix_time) + "Z";
+	return ret;
 }
 
 bool GitHubSource::should_skip_release(const String &plugin_name, const String &release_url) {
@@ -282,6 +327,12 @@ ReleaseInfo GitHubSource::get_release_info(const String &plugin_name, int64_t pr
 				release_info.secondary_id = asset_id;
 				release_info.version = tag_name;
 				release_info.release_date = asset.get("created_at", "");
+				if (!release_info.release_date.is_empty()) {
+					// parse the date string and rewrite it to the standard format
+					release_info.release_date = normalize_release_date(release_info.release_date);
+					// Time:: doesn't parse the timezone offset, so we need to parse it manually
+				}
+
 				release_info.download_url = download_url;
 				release_info.repository_url = get_repo_url(plugin_name);
 

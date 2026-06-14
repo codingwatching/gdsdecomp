@@ -42,46 +42,46 @@
 	}
 
 #if TESTS_ENABLED
+#include "main/gdre_main_loop.h"
 #include "tests/test_macros.h"
-#include "utility/gdre_settings.h"
 
 #define GDRE_CHECK(...)               \
-	if (GDRESettings::is_testing()) { \
+	if (GDREMainLoop::is_testing()) { \
 		CHECK(__VA_ARGS__);           \
 	} else {                          \
 		_GDRE_CHECK(__VA_ARGS__);     \
 	}
 
 #define GDRE_REQUIRE(...)             \
-	if (GDRESettings::is_testing()) { \
+	if (GDREMainLoop::is_testing()) { \
 		REQUIRE(__VA_ARGS__);         \
 	} else {                          \
 		_GDRE_REQUIRE(__VA_ARGS__);   \
 	}
 
 #define GDRE_CHECK_EQ(a, b)           \
-	if (GDRESettings::is_testing()) { \
+	if (GDREMainLoop::is_testing()) { \
 		CHECK_EQ(a, b);               \
 	} else {                          \
 		_GDRE_CHECK_EQ(a, b);         \
 	}
 
 #define GDRE_CHECK_GE(a, b)           \
-	if (GDRESettings::is_testing()) { \
+	if (GDREMainLoop::is_testing()) { \
 		CHECK_GE(a, b);               \
 	} else {                          \
 		_GDRE_CHECK_GE(a, b);         \
 	}
 
 #define GDRE_CHECK_GT(a, b)           \
-	if (GDRESettings::is_testing()) { \
+	if (GDREMainLoop::is_testing()) { \
 		CHECK_GT(a, b);               \
 	} else {                          \
 		_GDRE_CHECK_GT(a, b);         \
 	}
 
 #define GDRE_REQUIRE_GE(a, b)         \
-	if (GDRESettings::is_testing()) { \
+	if (GDREMainLoop::is_testing()) { \
 		REQUIRE_GE(a, b);             \
 	} else {                          \
 		_GDRE_REQUIRE_GE(a, b);       \

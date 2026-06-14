@@ -1,8 +1,19 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="AESContextGDRE" inherits="RefCounted" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+<class name="AESContextGDRE" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
+		AES cipher context for custom decryptors, with CFB mode support.
 	</brief_description>
 	<description>
+		[AESContextGDRE] implements AES encryption and decryption for use inside [CustomDecryptor] implementations. It supports AES-128, AES-192, and AES-256 (key length 16, 24, or 32 bytes) and exposes ECB, CBC, and CFB modes - the last of which Godot's built-in [code]AESContext[/code] does not provide but is the mode Godot uses for encrypted PCK files (AES-256-CFB).
+		Input data must be a multiple of 16 bytes; pad the buffer before passing it to [method update].
+		[codeblock]
+		func decrypt_aes_cfb(data: PackedByteArray, key: PackedByteArray, iv: PackedByteArray) -&gt; PackedByteArray:
+		    var ctx = AESContextGDRE.new()
+		    ctx.start(AESContextGDRE.MODE_CFB_DECRYPT, key, iv)
+		    var decrypted = ctx.update(data)
+		    ctx.finish()
+		    return decrypted
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -10,11 +21,13 @@
 		<method name="finish">
 			<return type="void" />
 			<description>
+				Releases context resources. Call this once you are done processing data. The context cannot be used again until you call [method start].
 			</description>
 		</method>
 		<method name="get_iv_state">
 			<return type="PackedByteArray" />
 			<description>
+				Returns the current IV state of the context. This is meaningful only for [constant MODE_CBC_ENCRYPT], [constant MODE_CBC_DECRYPT], [constant MODE_CFB_ENCRYPT], and [constant MODE_CFB_DECRYPT], where the IV evolves with each [method update] call. Use it to resume streaming encryption across multiple buffers.
 			</description>
 		</method>
 		<method name="start">
@@ -23,29 +36,38 @@
 			<param index="1" name="key" type="PackedByteArray" />
 			<param index="2" name="iv" type="PackedByteArray" default="PackedByteArray()" />
 			<description>
+				Initializes the cipher context with the given [param mode] and [param key]. The key must be 16, 24, or 32 bytes (AES-128, AES-192, or AES-256). An [param iv] of exactly 16 bytes is required for CBC and CFB modes and ignored for ECB modes. Returns [code]OK[/code] on success, or [code]ERR_ALREADY_IN_USE[/code] if [method finish] was not called after a previous [method start].
 			</description>
 		</method>
 		<method name="update">
 			<return type="PackedByteArray" />
 			<param index="0" name="src" type="PackedByteArray" />
 			<description>
+				Processes [param src] through the cipher and returns the encrypted or decrypted output. [code]src.size()[/code] must be a multiple of 16 bytes. Call this once or multiple times after [method start].
 			</description>
 		</method>
 	</methods>
 	<constants>
 		<constant name="MODE_ECB_ENCRYPT" value="0" enum="Mode">
+			Electronic Codebook mode - encrypt.
 		</constant>
 		<constant name="MODE_ECB_DECRYPT" value="1" enum="Mode">
+			Electronic Codebook mode - decrypt.
 		</constant>
 		<constant name="MODE_CBC_ENCRYPT" value="2" enum="Mode">
+			Cipher Block Chaining mode - encrypt. Requires a 16-byte IV.
 		</constant>
 		<constant name="MODE_CBC_DECRYPT" value="3" enum="Mode">
+			Cipher Block Chaining mode - decrypt. Requires a 16-byte IV.
 		</constant>
 		<constant name="MODE_CFB_ENCRYPT" value="4" enum="Mode">
+			Cipher Feedback mode - encrypt. Requires a 16-byte IV.
 		</constant>
 		<constant name="MODE_CFB_DECRYPT" value="5" enum="Mode">
+			Cipher Feedback mode - decrypt. Requires a 16-byte IV. This is the mode used by Godot's standard PCK encryption.
 		</constant>
 		<constant name="MODE_MAX" value="6" enum="Mode">
+			Sentinel value equal to the number of modes. Not a valid mode.
 		</constant>
 	</constants>
 </class>

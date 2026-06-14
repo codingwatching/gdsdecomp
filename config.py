@@ -7,6 +7,17 @@ import os
 import sys
 import shutil
 
+def _apply_core_patches(env):
+    import importlib.util
+
+    patches_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build", "patches.py")
+    spec = importlib.util.spec_from_file_location("gdsdecomp_build_patches", patches_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"gdsdecomp: failed to load patches module from {patches_path}")
+    patches_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(patches_module)
+    patches_module.apply_core_patches(env)
+
 
 # A terrible hack to force-enable our dependent modules being included on non-editor builds.
 # etcpak has dependencies our decompressor requires,
@@ -59,6 +70,8 @@ def monkey_patch_macos_generate_bundle():
         else:
             templ = env.Dir("#misc/dist/macos_template.app").abspath
             frameworks_dir = os.path.join(templ, "Contents/Frameworks")
+        if not os.path.isdir(templ):
+            raise Exception(f"gdsdecomp: failed to generate bundle: {templ} does not exist")
         remove_fw_dir = False
         if not os.path.isdir(frameworks_dir):
             remove_fw_dir = True
@@ -79,6 +92,7 @@ def monkey_patch_macos_generate_bundle():
     sys.path.remove(platform_macos_builders_dir)
 
 def configure(env):
+    _apply_core_patches(env)
     if not env.editor_build:
         monkey_patch_sort_module_list()
     if env["platform"] == "macos":
@@ -89,6 +103,7 @@ def get_doc_classes():
     return [
         "GDScriptDecomp",
         "Glob",
+        "SemVer",
         "GodotVer",
         "GodotREEditorStandalone",
         "ImportExporter",

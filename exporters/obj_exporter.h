@@ -7,7 +7,7 @@ class ObjExporter : public ResourceExporter {
 	GDCLASS(ObjExporter, ResourceExporter);
 
 private:
-	static Error write_materials_to_mtl(const HashMap<String, Ref<Material>> &p_materials, const String &p_path, const String &p_output_dir);
+	static Error write_materials_to_mtl(const HashMap<String, Ref<Material>> &p_materials, const String &p_path, const String &p_output_dir, bool force_single_precision);
 
 protected:
 	static void _bind_methods();

@@ -27,11 +27,6 @@ class SceneExporter : public ResourceExporter {
 
 	static SceneExporter *singleton;
 
-	void do_batch_export_instanced_scene(int i, std::shared_ptr<BatchExportToken> *tokens);
-	void do_single_threaded_batch_export_instanced_scene(int i, std::shared_ptr<BatchExportToken> *tokens);
-
-	String get_batch_export_description(int i, std::shared_ptr<BatchExportToken> *tokens) const;
-
 protected:
 	static void _bind_methods();
 
@@ -51,7 +46,7 @@ public:
 	};
 
 	static Error export_file_to_non_glb(const String &p_src_path, const String &p_dest_path, Ref<ImportInfo> iinfo);
-	static constexpr bool can_multithread = false;
+	static constexpr bool can_multithread = true;
 
 	static SceneExporter *get_singleton();
 	SceneExporter();
@@ -66,10 +61,10 @@ public:
 	virtual bool supports_nonpack_export() const override { return false; }
 	virtual String get_default_export_extension(const String &res_path) const override;
 	virtual Vector<String> get_export_extensions(const String &res_path) const override;
+	virtual void prebatch_export() override;
+	virtual void postbatch_export() override;
 
 	static Ref<ExportReport> export_file_with_options(const String &out_path, const String &res_path, const Dictionary &options);
-	static size_t get_vram_usage();
-	Vector<Ref<ExportReport>> batch_export_files(const String &output_dir, const Vector<Ref<ImportInfo>> &scenes);
 
 	static constexpr int get_minimum_godot_ver_supported() {
 		return MINIMUM_GODOT_VER_SUPPORTED;
@@ -162,8 +157,6 @@ class GLBExporterInstance {
 
 	constexpr static const char *const COPYRIGHT_STRING_FORMAT = "The Creators of '%s'";
 
-	Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> convert_shader_material_to_base_material(Ref<ShaderMaterial> p_shader_material, Node *p_parent = nullptr);
-
 	ObjExporter::MeshInfo _get_mesh_options_for_import_params();
 
 	static String get_resource_path(const Ref<Resource> &res);
@@ -173,6 +166,7 @@ class GLBExporterInstance {
 
 	String add_errors_to_report(Error p_err, const String &err_msg = "");
 	void set_cache_res(const dep_info &info, const Ref<Resource> &texture, bool force_replace);
+	bool check_cached_res(const dep_info &info);
 
 	[[nodiscard]] Node *_set_stuff_from_instanced_scene(Node *root);
 	Error _export_instanced_scene(Node *root, const String &p_dest_path);
@@ -182,6 +176,8 @@ class GLBExporterInstance {
 	Error _load_deps();
 	Error _load_scene_and_deps(Ref<PackedScene> &r_scene);
 	Error _load_scene(Ref<PackedScene> &r_scene);
+	void recompute_animation_tracks_for_library(AnimationPlayer *p_player, const Ref<AnimationLibrary> &p_anim_lib, const LocalVector<StringName> &p_anim_names);
+	void convert_animation_tracks_to_v4_for_player(AnimationPlayer *p_player);
 
 	void _unload_deps();
 	Error _get_return_error();

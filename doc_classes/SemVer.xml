@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SemVer" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		A parsed [url=https://semver.org/]Semantic Versioning 2.0[/url] version string.
+	</brief_description>
+	<description>
+		[SemVer] is a structured representation of a strict SemVer 2.0 version, broken into [member major], [member minor], [member patch], [member prerelease], and [member build_metadata] components. Use the static factory [method parse_semver] to parse a version string, [method create_semver] to build one from raw components, and the [method eq] / [method neq] / [method lt] / [method lte] / [method gt] / [method gte] methods to compare versions according to SemVer precedence rules.
+		[SemVer] is the base class for [GodotVer]; if you are working with Godot engine version strings (which use a non-strict format like [code]"4.3.stable.official.77dcf97d8"[/code]), use [GodotVer] instead.
+		[b]Note:[/b] following the SemVer 2.0 specification, [member build_metadata] is [i]not[/i] considered when ordering or comparing versions - two versions that differ only in their build metadata compare equal under [method eq].
+		[codeblock]
+		var v = SemVer.parse_semver("4.2.0-rc.1+sha.md5.f9300dc53")
+		print(v.major)           # 4
+		print(v.minor)           # 2
+		print(v.patch)           # 0
+		print(v.prerelease)      # "rc.1"
+		print(v.build_metadata)  # "sha.md5.f9300dc53"
+		print(v.is_prerelease()) # true
+		print(v.as_text())       # "4.2.0-rc.1+sha.md5.f9300dc53"
+
+		var a = SemVer.parse_semver("1.2.3")
+		var b = SemVer.parse_semver("1.2.3-rc.1")
+		print(a.gt(b))  # true - prerelease versions sort below their stable counterpart
+		[/codeblock]
+	</description>
+	<tutorials>
+		<link title="Semantic Versioning 2.0 specification">https://semver.org/</link>
+	</tutorials>
+	<methods>
+		<method name="as_tag" qualifiers="const">
+			<return type="String" />
+			<description>
+				Returns a string suitable for use as a release tag. For [SemVer] this is identical to [method as_text]; subclasses such as [GodotVer] override this to produce a different format.
+			</description>
+		</method>
+		<method name="as_text" qualifiers="const">
+			<return type="String" />
+			<description>
+				Returns the canonical SemVer 2.0 string for this version, in the form [code]"MAJOR.MINOR.PATCH[-PRERELEASE][+BUILDMETADATA]"[/code]. Returns an empty string when [method is_valid_semver] is [code]false[/code].
+			</description>
+		</method>
+		<method name="create_semver" qualifiers="static">
+			<return type="SemVer" />
+			<param index="0" name="major" type="int" />
+			<param index="1" name="minor" type="int" />
+			<param index="2" name="patch" type="int" />
+			<param index="3" name="prerelease" type="String" default="&quot;&quot;" />
+			<param index="4" name="build_metadata" type="String" default="&quot;&quot;" />
+			<description>
+				Constructs a [SemVer] directly from individual components. [param prerelease] is the dot-separated identifier list that follows the [code]-[/code] in a version string (e.g. [code]"rc.1"[/code], [code]"alpha.2"[/code]); pass an empty string for stable releases. [param build_metadata] is the dot-separated identifier list that follows the [code]+[/code] (e.g. [code]"sha.f9300dc53"[/code]); per the SemVer specification it does [i]not[/i] participate in version precedence.
+			</description>
+		</method>
+		<method name="eq" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="other" type="SemVer" />
+			<description>
+				Returns [code]true[/code] when this version compares equal to [param other] under SemVer precedence rules. [member build_metadata] is ignored, so [code]"1.2.3+a"[/code] and [code]"1.2.3+b"[/code] compare equal.
+			</description>
+		</method>
+		<method name="gt" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="other" type="SemVer" />
+			<description>
+				Returns [code]true[/code] when this version is strictly greater than [param other] under SemVer precedence rules.
+			</description>
+		</method>
+		<method name="gte" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="other" type="SemVer" />
+			<description>
+				Returns [code]true[/code] when this version is greater than or equal to [param other] under SemVer precedence rules.
+			</description>
+		</method>
+		<method name="is_prerelease">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] when [member prerelease] is non-empty - i.e. this version carries a pre-release tag such as [code]"alpha"[/code], [code]"beta.2"[/code], or [code]"rc.1"[/code].
+			</description>
+		</method>
+		<method name="is_valid_semver" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] when this [SemVer] holds a successfully parsed or constructed version. Newly default-constructed instances are invalid until parsed or until any setter is called; instances returned by [method parse_semver] and [method create_semver] are always valid.
+			</description>
+		</method>
+		<method name="lt" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="other" type="SemVer" />
+			<description>
+				Returns [code]true[/code] when this version is strictly less than [param other] under SemVer precedence rules.
+			</description>
+		</method>
+		<method name="lte" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="other" type="SemVer" />
+			<description>
+				Returns [code]true[/code] when this version is less than or equal to [param other] under SemVer precedence rules.
+			</description>
+		</method>
+		<method name="neq" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="other" type="SemVer" />
+			<description>
+				Returns [code]true[/code] when this version does not compare equal to [param other] under SemVer precedence rules. Equivalent to [code]not eq(other)[/code].
+			</description>
+		</method>
+		<method name="parse_semver" qualifiers="static">
+			<return type="SemVer" />
+			<param index="0" name="ver_text" type="String" />
+			<description>
+				Parses a strict SemVer 2.0 version string and returns a [SemVer] instance. Accepts an optional leading [code]v[/code] or [code]V[/code]. Examples: [code]"1.2.3"[/code], [code]"1.1.3-pre.1"[/code], [code]"4.2.0-rc.1+sha.md5.f9300dc53"[/code]. Returns [code]null[/code] when [param ver_text] is not a valid SemVer string; for non-strict Godot version strings such as [code]"4.3.stable.official.77dcf97d8"[/code], use [method GodotVer.parse_godotver] instead.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="build_metadata" type="String" setter="set_build_metadata" getter="get_build_metadata" default="&quot;&quot;">
+			Optional build-metadata identifier list that follows the [code]+[/code] in a SemVer string (e.g. [code]"sha.f9300dc53"[/code]). Per the SemVer 2.0 specification, build metadata is ignored when determining version precedence, so it does not affect the result of [method eq], [method lt], [method gt], or any other comparison method on this class.
+		</member>
+		<member name="major" type="int" setter="set_major" getter="get_major" default="0">
+			The major version number. Incremented when incompatible API changes are made.
+		</member>
+		<member name="minor" type="int" setter="set_minor" getter="get_minor" default="0">
+			The minor version number. Incremented when functionality is added in a backwards-compatible manner.
+		</member>
+		<member name="patch" type="int" setter="set_patch" getter="get_patch" default="0">
+			The patch version number. Incremented for backwards-compatible bug fixes.
+		</member>
+		<member name="prerelease" type="String" setter="set_prerelease" getter="get_prerelease" default="&quot;&quot;">
+			Optional dot-separated pre-release identifier list that follows the [code]-[/code] in a SemVer string (e.g. [code]"rc.1"[/code], [code]"alpha"[/code], [code]"beta.2"[/code]). A non-empty value indicates a pre-release version that sorts [i]below[/i] the corresponding stable release.
+		</member>
+	</members>
+</class>

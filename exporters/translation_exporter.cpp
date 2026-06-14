@@ -539,7 +539,7 @@ struct KeyWorker {
 		}
 	}
 
-	_FORCE_INLINE_ bool try_key_multipart(const char *part1, const char *part2 = "", const char *part3 = "", const char *part4 = "", const char *part5 = "", const char *part6 = "") {
+	_FORCE_INLINE_ bool try_key_multipart(const char *part1, const char *part2 = nullptr, const char *part3 = nullptr, const char *part4 = nullptr, const char *part5 = nullptr, const char *part6 = nullptr) {
 		auto msg = default_translation->get_message_multipart_str(part1, part2, part3, part4, part5, part6);
 		if (!msg.is_empty()) {
 			auto key = combine_string(part1, part2, part3, part4, part5, part6);
