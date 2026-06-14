@@ -39,7 +39,11 @@ Error FakeGDScript::_reload_from_file() {
 	Error err = OK;
 	// check the first four bytes to see if it's a binary file
 	is_binary = false;
-	String actual_path = GDRESettings::get_singleton()->get_mapped_path(script_path);
+	String actual_path = script_path;
+	if (actual_path.is_relative_path()) {
+		actual_path = GDRESettings::get_singleton()->localize_path(script_path);
+	}
+	actual_path = GDRESettings::get_singleton()->get_mapped_path(script_path);
 	auto ext = actual_path.get_extension().to_lower();
 	if (!FileAccess::exists(actual_path)) {
 		FAKEGDSCRIPT_FAIL_COND_V_MSG(true, ERR_FILE_NOT_FOUND, vformat("File does not exist: %s (remapped to %s)", script_path, actual_path));
