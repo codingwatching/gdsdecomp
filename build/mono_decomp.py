@@ -258,14 +258,13 @@ def build_godot_mono_decomp(
     module_obj,
     module_dir: str,
     build_dir: str,
-    mono_native_lib_type: str,
     godot_mono_decomp_parent: str,
     godot_mono_decomp_dir: str,
     godot_mono_decomp_libs: list[str],
 ):
     from SCons.Script import Action, Builder
     from SCons.Defaults import Copy
-
+    mono_native_lib_type = "Static" if env["use_static_godot_mono_decomp"] else "Shared"
     libs = get_godot_mono_decomp_lib_paths(env, godot_mono_decomp_dir, godot_mono_decomp_libs, mono_native_lib_type)
     if mono_native_lib_type == "Static":
         lib_suffix = ".lib" if env.msvc else ".a"

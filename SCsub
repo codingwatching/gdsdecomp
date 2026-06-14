@@ -20,11 +20,6 @@ if TYPE_CHECKING:
 Import("env")
 Import("env_modules")
 
-opts = Variables([], ARGUMENTS)
-opts.Add(BoolVariable("disable_godot_mono_decomp", "Disable Godot Mono Decompilation", False))
-opts.Add(BoolVariable("disable_gifski", "Disable Gifski", False))
-opts.Update(env)
-
 MODULE_DIR = get_module_dir(env)
 BUILD_DIR = get_build_dir(env)
 EXTERNAL_DIR = get_external_dir(MODULE_DIR)
@@ -48,24 +43,8 @@ INCLUDE_DIRS = [
     AXML_DEC_INCLUDE_DIR,
 ]
 
-# TODO: Keep static branch intact for future use. Runtime/dotnet issues still block rollout.
-mono_native_lib_type = "Shared"
-is_using_clang = env["CXX"].lower().endswith("clang++")
-if env["platform"] == "android" or (is_using_clang and env["platform"] == "macos"):
-    mono_native_lib_type = "Shared"
-
-# hack to force the minimum macOS version to 10.15; it is currently hard-coded to 10.13
-# TODO: remove this hack once the minimum macOS version is updated to 10.15
-if env["platform"] == "macos" and env["arch"] == "x86_64":
-    min_version_flag = "-mmacosx-version-min=10.15"
-    for build_env in [env, env_modules]:
-        build_env.Append(CPPFLAGS=[min_version_flag])
-        build_env.Append(LINKFLAGS=[min_version_flag])
-        build_env.Append(CXXFLAGS=[min_version_flag])
-        build_env.Append(ASFLAGS=[min_version_flag])
 
 env_gdsdecomp = env_modules.Clone()
-opts.Update(env_gdsdecomp)
 
 if "-fno-exceptions" in env_gdsdecomp["CXXFLAGS"]:
     env_gdsdecomp["CXXFLAGS"].remove("-fno-exceptions")
@@ -194,7 +173,6 @@ else:
         module_obj=module_obj,
         module_dir=MODULE_DIR,
         build_dir=BUILD_DIR,
-        mono_native_lib_type=mono_native_lib_type,
         godot_mono_decomp_parent=GODOT_MONO_DECOMP_PARENT,
         godot_mono_decomp_dir=GODOT_MONO_DECOMP_DIR,
         godot_mono_decomp_libs=GODOT_MONO_DECOMP_LIBS,

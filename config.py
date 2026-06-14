@@ -2,7 +2,6 @@ def can_build(env, platform):
     return True
 
 
-import methods
 import os
 import sys
 import shutil
@@ -32,6 +31,8 @@ def _apply_core_patches(env):
 # sort_module_list is called right after after env.module_list is set with all the modules,
 # so we can monkey patch that to add the modules we need.
 def monkey_patch_sort_module_list():
+    import methods  # pyright: ignore[reportMissingImports]
+
     old_sort_module_list = methods.sort_module_list
 
     def sort_module_list(env):
@@ -53,6 +54,34 @@ def configure(env):
     _apply_core_patches(env)
     if not env.editor_build:
         monkey_patch_sort_module_list()
+    if not "use_static_godot_mono_decomp" in env:
+        env["use_static_godot_mono_decomp"] = False
+
+    if env["use_static_godot_mono_decomp"] and env["platform"] == "android" or env["platform"] == "macos":
+        print(f"Using shared Mono for {env['platform']} because static Mono is not supported for this platform")
+        env["use_static_godot_mono_decomp"] = False
+
+    # hack to force the minimum macOS version to 10.15; it is currently hard-coded to 10.13
+    # TODO: remove this hack once the minimum macOS version is updated to 10.15
+    if env["platform"] == "macos" and env["arch"] == "x86_64":
+        min_version_flag = "-mmacosx-version-min=10.15"
+        env.Append(CPPFLAGS=[min_version_flag])
+        env.Append(LINKFLAGS=[min_version_flag])
+        env.Append(CXXFLAGS=[min_version_flag])
+        env.Append(ASFLAGS=[min_version_flag])
+
+
+def get_opts(platform):
+    from SCons.Variables import BoolVariable
+
+    opts = [
+        BoolVariable("disable_godot_mono_decomp", "Disable Godot Mono Decompilation", False),
+        BoolVariable("disable_gifski", "Disable Gifski", False),
+    ]
+    if not (platform == "android" or platform == "macos"):
+        opts.append(BoolVariable("use_static_godot_mono_decomp", "Build Godot Mono Decomp library as static", True))
+    return opts
+
 
 def get_doc_classes():
     return [
