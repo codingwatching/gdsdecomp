@@ -929,10 +929,12 @@ bool CompatFormatLoader::try_force_set_property(const Ref<Resource> &p_res, cons
 	if (si) {
 		if (FakeScriptInstance *fsi = dynamic_cast<FakeScriptInstance *>(si); fsi != nullptr) {
 			Ref<FakeScript> script = fsi->get_script();
+#if DEBUG_ENABLED
 			// If the script is recording properties and is not a fake embedded script, then this is a bug in the script parsing.
 			if (script.is_valid() && script->is_instance_recording_properties() && script->get_class() != "FakeScript") {
 				WARN_PRINT(vformat("Script %s is recording properties, but initial property set failed! Please report this!", script->get_path()));
 			}
+#endif
 			fsi->force_set_property(p_name, p_value);
 			return true;
 		}

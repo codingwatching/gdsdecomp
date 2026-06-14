@@ -986,7 +986,6 @@ Error ResourceLoaderCompatBinary::load() {
 #endif
 					} else {
 						valid = true;
-						WARN_PRINT(vformat("Forced set property %s for resource %s, this indicates a bug parsing the script! Please report this!", name, path));
 					}
 				}
 			}
