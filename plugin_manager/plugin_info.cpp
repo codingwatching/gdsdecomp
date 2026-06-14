@@ -121,7 +121,19 @@ bool PluginVersion::is_valid() const {
 }
 
 bool PluginVersion::is_compatible(const Ref<GodotVer> &ver) const {
-	auto min_ver = GodotVer::parse(min_godot_version);
+	Ref<GodotVer> min_ver;
+	if (!min_godot_version.is_empty()) {
+		min_ver = GodotVer::parse(min_godot_version);
+	} else if (gdexts.size() > 0) {
+		if (gdexts[0].relative_path.has_extension("gdnlib")) {
+			min_ver = GodotVer::parse("3.0");
+		} else if (gdexts[0].relative_path.has_extension("gdextension")) {
+			min_ver = GodotVer::parse("4.0");
+		}
+	}
+	if (min_ver.is_null()) {
+		return true;
+	}
 	if (ver->get_major() != min_ver->get_major()) {
 		return false;
 	}

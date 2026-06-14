@@ -266,6 +266,45 @@ PluginVersion PluginManager::get_plugin_info(const String &plugin_name, const Ve
 	return PluginVersion::invalid();
 }
 
+Vector<PluginVersion> PluginManager::get_possibles_from_deps(const String &plugin_name, const Ref<GodotVer> engine_version, const Vector<PluginBin> &deps) {
+	Vector<PluginVersion> possibles;
+	{
+		MutexLock lock(plugin_version_cache_mutex);
+		for (auto &E : plugin_version_cache) {
+			const PluginVersion &cached_version = E.value;
+			if (cached_version.is_valid() && cached_version.plugin_name == plugin_name) {
+				possibles.push_back(cached_version);
+			}
+		}
+	}
+	Vector<int> to_remove;
+	for (int i = 0; i < possibles.size(); i++) {
+		int matching_count = 0;
+		const PluginVersion &cached_version = possibles[i];
+		if (!cached_version.is_compatible(engine_version)) {
+			to_remove.push_back(i);
+			continue;
+		}
+		for (const auto &gdext : cached_version.gdexts) {
+			for (const auto &bin : gdext.dependencies) {
+				for (const auto &dep : deps) {
+					if (bin.name == dep.name && bin.sha256 == dep.sha256) {
+						matching_count++;
+						break;
+					}
+				}
+			}
+		}
+		if (matching_count != deps.size()) {
+			to_remove.push_back(i);
+		}
+	}
+	for (int i = to_remove.size() - 1; i >= 0; i--) {
+		possibles.remove_at(to_remove[i]);
+	}
+	return possibles;
+}
+
 void PluginManager::load_cache() {
 	auto start_time = OS::get_singleton()->get_ticks_msec();
 	Dictionary d;

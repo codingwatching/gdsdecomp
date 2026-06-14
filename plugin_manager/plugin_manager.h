@@ -48,6 +48,7 @@ public:
 	static String get_plugin_cache_path();
 	static TaskManager::DownloadTaskID download_plugin(const PluginVersion &p_plugin_version, String &r_save_path, Error &r_error);
 	static PluginVersion get_plugin_info(const String &plugin_name, const Vector<String> &hashes);
+	static Vector<PluginVersion> get_possibles_from_deps(const String &plugin_name, const Ref<GodotVer> engine_version, const Vector<PluginBin> &deps);
 	static void load_cache();
 	static void save_cache();
 	static Error prepop_cache(const Vector<String> &plugin_names, const String &output_path);
