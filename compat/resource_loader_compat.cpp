@@ -873,6 +873,11 @@ bool ResourceCompatConverter::is_external_resource(Ref<MissingResource> mr) {
 Ref<MissingResource> ResourceCompatConverter::get_missing_resource_from_real(Ref<Resource> res, int ver_major, const HashMap<String, String> &required_prop_map) {
 	Ref<MissingResource> mr;
 	mr.instantiate();
+	set_missing_resource_from_real(mr, res, ver_major, required_prop_map);
+	return mr;
+}
+
+void ResourceCompatConverter::set_missing_resource_from_real(Ref<MissingResource> mr, Ref<Resource> res, int ver_major, const HashMap<String, String> &required_prop_map) {
 	mr->set_original_class(res->get_class());
 	mr->set_recording_properties(true);
 	mr->set_path_cache(res->get_path());
@@ -882,12 +887,15 @@ Ref<MissingResource> ResourceCompatConverter::get_missing_resource_from_real(Ref
 	mr->set_scene_unique_id(res->get_scene_unique_id());
 	List<PropertyInfo> property_info;
 	res->get_property_list(&property_info);
+	HashSet<String> properties_to_set;
 	for (auto &property : property_info) {
-		if (required_prop_map.has(property.name)) {
-			mr->set(required_prop_map[property.name], res->get(property.name));
+		properties_to_set.insert(property.name);
+	}
+	for (auto &[new_prop, old_prop] : required_prop_map) {
+		if (properties_to_set.has(new_prop)) {
+			mr->set(old_prop, res->get(new_prop));
 		}
 	}
-	return mr;
 }
 
 Ref<Resource> ResourceCompatConverter::get_real_from_missing_resource(Ref<MissingResource> mr, ResourceInfo::LoadType load_type, const HashMap<String, String> &prop_map) {
