@@ -107,8 +107,6 @@ protected:
 	int current_line = 1;
 	int current_indent = 0;
 	bool multiline_mode = false;
-	List<int> indent_stack;
-	List<List<int>> indent_stack_stack; // For lambdas, which require manipulating the indentation point.
 	int pending_indents = 0;
 	bool last_token_was_newline = false;
 

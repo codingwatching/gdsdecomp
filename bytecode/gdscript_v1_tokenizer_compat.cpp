@@ -1484,11 +1484,6 @@ GDScriptTokenizerV1Compat::Token GDScriptTokenizerV1Compat::scan() {
 	int line = get_token_line();
 	TokenType g_token = get_token();
 	if (g_token == TokenType::G_TK_EOF) {
-		// if (!indent_stack.is_empty()) {
-		// 	pending_indents -= indent_stack.size();
-		// 	indent_stack.clear();
-		// 	return scan();
-		// }
 		Token data;
 		data.type = TokenType::G_TK_EOF;
 		data.start_line = line;
@@ -1499,27 +1494,12 @@ GDScriptTokenizerV1Compat::Token GDScriptTokenizerV1Compat::scan() {
 	if (g_token == TokenType::G_TK_NEWLINE) {
 		int previous_line = current_line;
 		current_line = line;
+		int previous_indent = current_indent;
 		current_indent = get_token_line_indent();
 
 		// Check if there's a need to indent/dedent.
 		if (!multiline_mode) {
-			uint32_t previous_indent = 0;
-			if (!indent_stack.is_empty()) {
-				previous_indent = indent_stack.back()->get();
-			}
-			if (current_indent > previous_indent) {
-				pending_indents++;
-				indent_stack.push_back(current_indent);
-			} else {
-				while (current_indent < previous_indent) {
-					pending_indents--;
-					indent_stack.pop_back();
-					if (indent_stack.is_empty()) {
-						break;
-					}
-					previous_indent = indent_stack.back()->get();
-				}
-			}
+			pending_indents += (current_indent - previous_indent);
 
 			Token newline;
 

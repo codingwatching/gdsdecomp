@@ -1200,9 +1200,30 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 }
 
 Error GDScriptDecomp::decompile_buffer_2(Vector<uint8_t> p_buffer) {
+	error_message = "";
+	script_text = String();
+
 	ScriptState s;
 	Error err = get_script_state(p_buffer, s);
 	ERR_FAIL_COND_V(err != OK, err);
+
+	int tab_size = 4;
+
+	if (s.columns.size() > 0) {
+		Vector<int> diffs;
+		int prev_column = 1;
+		for (auto &[key, value] : s.columns) {
+			int curr_column = value;
+			if (curr_column > prev_column) {
+				diffs.push_back(curr_column - prev_column);
+			}
+			prev_column = curr_column;
+		}
+		tab_size = gdre::get_most_popular_value(diffs);
+		if (tab_size <= 1) {
+			tab_size = 4;
+		}
+	}
 
 	Ref<GDScriptTokenizerCompat> tokenizer = GDScriptTokenizerCompat::create_buffer_tokenizer(this, p_buffer);
 	if (tokenizer.is_null()) {
@@ -1222,8 +1243,6 @@ Error GDScriptDecomp::decompile_buffer_2(Vector<uint8_t> p_buffer) {
 	bool first_line = true;
 	int version = s.bytecode_version;
 	int bytecode_version = get_bytecode_version();
-	int variant_ver_major = get_variant_ver_major();
-	uint32_t FUNC_MAX = get_function_count();
 	GDSDECOMP_FAIL_COND_V(version != get_bytecode_version(), ERR_INVALID_DATA);
 
 	//Decompile script
@@ -1231,16 +1250,24 @@ Error GDScriptDecomp::decompile_buffer_2(Vector<uint8_t> p_buffer) {
 	int indent = 0;
 
 	GlobalToken prev_token = G_TK_NEWLINE;
-	GlobalToken prev_prev_token = G_TK_MAX;
 	uint32_t prev_line = 1;
-	uint32_t prev_line_start_column = 1;
+
+	auto write_current_line = [&](int p_indent) {
+		for (int j = 0; j < p_indent; j++) {
+			if (use_spaces) {
+				for (int i = 0; i < tab_size; i++) {
+					script_text += " ";
+				}
+			} else {
+				script_text += "\t";
+			}
+		}
+		script_text += line;
+	};
 
 	auto handle_newline = [&](int i, GlobalToken curr_token) {
 		auto curr_line = tokens[i].end_line;
-		for (int j = 0; j < indent; j++) {
-			script_text += use_spaces ? " " : "\t";
-		}
-		script_text += line;
+		write_current_line(indent);
 		if (curr_line <= prev_line) {
 			curr_line = prev_line + 1; // force new line
 		}
@@ -1744,15 +1771,18 @@ Error GDScriptDecomp::decompile_buffer_2(Vector<uint8_t> p_buffer) {
 				GDSDECOMP_FAIL_V_MSG(ERR_INVALID_DATA, "Invalid token: " + itos(tokens[i].type));
 			}
 		}
-		prev_prev_token = prev_token;
 		prev_token = curr_token;
 	}
 
 	if (!line.is_empty() || (prev_token == G_TK_NEWLINE && bytecode_version < GDSCRIPT_2_0_VERSION && indent > 0)) {
-		for (int j = 0; j < indent; j++) {
-			script_text += use_spaces ? " " : "\t";
+		write_current_line(indent);
+	}
+	if (script_text == String()) {
+		if (s.identifiers.size() == 0 && s.constants.size() == 0 && s.tokens.size() == 0) {
+			return OK;
 		}
-		script_text += line;
+		error_message = RTR("Invalid token");
+		return ERR_INVALID_DATA;
 	}
 
 	return OK;

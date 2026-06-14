@@ -80,6 +80,30 @@ func _ready() -> void :
 	var thingy3 = thingy % 20
 )";
 
+static constexpr const char *test_indent = R"(
+extends Object
+
+func set_worldspawn_layers(new_worldspawn_layers: Array) -> void :
+	if worldspawn_layers != new_worldspawn_layers:
+		worldspawn_layers = new_worldspawn_layers
+
+		for i in range(0, worldspawn_layers.size()):
+			if not worldspawn_layers[i]:
+				worldspawn_layers[i] = QodotWorldspawnLayer.new()
+
+)";
+
+static constexpr const char *test_indent_current = R"(
+extends Object
+func foo():
+	var bar = 1;
+	if bar == 1:
+		print("bar is 1")
+	else:
+		print("bar is not 1")
+	return bar
+)";
+
 // should pass on all versions of GDScript
 static constexpr const char *test_reserved_word_as_accessor_name = R"(
 extends Object
@@ -112,6 +136,28 @@ func _ready():
 	)";
 // clang-format on
 
+inline void output_file(const String &path, const String &text) {
+	gdre::ensure_dir(path.get_base_dir());
+	auto fa = FileAccess::open(path, FileAccess::WRITE);
+	if (fa.is_valid()) {
+		fa->store_string(text);
+		fa->flush();
+		fa->close();
+	}
+}
+
+inline void debug_output(const String &script_name, const String &helper_script_text_stripped, const String &decompiled_string_stripped) {
+	auto diff = TextDiff::get_diff_with_header(script_name + "_original", script_name + "_decompiled", helper_script_text_stripped, decompiled_string_stripped);
+	TextDiff::print_diff(diff);
+	auto base_path = get_tmp_path().path_join(script_name.get_basename());
+	output_file(base_path + ".diff", diff);
+	output_file(base_path + ".decompiled.gd", decompiled_string_stripped);
+}
+
+inline String strip_script_text(const String &script_text) {
+	return remove_comments(script_text).replace("\"\"\"", "\"").replace("'", "\"");
+}
+
 inline void test_script_binary(const String &script_name, const Vector<uint8_t> &bytecode, const String &helper_script_text, int revision, bool helper_script, bool no_text_equality_check, bool compare_whitespace = false) {
 	auto decomp = GDScriptDecomp::create_decomp_for_commit(revision);
 	CHECK(decomp.is_valid());
@@ -134,17 +180,16 @@ inline void test_script_binary(const String &script_name, const Vector<uint8_t> 
 	CHECK(decomp->get_error_message() == "");
 	// no whitespace
 	auto decompiled_string = decomp->get_script_text();
-	auto helper_script_text_stripped = remove_comments(helper_script_text).replace("\"\"\"", "\"").replace("'", "\"");
+	auto helper_script_text_stripped = strip_script_text(helper_script_text);
 	if (!helper_script_text_stripped.strip_edges().is_empty()) {
 		CHECK(decompiled_string != "");
 	}
 
-	auto decompiled_string_stripped = remove_comments(decompiled_string).replace("\"\"\"", "\"").replace("'", "\"");
+	auto decompiled_string_stripped = strip_script_text(decompiled_string);
 
 #if DEBUG_ENABLED
 	if (!no_text_equality_check && gdre::remove_whitespace(decompiled_string_stripped) != gdre::remove_whitespace(helper_script_text_stripped)) {
-		TextDiff::print_diff(TextDiff::get_diff_with_header(script_name, script_name, decompiled_string_stripped, helper_script_text_stripped));
-		output_diff(script_name, decompiled_string_stripped, helper_script_text_stripped);
+		debug_output(script_name, helper_script_text_stripped, decompiled_string_stripped);
 	}
 #endif
 	if (!no_text_equality_check) {
@@ -152,7 +197,7 @@ inline void test_script_binary(const String &script_name, const Vector<uint8_t> 
 	}
 	if (compare_whitespace) {
 		if (decompiled_string_stripped != helper_script_text_stripped) {
-			TextDiff::print_diff(TextDiff::get_diff_with_header(script_name + "_original", script_name + "_decompiled", helper_script_text_stripped, decompiled_string_stripped));
+			debug_output(script_name, helper_script_text_stripped, decompiled_string_stripped);
 		}
 		CHECK(decompiled_string_stripped == helper_script_text_stripped);
 	}
@@ -164,16 +209,7 @@ inline void test_script_binary(const String &script_name, const Vector<uint8_t> 
 	err = decomp->test_bytecode_match(bytecode, recompiled_bytecode, !compare_whitespace, false);
 #if DEBUG_ENABLED
 	if (err) {
-		TextDiff::print_diff(TextDiff::get_diff_with_header(script_name + "_original", script_name + "_decompiled", helper_script_text_stripped, decompiled_string_stripped));
-		output_diff(script_name, decompiled_string_stripped, helper_script_text_stripped);
-		auto new_path = get_tmp_path().path_join(script_name.get_basename() + ".decompiled.gd");
-		gdre::ensure_dir(new_path.get_base_dir());
-		auto fa = FileAccess::open(new_path, FileAccess::WRITE);
-		if (fa.is_valid()) {
-			fa->store_string(decompiled_string_stripped);
-			fa->flush();
-			fa->close();
-		}
+		debug_output(script_name, helper_script_text_stripped, decompiled_string_stripped);
 	}
 #endif
 
@@ -185,6 +221,13 @@ inline void test_script_binary(const String &script_name, const Vector<uint8_t> 
 		err = decomp->test_bytecode_match(bytecode, reference_result, true, false);
 		CHECK(decomp->get_error_message() == "");
 		CHECK(err == OK);
+		err = decomp->decompile_buffer(reference_result);
+		CHECK(err == OK);
+		String decompiled_ref = decomp->get_script_text();
+		auto decompiled_ref_stripped = strip_script_text(decompiled_ref);
+		if (!no_text_equality_check) {
+			CHECK_MESSAGE(gdre::remove_whitespace(decompiled_ref_stripped) == gdre::remove_whitespace(helper_script_text_stripped), (String("No whitespace text diff failed: \n") + TextDiff::get_diff_with_header(script_name, script_name, decompiled_ref_stripped, helper_script_text_stripped)));
+		}
 	}
 
 	CHECK(err == OK);
@@ -290,6 +333,14 @@ TEST_CASE("[GDSDecomp][Bytecode][GDScript2.0] Compiling GDScript Tests") {
 			test_script(script_path, GDScriptDecompVersion::LATEST_GDSCRIPT_COMMIT, false, true);
 		}
 	}
+}
+
+TEST_CASE("[GDSDecomp][Bytecode][GDScript2.0] Test indenting") {
+	test_script_text("test_indent_current", test_indent_current, GDScriptDecompVersion::LATEST_GDSCRIPT_COMMIT, false, false, true);
+}
+
+TEST_CASE("[GDSDecomp][Bytecode] Test indenting") {
+	test_script_text("test_indent", test_indent, 0xa7aad78, false, false, true);
 }
 
 TEST_CASE("[GDSDecomp][Bytecode][GDScript2.0] Test unique_id modulo operator") {
