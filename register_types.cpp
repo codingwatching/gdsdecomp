@@ -58,6 +58,7 @@
 #include "exporters/resource_exporter.h"
 #include "exporters/sample_exporter.h"
 #include "exporters/scene_exporter.h"
+#include "exporters/shaderfile_exporter.h"
 #include "exporters/spine_exporter.h"
 #include "exporters/texture_exporter.h"
 #include "exporters/translation_exporter.h"
@@ -140,6 +141,7 @@ static Ref<Mp3StrExporter> mp3str_exporter = nullptr;
 static Ref<OggStrExporter> oggstr_exporter = nullptr;
 static Ref<SampleExporter> sample_exporter = nullptr;
 static Ref<SceneExporter> scene_exporter = nullptr;
+static Ref<ShaderFileExporter> shaderfile_exporter = nullptr;
 static Ref<SpineAtlasExporter> spine_atlas_exporter = nullptr;
 static Ref<SpineSkeletonExporter> spine_skeleton_exporter = nullptr;
 static Ref<TextureExporter> texture_exporter = nullptr;
@@ -226,6 +228,7 @@ void init_exporters() {
 	gdscript_exporter = memnew(GDScriptExporter);
 	csharp_exporter = memnew(CSharpExporter);
 	gdextension_exporter = memnew(GDExtensionExporter);
+	shaderfile_exporter = memnew(ShaderFileExporter);
 	spine_atlas_exporter = memnew(SpineAtlasExporter);
 	spine_skeleton_exporter = memnew(SpineSkeletonExporter);
 	Exporter::add_exporter(auto_converted_exporter);
@@ -244,6 +247,7 @@ void init_exporters() {
 	Exporter::add_exporter(gdscript_exporter);
 	Exporter::add_exporter(csharp_exporter);
 	Exporter::add_exporter(gdextension_exporter);
+	Exporter::add_exporter(shaderfile_exporter);
 	Exporter::add_exporter(spine_atlas_exporter);
 	Exporter::add_exporter(spine_skeleton_exporter);
 }
@@ -317,6 +321,9 @@ void deinit_exporters() {
 	if (csharp_exporter.is_valid()) {
 		Exporter::remove_exporter(csharp_exporter);
 	}
+	if (shaderfile_exporter.is_valid()) {
+		Exporter::remove_exporter(shaderfile_exporter);
+	}
 	if (spine_atlas_exporter.is_valid()) {
 		Exporter::remove_exporter(spine_atlas_exporter);
 	}
@@ -348,6 +355,7 @@ void deinit_exporters() {
 	obj_exporter = nullptr;
 	dialogue_exporter = nullptr;
 	csharp_exporter = nullptr;
+	shaderfile_exporter = nullptr;
 	spine_atlas_exporter = nullptr;
 	spine_skeleton_exporter = nullptr;
 	func_godot_lmp_exporter = nullptr;
@@ -485,6 +493,7 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<SampleExporter>();
 	ClassDB::register_class<SceneExporter>();
 	ClassDB::register_class<TextureExporter>();
+	ClassDB::register_class<ShaderFileExporter>();
 	ClassDB::register_class<TranslationExporter>();
 	ClassDB::register_class<GDScriptExporter>();
 	ClassDB::register_class<GDExtensionExporter>();
