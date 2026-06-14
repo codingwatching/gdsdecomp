@@ -256,7 +256,7 @@ func setup_file_dialog():
 	_file_dialog.set_access(FileDialog.ACCESS_FILESYSTEM)
 	_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILES #FileDialog.FILE_MODE_OPEN_FILE
 	#_file_dialog.filters = ["*"]
-	_file_dialog.filters = ["*.exe,*.bin,*.32,*.64,*.x86_64,*.x86,*.arm64,*.universal,*.pck,*.apk,*.app;Supported files"]
+	_file_dialog.filters = ["*.exe,*.bin,*.32,*.64,*.x86_64,*.x86,*.arm64,*.universal,*.zip,*.pck,*.apk,*.xapk,*.app;Supported files"]
 	#_file_dialog.filters = ["*.exe,*.bin,*.32,*.64,*.x86_64,*.x86,*.arm64,*.universal;Self contained executable files", "*.pck;PCK files", "*.apk;APK files", "*;All files"]
 	## TODO: remove this
 	_file_dialog.current_dir = GDRESettings.get_home_dir()
