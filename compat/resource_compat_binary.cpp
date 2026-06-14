@@ -977,12 +977,17 @@ Error ResourceLoaderCompatBinary::load() {
 				bool valid = false;
 				res->set(name, value, &valid);
 				if (!valid) {
-					missing_resource_properties[name] = value;
+					if (!CompatFormatLoader::try_force_set_property(res, name, value)) {
+						missing_resource_properties[name] = value;
 #ifdef DEBUG_ENABLED
-					if (ver_major < GODOT_VERSION_MAJOR) {
-						WARN_PRINT(vformat("Failed to set deprecated %d.%d property '%s' (type: %s) on res class '%s' (remap: %s)", ver_major, ver_minor, name, Variant::get_type_name(value.get_type()), t, res->get_class()));
-					}
+						if (ver_major < GODOT_VERSION_MAJOR) {
+							WARN_PRINT(vformat("Failed to set deprecated %d.%d property '%s' (type: %s) on res class '%s' (remap: %s)", ver_major, ver_minor, name, Variant::get_type_name(value.get_type()), t, res->get_class()));
+						}
 #endif
+					} else {
+						valid = true;
+						WARN_PRINT(vformat("Forced set property %s for resource %s, this indicates a bug parsing the script! Please report this!", name, path));
+					}
 				}
 			}
 		}

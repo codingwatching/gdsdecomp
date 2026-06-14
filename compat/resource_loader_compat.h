@@ -185,6 +185,8 @@ public:
 
 	static bool resource_is_resource(Ref<Resource> p_res, int ver_major);
 
+	static bool try_force_set_property(const Ref<Resource> &p_res, const StringName &p_name, const Variant &p_value);
+
 	// virtual Ref<Resource> load(const String &p_path, const String &p_original_path = "", Error *r_error = nullptr, bool p_use_sub_threads = false, float *r_progress = nullptr, CacheMode p_cache_mode = CACHE_MODE_IGNORE);
 	// virtual void get_recognized_extensions_for_type(const String &p_type, List<String> *p_extensions) const;
 	// virtual void get_recognized_extensions(List<String> *p_extensions) const;

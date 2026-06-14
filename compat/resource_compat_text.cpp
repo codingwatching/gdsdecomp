@@ -805,12 +805,17 @@ Error ResourceLoaderCompatText::load() {
 						bool valid = false;
 						res->set(assign, value, &valid);
 						if (!valid) {
-							missing_resource_properties[assign] = value;
+							if (!CompatFormatLoader::try_force_set_property(res, assign, value)) {
+								missing_resource_properties[assign] = value;
 #ifdef DEBUG_ENABLED
-							if (ver_major < GODOT_VERSION_MAJOR) {
-								WARN_PRINT(vformat("Failed to set deprecated %d.%d property '%s' (type: %s) on res class '%s' (class remap: %s)", ver_major, ver_minor, assign, Variant::get_type_name(value.get_type()), type, res->get_class()));
-							}
+								if (ver_major < GODOT_VERSION_MAJOR) {
+									WARN_PRINT(vformat("Failed to set deprecated %d.%d property '%s' (type: %s) on res class '%s' (remap: %s)", ver_major, ver_minor, assign, Variant::get_type_name(value.get_type()), type, res->get_class()));
+								}
 #endif
+							} else {
+								valid = true;
+								WARN_PRINT(vformat("Forced set property %s for resource %s, this indicates a bug parsing the script! Please report this!", assign, path));
+							}
 						}
 					}
 				}
@@ -1023,12 +1028,17 @@ Error ResourceLoaderCompatText::load() {
 					bool valid = false;
 					resource->set(assign, value, &valid);
 					if (!valid) {
-						missing_resource_properties[assign] = value;
+						if (!CompatFormatLoader::try_force_set_property(resource, assign, value)) {
+							missing_resource_properties[assign] = value;
 #ifdef DEBUG_ENABLED
-						if (ver_major < GODOT_VERSION_MAJOR) {
-							WARN_PRINT(vformat("Failed to set deprecated %d.%d property '%s' (type: %s) on res class '%s' (class remap: %s)", ver_major, ver_minor, assign, Variant::get_type_name(value.get_type()), res_type, resource->get_class()));
-						}
+							if (ver_major < GODOT_VERSION_MAJOR) {
+								WARN_PRINT(vformat("Failed to set deprecated %d.%d property '%s' (type: %s) on res class '%s' (class remap: %s)", ver_major, ver_minor, assign, Variant::get_type_name(value.get_type()), res_type, resource->get_class()));
+							}
 #endif
+						} else {
+							valid = true;
+							WARN_PRINT(vformat("Forced set property %s for resource %s, this indicates a bug parsing the script! Please report this!", assign, res_path));
+						}
 					}
 				}
 				//it's assignment

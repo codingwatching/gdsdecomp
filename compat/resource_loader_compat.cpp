@@ -920,3 +920,23 @@ Ref<Resource> ResourceCompatConverter::get_real_from_missing_resource(Ref<Missin
 bool CompatFormatLoader::resource_is_resource(Ref<Resource> p_res, int ver_major) {
 	return p_res.is_valid() && !(ver_major <= 2 && (p_res->get_save_class() == "Image" || Ref<InputEvent>(p_res).is_valid()));
 }
+
+bool CompatFormatLoader::try_force_set_property(const Ref<Resource> &p_res, const StringName &p_name, const Variant &p_value) {
+	if (p_res.is_null()) {
+		return false;
+	}
+	ScriptInstance *si = p_res->get_script_instance();
+	if (si) {
+		if (FakeScriptInstance *fsi = dynamic_cast<FakeScriptInstance *>(si); fsi != nullptr) {
+			Ref<FakeScript> script = fsi->get_script();
+			// If the script is recording properties and is not a fake embedded script, then this is a bug in the script parsing.
+			if (script.is_valid() && script->is_instance_recording_properties() && script->get_class() != "FakeScript") {
+				WARN_PRINT(vformat("Script %s is recording properties, but initial property set failed! Please report this!", script->get_path()));
+			}
+			fsi->force_set_property(p_name, p_value);
+			return true;
+		}
+		return false;
+	}
+	return false;
+}

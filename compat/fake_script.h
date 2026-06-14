@@ -189,5 +189,7 @@ public:
 	virtual const Variant get_rpc_config() const override;
 
 	virtual ScriptLanguage *get_language() override;
+
+	void force_set_property(const StringName &p_name, const Variant &p_value);
 	virtual ~FakeScriptInstance();
 };
