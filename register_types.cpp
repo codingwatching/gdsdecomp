@@ -12,6 +12,7 @@
 #include "gui/gdre_progress.h"
 #include "gui/gdre_standalone.h"
 #include "modules/regex/regex.h"
+#include "utility/app_version_getter.h"
 #include "utility/file_access_gdre.h"
 #include "utility/image_saver.h"
 #include "utility/text_diff.h"
@@ -470,6 +471,7 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<ResourceImportMetadatav2>();
 	ClassDB::register_abstract_class<ImportInfo>();
 	ClassDB::register_class<ProjectConfigLoader>();
+	ClassDB::register_class<AppVersionGetter>();
 
 	ClassDB::register_class<Exporter>();
 	ClassDB::register_class<ExportReport>();

@@ -18,6 +18,7 @@
 #include "modules/gdscript/gdscript_resource_format.h"
 #include "modules/zip/zip_reader.h"
 #include "plugin_manager/plugin_manager.h"
+#include "utility/app_version_getter.h"
 #include "utility/common.h"
 #include "utility/file_access_gdre.h"
 #include "utility/gdre_logger.h"
@@ -835,6 +836,7 @@ Error GDRESettings::_project_post_load(bool initial_load, const String &csharp_a
 	ResourceCompatLoader::make_globally_available();
 	_set_shader_globals();
 
+	_get_app_version();
 	// Log the project info for bug reporting
 	print_line(vformat("Detected Engine Version: %s", get_version_string()));
 	int bytecode_revision = get_bytecode_revision();
@@ -2953,6 +2955,46 @@ void GDRESettings::_detect_csharp() {
 	}
 
 	current_project->detected_csharp = false;
+}
+
+void GDRESettings::_get_app_version() {
+	if (!is_pack_loaded() || !current_project->app_version.is_empty()) {
+		return;
+	}
+	String pack_path = get_pack_path();
+	String pack_path_dir = pack_path.get_base_dir();
+	if (pack_path_dir.get_file() == "Resources") {
+		pack_path_dir = pack_path_dir.get_base_dir();
+		if (pack_path_dir.get_file() == "Contents") {
+			String info_plist_path = pack_path_dir.path_join("Info.plist");
+			if (!FileAccess::exists(info_plist_path)) {
+				auto paths = Glob::rglob(pack_path_dir.path_join("**/Info.plist"));
+				if (!paths.is_empty()) {
+					info_plist_path = paths[0];
+				} else {
+					info_plist_path = "";
+				}
+			}
+			if (!info_plist_path.is_empty()) {
+				current_project->app_version = AppVersionGetter::get_version_from_info_plist(info_plist_path);
+			}
+		}
+	}
+	if (current_project->app_version.is_empty()) {
+		String path_pack_exe = pack_path.get_basename() + ".exe";
+		if (FileAccess::exists(path_pack_exe)) {
+			current_project->app_version = AppVersionGetter::get_version_from_windows_exe_versioninfo(path_pack_exe);
+		}
+	}
+	if (!current_project->app_version.is_empty()) {
+		Ref<GodotVer> ver;
+		if (GodotVer::parse_valid(current_project->app_version, ver)) {
+			if (current_project->version.is_valid() && current_project->version->get_major() <= 3 && ver->get_major() == current_project->version->get_major() && ver->get_minor() == current_project->version->get_minor()) {
+				// Godot wrote the engine version to the executable by default in 3.x and below, so we'll ignore it
+				current_project->app_version = "";
+			}
+		}
+	}
 }
 
 String GDRESettings::get_temp_dotnet_assembly_dir() const {

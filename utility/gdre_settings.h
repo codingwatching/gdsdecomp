@@ -261,6 +261,8 @@ private:
 
 	void _detect_csharp();
 
+	void _get_app_version();
+
 protected:
 	static void _bind_methods();
 	Error _add_pack(const String &p_path);
