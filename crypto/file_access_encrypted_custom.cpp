@@ -31,6 +31,8 @@
 #include "file_access_encrypted_custom.h"
 
 #include "core/error/error_list.h"
+#include "core/io/file_access_encrypted.h"
+#include "core/object/class_db.h"
 #include "core/variant/variant.h"
 
 CryptoCore::RandomGenerator *FileAccessEncryptedCustom::_fae_static_rng = nullptr;
@@ -51,7 +53,7 @@ Error FileAccessEncryptedCustom::open_and_parse(Ref<FileAccess> p_base, const Ve
 	eofed = false;
 	use_magic = p_with_magic;
 
-	if (p_mode == MODE_WRITE_CUSTOM) {
+	if (p_mode == MODE_WRITE) {
 		ERR_FAIL_V_MSG(ERR_UNAVAILABLE, "Writing to a custom encrypted file is not supported.");
 	} else if (p_mode == MODE_READ) {
 		writing = false;
@@ -265,4 +267,30 @@ Ref<FileAccessEncryptedCustom> FileAccessEncryptedCustom::create(Ref<CustomDecry
 
 FileAccessEncryptedCustom::~FileAccessEncryptedCustom() {
 	_close();
+}
+
+Ref<FileAccess> FileAccessEncryptedCustom::_create_and_parse_custom(Ref<CustomDecryptor> p_decryptor, Ref<FileAccess> p_base, const Vector<uint8_t> &p_key, Mode p_mode, bool p_with_magic, const Vector<uint8_t> &p_iv) {
+	Ref<FileAccessEncryptedCustom> fae = create(p_decryptor);
+	Error err = fae->open_and_parse(p_base, p_key, p_mode, p_with_magic, p_iv);
+	if (err != OK) {
+		return nullptr;
+	}
+	return fae;
+}
+
+Ref<FileAccess> FileAccessEncryptedCustom::_create_and_parse_non_custom(Ref<FileAccess> p_base, const Vector<uint8_t> &p_key, Mode p_mode, bool p_with_magic, const Vector<uint8_t> &p_iv) {
+	Ref<FileAccessEncrypted> fae = memnew(FileAccessEncrypted);
+	Error err = fae->open_and_parse(p_base, p_key, FileAccessEncrypted::Mode(p_mode), p_with_magic, p_iv);
+	if (err != OK) {
+		return nullptr;
+	}
+	return fae;
+}
+
+void FileAccessEncryptedCustom::_bind_methods() {
+	BIND_ENUM_CONSTANT(MODE_READ);
+	BIND_ENUM_CONSTANT(MODE_WRITE);
+	BIND_ENUM_CONSTANT(MODE_MAX);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("create_and_parse_custom", "custom_decryptor", "base", "key", "mode", "with_magic", "iv"), &FileAccessEncryptedCustom::_create_and_parse_custom, DEFVAL(true), DEFVAL(Vector<uint8_t>()));
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("create_and_parse_non_custom", "base", "key", "mode", "with_magic", "iv"), &FileAccessEncryptedCustom::_create_and_parse_non_custom, DEFVAL(true), DEFVAL(Vector<uint8_t>()));
 }
