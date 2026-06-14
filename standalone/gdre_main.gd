@@ -17,7 +17,6 @@ var gdre_patch_pck = preload("res://gdre_patch_pck.tscn")
 var _file_dialog: Window = null
 var last_dir: String = ""
 var REAL_ROOT_WINDOW = null
-var deferred_calls = []
 var ret_code = 0
 # TODO: This is a hack to have the CLI mode work correctly; CLI parsing needs overhauling
 var had_main = false
@@ -117,7 +116,7 @@ func _on_new_pck_selected(pck_path: String):
 
 
 func _on_recovery_confirmed(files_to_extract: PackedStringArray, output_dir: String, extract_only: bool):
-	deferred_calls.append(func(): extract_and_recover(files_to_extract, output_dir, extract_only))
+	GDREMainLoop.call_on_next_process(func(): extract_and_recover(files_to_extract, output_dir, extract_only))
 
 func end_recovery():
 	GDRESettings.close_log_file()
@@ -210,13 +209,13 @@ func launch_patch_pck_window():
 
 func _on_recover_project_files_selected(paths: PackedStringArray):
 	close_recover_file_dialog()
-	deferred_calls.append(func(): launch_recovery_window(paths))
+	GDREMainLoop.call_on_next_process(func(): launch_recovery_window(paths))
 
 func _on_recover_project_dir_selected(path):
 	# just check if the dir path ends in ".app"
 	close_recover_file_dialog()
 	if path.ends_with(".app"):
-		deferred_calls.append(func(): launch_recovery_window([path]))
+		GDREMainLoop.call_on_next_process(func(): launch_recovery_window([path]))
 	else:
 		# pop up an accept dialog
 		popup_error_box("Invalid Selection!!", "Error")
@@ -605,8 +604,7 @@ func get_globs_files(globs: PackedStringArray) -> PackedStringArray:
 	return files
 
 func _process(_delta):
-	if deferred_calls.size() > 0:
-		deferred_calls.pop_front().call()
+	pass
 
 func _ready():
 	$version_lbl.text = GDRESettings.get_gdre_version()
@@ -1735,7 +1733,7 @@ func handle_cli(args: PackedStringArray) -> bool:
 		return false
 
 	had_main = true
-	deferred_calls.push_back(func():
+	GDREMainLoop.call_on_next_process(func():
 		if prepop.size() > 0:
 			var output_path = output_dir
 			if output_path.is_empty():

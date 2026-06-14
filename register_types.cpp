@@ -575,6 +575,7 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 
 	ClassDB::register_class<ConfigFileCompat>();
 	ClassDB::register_class<GDRESceneTree>();
+	ClassDB::register_class<GDREMainLoop>();
 
 	gui_icons = memnew(GDREGuiIcons);
 	gdre_main_loop = memnew(GDREMainLoop);

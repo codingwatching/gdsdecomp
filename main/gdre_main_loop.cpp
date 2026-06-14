@@ -1,12 +1,12 @@
 #include "gdre_main_loop.h"
 
 #include "compat/resource_loader_compat.h"
+#include "core/object/class_db.h"
 #include "core/object/object.h"
 #include "core/os/os.h"
 #include "main/main.h"
 #include "scene/main/node.h"
 #include "servers/rendering/rendering_server.h"
-#include "utility/gdre_settings.h"
 #include "utility/task_manager.h"
 
 GDREMainLoop *GDREMainLoop::singleton = nullptr;
@@ -39,8 +39,25 @@ bool GDREMainLoop::physics_process(double p_time) {
 void GDREMainLoop::iteration_end() {
 }
 
+void GDREMainLoop::_process_next_process_calls() {
+	if (running_process_calls) {
+		return;
+	}
+	running_process_calls = true;
+	Vector<Callable> calls;
+	Callable callable;
+	while (next_process_calls.try_pop(callable)) {
+		calls.push_back(callable);
+	}
+	for (auto &callable : calls) {
+		callable.call();
+	}
+	running_process_calls = false;
+}
+
 bool GDREMainLoop::process(double p_time) {
 	last_process_time = p_time;
+	_process_next_process_calls();
 	_wait_until_next_frame(p_time * 1000000 / 2, true);
 	return false;
 }
@@ -134,6 +151,19 @@ bool GDREMainLoop::iteration(bool p_no_delay) {
 		OS::get_singleton()->set_low_processor_usage_mode_sleep_usec(os_low_processor_usage_mode_sleep_usec);
 	}
 	return result;
+}
+
+bool GDREMainLoop::call_on_next_process(const Callable &p_callable) {
+	ERR_FAIL_COND_V_MSG(!singleton, true, "GDREMainLoop singleton not initialized");
+	if (!singleton->next_process_calls.try_push(p_callable)) {
+		ERR_FAIL_V_MSG(true, "Failed to push callable to next_process_calls");
+	}
+	return false;
+}
+
+void GDREMainLoop::_bind_methods() {
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("wait_until_next_frame", "p_time_usec"), &GDREMainLoop::wait_until_next_frame);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("call_on_next_process", "p_callable"), &GDREMainLoop::call_on_next_process);
 }
 
 // *** Scene Tree ***
