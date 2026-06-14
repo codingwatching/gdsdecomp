@@ -2024,6 +2024,30 @@ Error GDScriptDecomp::test_bytecode_match(const Vector<uint8_t> &p_buffer1, cons
 	}
 	if (!ignore_columns) {
 		do_vmap_thing("Columns", state1.columns, state2.columns);
+	} else if (!ignore_lines) {
+		auto buffer = GDScriptTokenizerCompat::create_buffer_tokenizer(this, p_buffer1);
+		ERR_FAIL_COND_V_MSG(buffer.is_null(), ERR_INVALID_DATA, "Error creating buffer tokenizer");
+		buffer->set_multiline_mode(false);
+		auto buffer2 = GDScriptTokenizerCompat::create_buffer_tokenizer(this, p_buffer2);
+		ERR_FAIL_COND_V_MSG(buffer2.is_null(), ERR_INVALID_DATA, "Error creating buffer tokenizer");
+		buffer2->set_multiline_mode(false);
+		auto token = buffer->scan();
+		auto recompiled_token = buffer2->scan();
+		while (token.type != GDScriptTokenizerCompat::Token::Type::G_TK_EOF) {
+			if (token.type != recompiled_token.type) {
+				REPORT_DIFF("Different Tokens: " + GDScriptTokenizerCompat::get_token_name(token.type) + " != " + GDScriptTokenizerCompat::get_token_name(recompiled_token.type));
+			}
+			token = buffer->scan();
+			recompiled_token = buffer2->scan();
+		}
+		if (recompiled_token.type != GDScriptTokenizerCompat::Token::Type::G_TK_EOF) {
+			int number_of_other_tokens = 1;
+			while (recompiled_token.type != GDScriptTokenizerCompat::Token::Type::G_TK_EOF) {
+				number_of_other_tokens++;
+				recompiled_token = buffer2->scan();
+			}
+			REPORT_DIFF("Different Token sizes: " + itos(number_of_other_tokens));
+		}
 	}
 	if (!ignore_lines) {
 		do_vmap_thing("End Lines", state1.end_lines, state2.end_lines);

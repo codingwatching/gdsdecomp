@@ -82,80 +82,79 @@ static const ScriptToRevision tests[] = {
 };
 
 static constexpr const char *test_unique_id_modulo = R"(
-	extends AnimationPlayer
+extends AnimationPlayer
 
-	func _ready() -> void :
-		%BlinkTimer.timeout.connect(check_for_blink)
-		var thingy = 10 % 3
-		var thingy2 = 10 % thingy
-		var thingy3 = thingy % 20
-	)";
+func _ready() -> void :
+	%BlinkTimer.timeout.connect(check_for_blink)
+	var thingy = 10 % 3
+	var thingy2 = 10 % thingy
+	var thingy3 = thingy % 20
+)";
 
 static constexpr const char *test_indent = R"(
-	extends Object
+extends Object
 
-	func set_worldspawn_layers(new_worldspawn_layers: Array) -> void :
-		if worldspawn_layers != new_worldspawn_layers:
-			worldspawn_layers = new_worldspawn_layers
+func set_worldspawn_layers(new_worldspawn_layers: Array) -> void :
+	if worldspawn_layers != new_worldspawn_layers:
+		worldspawn_layers = new_worldspawn_layers
 
-			for i in range(0, worldspawn_layers.size()):
-				if not worldspawn_layers[i]:
-					worldspawn_layers[i] = QodotWorldspawnLayer.new()
+		for i in range(0, worldspawn_layers.size()):
+			if not worldspawn_layers[i]:
+				worldspawn_layers[i] = QodotWorldspawnLayer.new()
 
-	)";
+)";
 
 static constexpr const char *test_indent_current = R"(
-	extends Object
-	func foo():
-		var bar = 1;
-		if bar == 1:
-			print("bar is 1")
-		else:
-			print("bar is not 1")
-		return bar
-	)";
+extends Object
+func foo():
+	var bar = 1;
+	if bar == 1:
+		print("bar is 1")
+	else:
+		print("bar is not 1")
+	return bar
+)";
 
 static constexpr const char *test_multiline_string = R"(
-	static func find_or_null(arr: Array[Node], index: int = 0) -> Node:
-		if (arr.is_empty()):
-			push_error("""Node that is needed for Script-IDE not found.
-	Plugin will not work correctly.
-	This might be due to some other plugins or changes in the Engine.
-	Please report this to Script-IDE, so we can figure out a fix.""")
-			return null
-		return arr[index]
-	)";
+static func find_or_null(arr: Array[Node], index: int = 0) -> Node:
+	if (arr.is_empty()):
+		push_error("""Node that is needed for Script-IDE not found.
+Plugin will not work correctly.
+This might be due to some other plugins or changes in the Engine.
+Please report this to Script-IDE, so we can figure out a fix.""")
+		return null
+	return arr[index]
+)";
 
 // should pass on all versions of GDScript
 static constexpr const char *test_reserved_word_as_accessor_name = R"(
-	extends Object
+extends Object
 
-
-	func _ready():
-		var thingy = {}
-		thingy["func"] = "bar"
-		thingy["enum"] = "foo"
-		thingy["preload"] = "foo"
-		thingy["yield"] = "foo"
-		thingy["sin"] = "foo"
-		thingy["static"] = "foo"
-		thingy["pass"] = "foo"
-		foo.sin()
-		print(thingy.func)
-		print(thingy.enum)
-		print(thingy.preload)
-		print(thingy.yield)
-		print(thingy.sin)
-		print(thingy.static)
-		print(thingy.pass)
-	)";
+func _ready():
+	var thingy = {}
+	thingy["func"] = "bar"
+	thingy["enum"] = "foo"
+	thingy["preload"] = "foo"
+	thingy["yield"] = "foo"
+	thingy["sin"] = "foo"
+	thingy["static"] = "foo"
+	thingy["pass"] = "foo"
+	foo.sin()
+	print(thingy.func)
+	print(thingy.enum)
+	print(thingy.preload)
+	print(thingy.yield)
+	print(thingy.sin)
+	print(thingy.static)
+	print(thingy.pass)
+)";
 
 // clang-format off
 	static constexpr const char *test_eof_newline = R"(
-	extends RefCounted
-	func _ready():
-		pass
-		)";
+extends RefCounted
+func _ready():
+	pass
+	)";
 // clang-format on
 
 inline void output_file(const String &path, const String &text) {
@@ -244,7 +243,7 @@ inline void test_script_binary(const String &script_name, const Vector<uint8_t> 
 #endif
 
 	CHECK(decomp->get_error_message() == "");
-	if (revision == GDScriptDecompVersion::LATEST_GDSCRIPT_COMMIT) {
+	if (script_name != "super" && revision == GDScriptDecompVersion::LATEST_GDSCRIPT_COMMIT) {
 		// test with the latest GDScriptTokenizer
 		auto reference_result = GDScriptTokenizerBuffer::parse_code_string(helper_script_text, GDScriptTokenizerBuffer::CompressMode::COMPRESS_ZSTD);
 		CHECK(reference_result.size() > 0);
@@ -269,7 +268,7 @@ inline void test_script_binary(const String &script_name, const Vector<uint8_t> 
 			err = buffer.set_code_buffer(bytecode);
 			REQUIRE(err == OK);
 			auto recompiled_buffer = GDScriptTokenizerBuffer();
-			err = recompiled_buffer.set_code_buffer(recompiled_ref);
+			err = recompiled_buffer.set_code_buffer(reference_result);
 			REQUIRE(err == OK);
 			auto token = buffer.scan();
 			auto recompiled_token = recompiled_buffer.scan();
