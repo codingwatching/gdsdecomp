@@ -452,7 +452,7 @@ public:
 };
 CHECK_SIZE_MATCH_NO_PADDING(faketex2D, CompressedTexture2D);
 
-Error TextureLoaderCompat::_load_data_stex2d_v3(const String &p_path, int &tw, int &th, int &tw_custom, int &th_custom, int &flags, Ref<Image> &image, int p_size_limit) {
+Error TextureLoaderCompat::_load_data_stex2d_v3(const String &p_path, int &tw, int &th, int &tw_custom, int &th_custom, uint32_t &flags, uint32_t &df, Ref<Image> &image, int p_size_limit) {
 	Error err;
 	// TODO: make this pass back the flags
 
@@ -468,7 +468,7 @@ Error TextureLoaderCompat::_load_data_stex2d_v3(const String &p_path, int &tw, i
 	th_custom = f->get_16();
 
 	flags = f->get_32(); // texture flags!
-	uint32_t df = f->get_32(); // data format
+	df = f->get_32(); // data format
 	p_size_limit = 0;
 	if (image.is_null()) {
 		image.instantiate();
@@ -486,7 +486,7 @@ Error TextureLoaderCompat::_load_data_stex2d_v3(const String &p_path, int &tw, i
 	return OK;
 }
 
-Error TextureLoaderCompat::_load_data_ctex2d_v4(const String &p_path, int &tw, int &th, Ref<Image> &image, int &r_data_format, int &r_texture_flags, int p_size_limit) {
+Error TextureLoaderCompat::_load_data_ctex2d_v4(const String &p_path, int &tw, int &th, Ref<Image> &image, uint32_t &r_texture_flags, uint32_t &r_data_format, int p_size_limit) {
 	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ);
 	uint8_t header[4];
 	// already checked header
@@ -523,7 +523,7 @@ Error TextureLoaderCompat::_load_data_ctex2d_v4(const String &p_path, int &tw, i
 	return OK;
 }
 
-Error TextureLoaderCompat::_load_layered_texture_v3(const String &p_path, Vector<Ref<Image>> &r_data, Image::Format &r_format, int &r_width, int &r_height, int &r_depth, bool &r_mipmaps) {
+Error TextureLoaderCompat::_load_layered_texture_v3(const String &p_path, Vector<Ref<Image>> &r_data, Image::Format &r_format, int &r_width, int &r_height, int &r_depth, bool &r_mipmaps, uint32_t &flags, uint32_t &r_data_format) {
 	Error err;
 	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ, &err);
 	ERR_FAIL_COND_V_MSG(f.is_null(), err, "Cannot open file '" + p_path + "'.");
@@ -535,10 +535,11 @@ Error TextureLoaderCompat::_load_layered_texture_v3(const String &p_path, Vector
 	r_width = f->get_32();
 	r_height = f->get_32();
 	r_depth = f->get_32();
-	int flags = f->get_32(); //texture flags!
+	flags = f->get_32(); //texture flags!
 	r_mipmaps = (flags & 1); // Texture::FLAG_MIPMAPS
 
-	Image::Format format = ImageEnumCompat::convert_image_format_enum_v3_to_v4(V3Image::Format(f->get_32()));
+	r_data_format = f->get_32(); // data format
+	Image::Format format = ImageEnumCompat::convert_image_format_enum_v3_to_v4(V3Image::Format(r_data_format));
 	ERR_FAIL_COND_V_MSG(format == Image::FORMAT_MAX, ERR_FILE_CORRUPT, "Textured layer is in an invalid or deprecated format");
 
 	uint32_t compression = f->get_32(); // 0 - lossless (PNG), 1 - vram, 2 - uncompressed
@@ -618,7 +619,7 @@ Error TextureLoaderCompat::_load_layered_texture_v3(const String &p_path, Vector
 	return OK;
 }
 
-Error TextureLoaderCompat::_load_data_ctexlayered_v4(const String &p_path, Vector<Ref<Image>> &r_data, Image::Format &r_format, int &r_width, int &r_height, int &r_depth, int &r_type, bool &r_mipmaps, int &r_data_format) {
+Error TextureLoaderCompat::_load_data_ctexlayered_v4(const String &p_path, Vector<Ref<Image>> &r_data, Image::Format &r_format, int &r_width, int &r_height, int &r_depth, int &r_type, bool &r_mipmaps, uint32_t &r_flags, uint32_t &r_data_format) {
 	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ);
 	ERR_FAIL_COND_V_MSG(f.is_null(), ERR_CANT_OPEN, vformat("Unable to open file: %s.", p_path));
 
@@ -635,7 +636,7 @@ Error TextureLoaderCompat::_load_data_ctexlayered_v4(const String &p_path, Vecto
 
 	r_depth = f->get_32(); //depth or layer count (CompressedTextureLayered)
 	r_type = f->get_32(); //type
-	f->get_32(); // Nothing
+	r_flags = f->get_32(); //texture flags
 	f->get_32(); // Nothing
 	int mipmaps = f->get_32();
 	f->get_32(); // ignored
@@ -646,10 +647,7 @@ Error TextureLoaderCompat::_load_data_ctexlayered_v4(const String &p_path, Vecto
 	r_data.clear();
 
 	String ext = p_path.get_extension();
-	bool is_layered = false;
-	if (ext == "ctexarray" || ext == "ccube" || ext == "ccubearray") {
-		is_layered = true;
-	}
+	bool is_layered = r_type != V4_MODE_3D;
 
 	int limit = is_layered ? r_depth : r_depth + mipmaps;
 	for (int i = 0; i < limit; i++) {
@@ -821,7 +819,7 @@ String ResourceFormatLoaderCompatTexture2D::get_resource_type(const String &p_pa
 	return type;
 }
 
-Ref<CompressedTexture2D> ResourceFormatLoaderCompatTexture2D::_set_tex(const String &p_path, ResourceInfo::LoadType p_type, int tw, int th, int tw_custom, int th_custom, int flags, Ref<Image> image) {
+Ref<CompressedTexture2D> ResourceFormatLoaderCompatTexture2D::_set_tex(const String &p_path, ResourceInfo::LoadType p_type, int tw, int th, int tw_custom, int th_custom, uint32_t flags, Ref<Image> image) {
 	Ref<CompressedTexture2D> texture;
 	Ref<OverrideTexture2D> override_texture;
 	if (p_type != ResourceInfo::LoadType::REAL_LOAD) {
@@ -889,17 +887,17 @@ Ref<Resource> ResourceFormatLoaderCompatTexture2D::custom_load(const String &p_p
 		}
 		return Ref<Resource>();
 	}
-	int lw, lh, lwc, lhc, lflags;
-	int data_format;
-	int texture_flags;
+	int lw, lh, lwc, lhc;
+	uint32_t data_format;
+	uint32_t texture_flags;
 	Ref<Resource> texture;
 	Ref<Image> image;
 	if (t == TextureLoaderCompat::FORMAT_V3_STREAM_TEXTURE2D) {
-		err = TextureLoaderCompat::_load_data_stex2d_v3(p_path, lw, lh, lwc, lhc, lflags, image);
+		err = TextureLoaderCompat::_load_data_stex2d_v3(p_path, lw, lh, lwc, lhc, texture_flags, data_format, image);
 	} else if (t == TextureLoaderCompat::FORMAT_V4_COMPRESSED_TEXTURE2D) {
 		lw = 0;
 		lh = 0;
-		err = TextureLoaderCompat::_load_data_ctex2d_v4(p_path, lwc, lhc, image, data_format, texture_flags);
+		err = TextureLoaderCompat::_load_data_ctex2d_v4(p_path, lwc, lhc, image, texture_flags, data_format);
 		if (image.is_valid()) {
 			if (!lwc) {
 				lw = image->get_width();
@@ -915,7 +913,7 @@ Ref<Resource> ResourceFormatLoaderCompatTexture2D::custom_load(const String &p_p
 		*r_error = err;
 	}
 	ERR_FAIL_COND_V_MSG(err != OK, Ref<Resource>(), "Failed to load texture " + p_path);
-	texture = _set_tex(p_path, p_type, lw, lh, lwc, lhc, lflags, image);
+	texture = _set_tex(p_path, p_type, lw, lh, lwc, lhc, texture_flags, image);
 	set_res_path(texture, p_original_path.is_empty() ? p_path : p_original_path, p_type, p_cache_mode);
 	auto info = TextureLoaderCompat::_get_resource_info(p_original_path.is_empty() ? p_path : p_original_path, t);
 	info->cached_id = p_path;
@@ -983,12 +981,12 @@ Ref<Resource> ResourceFormatLoaderCompatTexture3D::custom_load(const String &p_p
 	Ref<Resource> texture;
 	Vector<Ref<Image>> images;
 	Image::Format fmt;
-	int data_format = 0;
-	int texture_flags = 0;
+	uint32_t data_format = 0;
+	uint32_t texture_flags = 0;
 	if (t == TextureLoaderCompat::FORMAT_V3_STREAM_TEXTURE3D) {
-		err = TextureLoaderCompat::_load_layered_texture_v3(p_path, images, fmt, lw, lh, ld, mipmaps);
+		err = TextureLoaderCompat::_load_layered_texture_v3(p_path, images, fmt, lw, lh, ld, mipmaps, texture_flags, data_format);
 	} else if (t == TextureLoaderCompat::FORMAT_V4_COMPRESSED_TEXTURE3D) {
-		err = TextureLoaderCompat::_load_data_ctexlayered_v4(p_path, images, fmt, lw, lh, ld, ltype, mipmaps, data_format);
+		err = TextureLoaderCompat::_load_data_ctexlayered_v4(p_path, images, fmt, lw, lh, ld, ltype, mipmaps, texture_flags, data_format);
 	} else {
 		err = ERR_INVALID_PARAMETER;
 	}
@@ -1080,18 +1078,18 @@ Ref<Resource> ResourceFormatLoaderCompatTextureLayered::custom_load(const String
 		return Ref<Resource>();
 	}
 
-	int data_format;
-	int texture_flags = 0;
+	uint32_t data_format = 0;
+	uint32_t texture_flags = 0;
 	int lw, lh, ld, ltype;
 	bool mipmaps;
 	Ref<Resource> texture;
 	Vector<Ref<Image>> images;
 	Image::Format fmt;
 	if (t == TextureLoaderCompat::FORMAT_V3_STREAM_TEXTUREARRAY) {
-		err = TextureLoaderCompat::_load_layered_texture_v3(p_path, images, fmt, lw, lh, ld, mipmaps);
+		err = TextureLoaderCompat::_load_layered_texture_v3(p_path, images, fmt, lw, lh, ld, mipmaps, texture_flags, data_format);
 		ltype = RSE::TEXTURE_LAYERED_2D_ARRAY;
 	} else if (t == TextureLoaderCompat::FORMAT_V4_COMPRESSED_TEXTURELAYERED) {
-		err = TextureLoaderCompat::_load_data_ctexlayered_v4(p_path, images, fmt, lw, lh, ld, ltype, mipmaps, data_format);
+		err = TextureLoaderCompat::_load_data_ctexlayered_v4(p_path, images, fmt, lw, lh, ld, ltype, mipmaps, texture_flags, data_format);
 	} else {
 		err = ERR_INVALID_PARAMETER;
 	}
