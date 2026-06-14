@@ -1,7 +1,7 @@
 #!/bin/sh
 
-CLANG_FORMAT_MAJOR="18"
-DEFAULT_CLANG_FORMAT=clang-format-18
+CLANG_FORMAT_MAJOR="21"
+DEFAULT_CLANG_FORMAT=clang-format-21
 CLANG_FORMAT=${CLANG_FORMAT:-$DEFAULT_CLANG_FORMAT}
 # check if $CLANG_FORMAT is available, use --version
 if ! command -v "$CLANG_FORMAT" &> /dev/null; then
