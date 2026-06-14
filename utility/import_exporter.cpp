@@ -734,6 +734,12 @@ void ImportExporter::_do_export(uint32_t i, ExportToken *tokens) {
 	}
 
 	tokens[i].report = Exporter::export_resource(output_dir, tokens[i].iinfo);
+	if (tokens[i].report.is_valid() && tokens[i].report->get_error() == OK) {
+		Error err = Exporter::recreate_missing_variants(output_dir, tokens[i].iinfo);
+		if (err && err != ERR_UNAVAILABLE) {
+			// ignore it for now
+		}
+	}
 	rewrite_metadata(tokens[i]);
 	if (tokens[i].supports_multithread) {
 		tokens[i].report->append_error_messages(GDRELogger::get_thread_errors());

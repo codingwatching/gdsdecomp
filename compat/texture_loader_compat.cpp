@@ -1540,3 +1540,231 @@ Ref<ResourceInfo> ResourceFormatLoaderImageTextureCompat::get_resource_info(cons
 	info->ver_major = GDRESettings::get_singleton()->get_ver_major();
 	return info;
 }
+
+enum TextureFlags : unsigned int { // unsigned to stop sanitizer complaining about bit operations on ints
+	TEXTURE_FLAG_MIPMAPS = 1, /// Enable automatic mipmap generation - when available
+	TEXTURE_FLAG_REPEAT = 2, /// Repeat texture (Tiling), otherwise Clamping
+	TEXTURE_FLAG_FILTER = 4, /// Create texture with linear (or available) filter
+	TEXTURE_FLAG_ANISOTROPIC_FILTER = 8,
+	TEXTURE_FLAG_CONVERT_TO_LINEAR = 16,
+	TEXTURE_FLAG_MIRRORED_REPEAT = 32, /// Repeat texture, with alternate sections mirrored
+	TEXTURE_FLAG_USED_FOR_STREAMING = 2048,
+	TEXTURE_FLAGS_DEFAULT = TEXTURE_FLAG_REPEAT | TEXTURE_FLAG_MIPMAPS | TEXTURE_FLAG_FILTER
+};
+
+enum CompressMode {
+	COMPRESS_LOSSLESS,
+	COMPRESS_LOSSY,
+	COMPRESS_VIDEO_RAM,
+	COMPRESS_UNCOMPRESSED
+};
+
+Error _save_stex(const Ref<Image> &p_image, const String &p_to_path, int p_compress_mode, float p_lossy_quality, Image::CompressMode p_vram_compression, bool p_mipmaps, int p_texture_flags, bool p_streamable, bool p_detect_3d, bool p_detect_srgb, bool p_force_rgbe, bool p_detect_normal, bool p_force_normal, bool p_force_po2_for_compressed) {
+	Ref<FileAccess> f = FileAccess::open(p_to_path, FileAccess::WRITE);
+	ERR_FAIL_COND_V_MSG(f.is_null(), ERR_CANT_OPEN, "Failed to open file " + p_to_path);
+	f->store_8('G');
+	f->store_8('D');
+	f->store_8('S');
+	f->store_8('T'); //godot streamable texture
+
+	bool resize_to_po2 = false;
+
+	if (p_compress_mode == COMPRESS_VIDEO_RAM && p_force_po2_for_compressed && (p_mipmaps || p_texture_flags & TEXTURE_FLAG_REPEAT)) {
+		resize_to_po2 = true;
+		f->store_16(Math::next_power_of_2((uint32_t)p_image->get_width()));
+		f->store_16(p_image->get_width());
+		f->store_16(Math::next_power_of_2((uint32_t)p_image->get_height()));
+		f->store_16(p_image->get_height());
+	} else {
+		f->store_16(p_image->get_width());
+		f->store_16(0);
+		f->store_16(p_image->get_height());
+		f->store_16(0);
+	}
+	f->store_32(p_texture_flags);
+
+	uint32_t format = 0;
+
+	if (p_streamable) {
+		format |= FORMAT_BIT_STREAM;
+	}
+	if (p_mipmaps) {
+		format |= FORMAT_BIT_HAS_MIPMAPS; //mipmaps bit
+	}
+	if (p_detect_3d) {
+		format |= FORMAT_BIT_DETECT_3D;
+	}
+	if (p_detect_srgb) {
+		format |= FORMAT_BIT_DETECT_SRGB;
+	}
+	if (p_detect_normal) {
+		format |= FORMAT_BIT_DETECT_NORMAL;
+	}
+
+	if ((p_compress_mode == COMPRESS_LOSSLESS || p_compress_mode == COMPRESS_LOSSY) && p_image->get_format() > Image::FORMAT_RGBA8) {
+		p_compress_mode = COMPRESS_UNCOMPRESSED; //these can't go as lossy
+	}
+
+	switch (p_compress_mode) {
+		case COMPRESS_LOSSLESS: {
+			bool lossless_force_png = ProjectSettings::get_singleton()->get("rendering/misc/lossless_compression/force_png") ||
+					!Image::_webp_mem_loader_func; // WebP module disabled.
+			bool use_webp = !lossless_force_png && p_image->get_width() <= 16383 && p_image->get_height() <= 16383; // WebP has a size limit
+			Ref<Image> image = p_image->duplicate();
+			if (p_mipmaps) {
+				image->generate_mipmaps();
+			} else {
+				image->clear_mipmaps();
+			}
+
+			int mmc = image->get_mipmap_count() + 1;
+
+			if (use_webp) {
+				format |= FORMAT_BIT_WEBP;
+			} else {
+				format |= FORMAT_BIT_PNG;
+			}
+			f->store_32(format);
+			f->store_32(mmc);
+
+			for (int i = 0; i < mmc; i++) {
+				if (i > 0) {
+					image->shrink_x2();
+				}
+
+				Vector<uint8_t> data;
+				if (use_webp) {
+					data = Image::webp_lossless_packer(image);
+				} else {
+					data = Image::png_packer(image);
+				}
+				int data_len = data.size();
+				f->store_32(data_len);
+
+				f->store_buffer(data.ptr(), data_len);
+			}
+
+		} break;
+		case COMPRESS_LOSSY: {
+			Ref<Image> image = p_image->duplicate();
+			if (p_mipmaps) {
+				image->generate_mipmaps();
+			} else {
+				image->clear_mipmaps();
+			}
+
+			int mmc = image->get_mipmap_count() + 1;
+
+			format |= FORMAT_BIT_WEBP;
+			f->store_32(format);
+			f->store_32(mmc);
+
+			for (int i = 0; i < mmc; i++) {
+				if (i > 0) {
+					image->shrink_x2();
+				}
+
+				Vector<uint8_t> data = Image::webp_lossy_packer(image, p_lossy_quality);
+				int data_len = data.size();
+				f->store_32(data_len);
+
+				f->store_buffer(data.ptr(), data_len);
+			}
+		} break;
+		case COMPRESS_VIDEO_RAM: {
+			Ref<Image> image = p_image->duplicate();
+			if (resize_to_po2) {
+				image->resize_to_po2();
+			}
+			if (p_mipmaps) {
+				image->generate_mipmaps(p_force_normal);
+			}
+
+			if (p_force_rgbe && image->get_format() >= Image::FORMAT_R8 && image->get_format() <= Image::FORMAT_RGBE9995) {
+				image->convert(Image::FORMAT_RGBE9995);
+			} else {
+				Image::CompressSource csource = Image::COMPRESS_SOURCE_GENERIC;
+				if (p_force_normal) {
+					csource = Image::COMPRESS_SOURCE_NORMAL;
+				} else if (p_texture_flags & TEXTURE_FLAG_CONVERT_TO_LINEAR) {
+					csource = Image::COMPRESS_SOURCE_SRGB;
+				}
+
+				image->compress(p_vram_compression, csource /*, p_lossy_quality*/);
+			}
+
+			format |= ImageEnumCompat::convert_image_format_enum_v4_to_v3(image->get_format());
+
+			f->store_32(format);
+
+			Vector<uint8_t> data = image->get_data();
+			int dl = data.size();
+			f->store_buffer(data.ptr(), dl);
+		} break;
+		case COMPRESS_UNCOMPRESSED: {
+			Ref<Image> image = p_image->duplicate();
+			if (p_mipmaps) {
+				image->generate_mipmaps();
+			} else {
+				image->clear_mipmaps();
+			}
+
+			format |= image->get_format();
+			f->store_32(format);
+
+			Vector<uint8_t> data = image->get_data();
+			int dl = data.size();
+
+			f->store_buffer(data.ptr(), dl);
+
+		} break;
+	}
+	return OK;
+}
+
+Error TextureLoaderCompat::save_image_to_stex_v3(const Ref<Image> &p_image, const String &p_to_path, int p_compress_mode, Image::CompressMode p_vram_compression, uint32_t p_texture_flags, uint32_t p_data_format, bool force_rgbe, bool force_normal) {
+	if (p_compress_mode == COMPRESS_VIDEO_RAM) {
+		switch (p_vram_compression) {
+			case Image::CompressMode::COMPRESS_S3TC:
+			case Image::CompressMode::COMPRESS_ETC:
+			case Image::CompressMode::COMPRESS_ETC2: {
+			} break;
+			default: { // v3 didn't support other compress modes
+				return ERR_INVALID_PARAMETER;
+			} break;
+		}
+	}
+	float p_lossy_quality = 1.0;
+	// int compress_mode = p_options["compress/mode"];
+	// float lossy = p_options["compress/lossy_quality"];
+	// int repeat = p_options["flags/repeat"];
+	// bool filter = p_options["flags/filter"];
+	// bool mipmaps = p_options["flags/mipmaps"];
+	// bool anisotropic = p_options["flags/anisotropic"];
+	// int srgb = p_options["flags/srgb"];
+	// bool fix_alpha_border = p_options["process/fix_alpha_border"];
+	// bool premult_alpha = p_options["process/premult_alpha"];
+	// bool invert_color = p_options["process/invert_color"];
+	// bool normal_map_invert_y = p_options["process/normal_map_invert_y"];
+	// bool stream = p_options["stream"];
+	// int size_limit = p_options["size_limit"];
+	// bool hdr_as_srgb = p_options["process/HDR_as_SRGB"];
+	// float scale = p_options["svg/scale"];
+	// force normal is normal == 1
+	// int normal = p_options["compress/normal_map"];
+	// bool force_rgbe = p_options["compress/hdr_mode"];
+	// int bptc_ldr = p_options["compress/bptc_ldr"];
+
+	bool p_mipmaps = p_texture_flags & TEXTURE_FLAG_MIPMAPS;
+	bool p_streamable = p_data_format & FORMAT_BIT_STREAM;
+	bool p_detect_3d = p_data_format & FORMAT_BIT_DETECT_3D;
+	bool p_detect_srgb = p_data_format & FORMAT_BIT_DETECT_SRGB;
+	bool p_detect_normal = p_data_format & FORMAT_BIT_DETECT_NORMAL;
+	bool p_force_normal = force_normal;
+	bool p_force_po2_for_compressed = p_compress_mode == COMPRESS_VIDEO_RAM && p_vram_compression != Image::CompressMode::COMPRESS_S3TC;
+
+	if (p_image->is_compressed()) {
+		p_image->decompress();
+	}
+	return _save_stex(p_image, p_to_path, p_compress_mode, p_lossy_quality, p_vram_compression, p_mipmaps, p_texture_flags, p_streamable, p_detect_3d, p_detect_srgb, force_rgbe, p_detect_normal, p_force_normal, p_force_po2_for_compressed);
+}

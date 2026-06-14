@@ -1094,8 +1094,12 @@ Error ImportInfoModern::save_md5_file(const String &output_dir) {
 	// check if each exists
 	for (int64_t i = 0; i < dest_files.size(); i++) {
 		if (!FileAccess::exists(dest_files[i])) {
-			//WARN_PRINT("Cannot find " + dest_files[i] + ", cannot compute dest_md5.");
-			return ERR_PRINTER_ON_FIRE;
+			String alt_path = output_dir.path_join(dest_files[i].trim_prefix("res://"));
+			if (FileAccess::exists(alt_path)) {
+				dest_files.write[i] = alt_path;
+			} else {
+				return ERR_PRINTER_ON_FIRE;
+			}
 		}
 	}
 	// dest_md5 is the md5 of all the destination files together

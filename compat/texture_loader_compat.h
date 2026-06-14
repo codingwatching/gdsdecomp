@@ -59,6 +59,8 @@ public:
 	static TextureType get_type_enum_from_version_type(TextureVersionType type);
 	static String get_type_name_from_textype(TextureVersionType type);
 	static Vector<Ref<Image>> load_images_from_layered_tex(const String p_path, Error *r_err);
+
+	static Error save_image_to_stex_v3(const Ref<Image> &p_image, const String &p_to_path, int p_compress_mode, Image::CompressMode p_vram_compression, uint32_t p_texture_flags, uint32_t p_data_format, bool force_rgbe, bool force_normal);
 };
 
 class ResourceConverterTexture2D : public ResourceCompatConverter {
