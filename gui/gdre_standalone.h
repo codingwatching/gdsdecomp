@@ -4,10 +4,13 @@
 #include "scene/gui/box_container.h"
 #include "scene/gui/control.h"
 #include "scene/gui/tree.h"
+#include "utility/gd_parallel_queue.h"
 
 class GDREAudioStreamPreviewGeneratorNode;
 class AcceptDialog;
 class ConfirmationDialog;
+class RichTextLabel;
+
 class GodotREEditorStandalone : public Control {
 	GDCLASS(GodotREEditorStandalone, Control)
 
@@ -18,7 +21,10 @@ class GodotREEditorStandalone : public Control {
 	AcceptDialog *error_dialog = nullptr;
 	ConfirmationDialog *confirmation_dialog = nullptr;
 	uint64_t last_log_message_time = 0;
-	Vector<String> log_message_buffer;
+	StaticParallelQueue<String, 10240> log_message_buffer;
+
+	void flush_log_message_buffer(uint64_t p_current_time);
+	RichTextLabel *get_log_window();
 
 protected:
 	void _notification(int p_notification);
