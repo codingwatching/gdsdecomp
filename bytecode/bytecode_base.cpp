@@ -988,7 +988,8 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 				line += "onready ";
 			} break;
 			case G_TK_PR_TOOL: {
-				line += "tool ";
+				line += "tool";
+				ensure_ending_space_func(i);
 			} break;
 			case G_TK_PR_STATIC: {
 				line += "static ";
