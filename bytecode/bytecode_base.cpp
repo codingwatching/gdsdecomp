@@ -742,6 +742,16 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 		const Token &token = tokens[i];
 		GlobalToken curr_token = tokens[i].type;
 		if (!is_token_newline_or_indent(curr_token) && check_new_line(i)) {
+			if (curr_token == G_TK_CONSTANT && tokens[i].literal.get_type() == Variant::Type::STRING) {
+				String str = tokens[i].literal.operator String().c_escape_multiline();
+				int num_newlines = str.count("\n");
+				int num_lines = token.end_line - token.start_line;
+				if (num_newlines == num_lines) {
+					line += "\"\"\"" + str + "\"\"\"";
+					prev_line = token.end_line;
+					continue;
+				}
+			}
 			handle_newline(i, curr_token);
 		}
 		switch (curr_token) {
@@ -753,6 +763,19 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 				line += tokens[i].literal.operator String();
 			} break;
 			case G_TK_CONSTANT: {
+				if (bytecode_version >= GDSCRIPT_2_0_VERSION && token.literal.get_type() == Variant::Type::STRING && check_new_line(i + 1)) {
+					auto &next_token = tokens[i + 1];
+					if (next_token.type != G_TK_NEWLINE && token.start_line == next_token.start_line) {
+						String str = tokens[i].literal.operator String().c_escape_multiline();
+						int num_newlines = str.count("\n");
+						int num_lines = next_token.end_line - next_token.start_line;
+						if (num_newlines == num_lines) {
+							line += "\"\"\"" + str + "\"\"\"";
+							prev_line = next_token.end_line;
+							continue;
+						}
+					}
+				}
 				// TODO: handle GDScript 2.0 multi-line strings: we have to check the number of newlines
 				// in the string and if the next token has a line number difference >= the number of newlines
 				line += get_constant_string(tokens[i].literal);
