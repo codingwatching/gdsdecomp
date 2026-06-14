@@ -547,17 +547,24 @@ Error _wget_sync(const String &p_url, Ref<FileAccess> response, int retries, con
 		for (const String &E : rheaders) {
 			response_headers.push_back(E);
 		}
-		if (response_code == 404) {
-			return ERR_FILE_NOT_FOUND;
-		}
-		if (response_code == 403) {
-			return ERR_UNAUTHORIZED;
-		}
-		if (response_code == 401) {
-			return ERR_UNAUTHORIZED;
-		}
-		if (response_code >= 400) {
-			return ERR_BUG;
+		switch (response_code) {
+			case 404:
+				return ERR_FILE_NOT_FOUND;
+			case 403:
+				return ERR_FILE_NO_PERMISSION;
+			case 401:
+				return ERR_UNAUTHORIZED;
+			case 425:
+			case 429:
+			case 503:
+				return ERR_BUSY;
+			case 504:
+				return ERR_TIMEOUT;
+			default: {
+				if (response_code >= 400) {
+					return ERR_BUG;
+				}
+			}
 		}
 
 		if (response_code == 301 || response_code == 302) {
@@ -598,18 +605,19 @@ Error _wget_sync(const String &p_url, Ref<FileAccess> response, int retries, con
 		if (response_code == 404 || response_code == 403 || response_code == 401) {
 			return retry_err;
 		}
-		retries--;
-		Ref<FileAccessBuffer> resp = response;
-		if (!resp.is_null()) {
-			resp->open_new();
-		} else {
-			String path = response->get_path();
-			response->close();
-			err = response->reopen(path, FileAccess::WRITE);
-			if (err != OK) {
-				return err;
-			}
+		if (retry_err == ERR_BUSY || retry_err == ERR_TIMEOUT) {
+			// backoff for 1 second
+			OS::get_singleton()->delay_usec(1000000);
 		}
+		retries--;
+		String path = response->get_path();
+		response->close();
+		err = response->reopen(path, FileAccess::WRITE);
+		if (err != OK) {
+			return err;
+		}
+		client->close();
+		client = nullptr;
 		return _wget_sync(p_url, response, retries, extra_headers, p_progress, p_cancelled, r_size);
 	};
 	size_t downloaded = 0;
