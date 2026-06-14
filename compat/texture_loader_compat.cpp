@@ -6,6 +6,7 @@
 #include "core/io/resource_loader.h"
 #include "utility/common.h"
 #include "utility/gdre_settings.h"
+#include "utility/image_saver.h"
 #include "utility/resource_info.h"
 
 #include "core/error/error_list.h"
@@ -942,6 +943,41 @@ String ResourceFormatLoaderCompatTexture3D::get_resource_type(const String &p_pa
 	return type;
 }
 
+void normalize_image_formats(const Vector<Ref<Image>> &images) {
+	ERR_FAIL_COND(images.is_empty());
+	auto safe_format = images[0]->get_format();
+	for (int i = 1; i < images.size(); i++) {
+		Ref<Image> image = images[i];
+		auto format = images[i]->get_format();
+		if (format != safe_format) {
+			if (image->is_compressed()) {
+				auto mode = ImageSaver::get_compress_mode_from_format(safe_format);
+				image->decompress();
+				auto astc_format = (safe_format >= Image::Format::FORMAT_ASTC_8x8) ? Image::ASTC_FORMAT_8x8 : Image::ASTC_FORMAT_4x4;
+				Image::BPTCFormat bptc_format = Image::BPTC_DETECT;
+				if (mode == Image::CompressMode::COMPRESS_BPTC) {
+					switch (safe_format) {
+						case Image::FORMAT_BPTC_RGBF:
+							bptc_format = Image::BPTC_FORCE_SIGNED;
+							break;
+						case Image::FORMAT_BPTC_RGBFU:
+							bptc_format = Image::BPTC_FORCE_UNSIGNED;
+							break;
+						default:
+							bptc_format = Image::BPTC_DETECT;
+							break;
+					}
+				}
+				Error err = image->_compress_from_channels(mode, image->detect_used_channels(Image::COMPRESS_SOURCE_GENERIC), astc_format, bptc_format);
+				ERR_CONTINUE_MSG(err != OK, "Failed to compress image from format " + Image::get_format_name(format) + " to format " + Image::get_format_name(safe_format));
+			} else {
+				image->convert(safe_format);
+				ERR_CONTINUE_MSG(image->get_format() != safe_format, "Failed to convert image from format " + Image::get_format_name(format) + " to format " + Image::get_format_name(safe_format));
+			}
+		}
+	}
+}
+
 Ref<CompressedTexture3D> ResourceFormatLoaderCompatTexture3D::_set_tex(const String &p_path, ResourceInfo::LoadType p_type, int tw, int th, int td, bool mipmaps, const Vector<Ref<Image>> &images) {
 	Ref<CompressedTexture3D> texture;
 	Ref<OverrideTexture3D> override_texture;
@@ -960,6 +996,9 @@ Ref<CompressedTexture3D> ResourceFormatLoaderCompatTexture3D::_set_tex(const Str
 	fake->path_to_file = p_path;
 	fake->mipmaps = mipmaps;
 	if (p_type == ResourceInfo::LoadType::REAL_LOAD) {
+		// There was a bug in the layer textured importer that caused bptc texture images to be saved as alternatingly signed and unsigned.
+		// We have to force the image formats to be the same before creating the texture, otherwise the RenderingServer will refuse to create it.
+		normalize_image_formats(images);
 		RID texture_rid = RS::get_singleton()->texture_3d_create(texture->get_format(), texture->get_width(), texture->get_height(), texture->get_depth(), texture->has_mipmaps(), images);
 		fake->texture = texture_rid;
 	}
@@ -1061,6 +1100,8 @@ Ref<CompressedTextureLayered> ResourceFormatLoaderCompatTextureLayered::_set_tex
 	fake->mipmaps = mipmaps;
 	fake->layered_type = TextureLayered::LayeredType(type);
 	if (p_type == ResourceInfo::LoadType::REAL_LOAD) {
+		// We have to force the image formats to be the same before creating the texture, otherwise the RenderingServer will refuse to create it.
+		normalize_image_formats(images);
 		RID texture_rid = RS::get_singleton()->texture_2d_layered_create(images, RSE::TextureLayeredType(type));
 		fake->texture = texture_rid;
 	}
