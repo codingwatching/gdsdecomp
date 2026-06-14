@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace spirv_interop{
+namespace spirv_interop {
 
 struct VariableTypeRemap {
 	std::string variable_name;
@@ -59,4 +59,4 @@ struct SPIRVCrossOptions {
 
 std::optional<std::string> compile_iteration(const SPIRVCrossOptions &args, std::vector<uint32_t> spirv_file, std::string &execution_model_str, std::string &error_message);
 
-}
+} //namespace spirv_interop
