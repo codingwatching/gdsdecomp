@@ -241,6 +241,7 @@ class GDScriptV1TokenizerBufferCompat : public GDScriptTokenizerV1Compat {
 	Vector<StringName> identifiers;
 	Vector<Variant> constants;
 	RBMap<uint32_t, uint32_t> lines;
+	RBMap<uint32_t, uint32_t> columns;
 	Vector<uint32_t> tokens;
 	Variant nil;
 	int token = 0;

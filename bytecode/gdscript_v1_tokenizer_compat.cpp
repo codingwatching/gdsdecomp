@@ -1195,6 +1195,18 @@ Error GDScriptV1TokenizerBufferCompat::set_code_buffer(const Vector<uint8_t> &p_
 			total_len--;
 		}
 	}
+	int prev_column = 1;
+	// Get the actual columns; the bytecode emitter for v3.x and below didn't actually store the columns
+	for (auto &[tk_idx, linecol] : lines) {
+		int column = linecol >> TOKEN_LINE_BITS;
+		if (column == 0 && tk_idx < tokens.size() && decomp->get_global_token(tokens[tk_idx]) == GDScriptDecomp::G_TK_NEWLINE) {
+			column = (tokens[tk_idx] >> TOKEN_BITS) + 1;
+		} else if (column == 0) {
+			column = prev_column;
+		}
+		prev_column = column;
+		columns[tk_idx] = column;
+	}
 
 	token = 0;
 	current_indent = 0;
@@ -1406,41 +1418,41 @@ Variant::Type GDScriptV1TokenizerBufferCompat::get_token_type(int p_offset) cons
 	return VariantDecoderCompat::convert_variant_type_from_old(local_type, decomp->get_variant_ver_major());
 }
 
-int GDScriptV1TokenizerBufferCompat::get_token_line(int p_offset) const {
-	int offset = token + p_offset;
+namespace {
+uint32_t _get_token_line(const RBMap<uint32_t, uint32_t> &lines, int offset) {
 	auto pos_it = lines.find_closest(offset);
 
-	auto largest = lines.back();
-	uint32_t l = 0;
 	if (pos_it == nullptr) {
+		auto largest = lines.back();
 		if (offset > largest->key()) {
-			l = largest->value();
+			return largest->value();
 		} else {
-			return -1;
+			return lines.front()->value();
 		}
-	} else {
-		l = pos_it->value();
 	}
+
+	return pos_it->value();
+}
+} //namespace
+
+int GDScriptV1TokenizerBufferCompat::get_token_line(int p_offset) const {
+	int offset = token + p_offset;
+	if (lines.is_empty()) {
+		return -1;
+	}
+	uint32_t l = _get_token_line(lines, offset);
 
 	return l & TOKEN_LINE_MASK;
 }
 
 int GDScriptV1TokenizerBufferCompat::get_token_column(int p_offset) const {
 	int offset = token + p_offset;
-	auto pos_it = lines.find_closest(offset);
-
-	auto largest = lines.back();
-	uint32_t l = 0;
-	if (pos_it == nullptr) {
-		if (offset > largest->key()) {
-			l = largest->value();
-		} else {
-			return -1;
-		}
-	} else {
-		l = pos_it->value();
+	if (lines.is_empty()) {
+		return -1;
 	}
-	return l >> TOKEN_LINE_BITS;
+	int l = _get_token_line(columns, offset);
+
+	return l;
 }
 int GDScriptV1TokenizerBufferCompat::get_token_line_indent(int p_offset) const {
 	int offset = token + p_offset;
@@ -1459,6 +1471,12 @@ String GDScriptV1TokenizerBufferCompat::get_token_error(int p_offset) const {
 }
 
 void GDScriptV1TokenizerBufferCompat::advance(int p_amount) {
+	if (unlikely((p_amount + token) < 0 || (p_amount + token) >= (tokens.size()))) {
+		_err_print_index_error(FUNCTION_STR, __FILE__, __LINE__, p_amount + token, tokens.size(), _STR(p_amount + token), _STR(tokens.size()));
+		return;
+	} else {
+		((void)0);
+	}
 	ERR_FAIL_INDEX(p_amount + token, tokens.size());
 	token += p_amount;
 }
@@ -1492,7 +1510,6 @@ GDScriptTokenizerV1Compat::Token GDScriptTokenizerV1Compat::scan() {
 	}
 
 	if (g_token == TokenType::G_TK_NEWLINE) {
-		int previous_line = current_line;
 		current_line = line;
 		int previous_indent = current_indent;
 		current_indent = get_token_line_indent();
@@ -1502,17 +1519,11 @@ GDScriptTokenizerV1Compat::Token GDScriptTokenizerV1Compat::scan() {
 			pending_indents += (current_indent - previous_indent);
 
 			Token newline;
-
-			if (g_token == TokenType::G_TK_NEWLINE) {
-				advance();
-				newline.start_line = current_line;
-			} else {
-				newline.start_line = previous_line;
-			}
 			newline.type = Token::Type::G_TK_NEWLINE;
 			newline.start_line = current_line;
 			newline.end_line = current_line;
 			last_token_was_newline = true;
+			advance();
 			return newline;
 		} else {
 			while (g_token == TokenType::G_TK_NEWLINE) {
@@ -1562,7 +1573,9 @@ GDScriptTokenizerV1Compat::Token GDScriptTokenizerV1Compat::scan() {
 	data.start_column = get_token_column();
 	data.end_column = data.start_column;
 	current_line = line;
-	advance();
+	if (g_token != TokenType::G_TK_EOF) {
+		advance();
+	}
 	return data;
 }
 
