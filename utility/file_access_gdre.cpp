@@ -28,9 +28,9 @@ bool DirSource::try_open_pack(const String &p_path, bool p_replace_files, uint64
 			print_verbose(s);
 		}
 	}
-	Ref<GDRESettings::PackInfo> pckinfo;
+	Ref<PackInfo> pckinfo;
 	pckinfo.instantiate();
-	pckinfo->init(p_path, Ref<GodotVer>(memnew(GodotVer)), 1, 0, 0, pa.size(), GDRESettings::PackInfo::DIR);
+	pckinfo->init(p_path, Ref<GodotVer>(memnew(GodotVer)), 1, 0, 0, pa.size(), PackInfo::DIR);
 	GDRESettings::get_singleton()->add_pack_info(pckinfo);
 	for (auto &path : pa) {
 		size_t size = 0;

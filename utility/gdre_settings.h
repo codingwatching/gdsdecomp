@@ -12,6 +12,8 @@
 #include "core/object/object.h"
 #include "core/os/thread_safe.h"
 
+#include "pack_info.h"
+
 class GDRELogger;
 class GDREPackedData;
 class GodotMonoDecompWrapper;
@@ -21,95 +23,6 @@ class GDRESettings : public Object {
 	GDCLASS(GDRESettings, Object);
 	_THREAD_SAFE_CLASS_
 public:
-	class PackInfo : public RefCounted {
-		GDCLASS(PackInfo, RefCounted);
-
-		friend class GDRESettings;
-
-	public:
-		enum PackType {
-			PCK,
-			APK,
-			ZIP,
-			DIR,
-			EXE,
-			UNKNOWN
-		};
-
-	private:
-		String pack_file = "";
-		Ref<GodotVer> version;
-		uint32_t fmt_version = 0;
-		uint32_t pack_flags = 0;
-		uint64_t file_base = 0;
-		uint32_t file_count = 0;
-		PackType type = PCK;
-		Ref<ProjectConfigLoader> pcfg;
-		bool encrypted = false;
-		bool suspect_version = false;
-		String non_standard_header;
-		String app_version;
-
-	public:
-		void init(
-				String f, Ref<GodotVer> godot_ver, uint32_t fver, uint32_t flags, uint64_t base, uint32_t count, PackType tp, bool p_encrypted = false, bool p_suspect_version = false, String p_non_standard_header = {}, String p_application_version = {}) {
-			pack_file = f;
-			// copy the version, or set it to null if it's invalid
-			if (godot_ver.is_valid() && godot_ver->is_valid_semver()) {
-				version = GodotVer::create(godot_ver->get_major(), godot_ver->get_minor(), godot_ver->get_patch(), godot_ver->get_prerelease(), godot_ver->get_build_metadata());
-			}
-			fmt_version = fver;
-			pack_flags = flags;
-			file_base = base;
-			file_count = count;
-			type = tp;
-			pcfg.instantiate();
-			encrypted = p_encrypted;
-			suspect_version = p_suspect_version;
-			non_standard_header = p_non_standard_header;
-			app_version = p_application_version;
-		}
-		bool has_unknown_version() {
-			return !version.is_valid() || !version->is_valid_semver();
-		}
-		void set_project_config() {
-		}
-		PackInfo() {
-			version.instantiate();
-			pcfg.instantiate();
-		}
-
-		String get_pack_file() const { return pack_file; }
-		Ref<GodotVer> get_version() const { return GodotVer::create(version->get_major(), version->get_minor(), version->get_patch(), version->get_prerelease(), version->get_build_metadata()); }
-		uint32_t get_fmt_version() const { return fmt_version; }
-		uint32_t get_pack_flags() const { return pack_flags; }
-		uint64_t get_file_base() const { return file_base; }
-		uint32_t get_file_count() const { return file_count; }
-		PackType get_type() const { return type; }
-		bool is_encrypted() const { return encrypted; }
-		bool has_suspect_version() const { return suspect_version; }
-		String get_non_standard_header() const { return non_standard_header; }
-
-	protected:
-		static void _bind_methods() {
-			ClassDB::bind_method(D_METHOD("get_pack_file"), &PackInfo::get_pack_file);
-			ClassDB::bind_method(D_METHOD("get_version"), &PackInfo::get_version);
-			ClassDB::bind_method(D_METHOD("get_fmt_version"), &PackInfo::get_fmt_version);
-			ClassDB::bind_method(D_METHOD("get_pack_flags"), &PackInfo::get_pack_flags);
-			ClassDB::bind_method(D_METHOD("get_file_base"), &PackInfo::get_file_base);
-			ClassDB::bind_method(D_METHOD("get_file_count"), &PackInfo::get_file_count);
-			ClassDB::bind_method(D_METHOD("get_type"), &PackInfo::get_type);
-			ClassDB::bind_method(D_METHOD("is_encrypted"), &PackInfo::is_encrypted);
-			ClassDB::bind_method(D_METHOD("has_suspect_version"), &PackInfo::has_suspect_version);
-			BIND_ENUM_CONSTANT(PCK);
-			BIND_ENUM_CONSTANT(APK);
-			BIND_ENUM_CONSTANT(ZIP);
-			BIND_ENUM_CONSTANT(DIR);
-			BIND_ENUM_CONSTANT(EXE);
-			BIND_ENUM_CONSTANT(UNKNOWN);
-		}
-	};
-
 	class ProjectInfo : public RefCounted {
 		GDCLASS(ProjectInfo, RefCounted);
 
@@ -495,5 +408,3 @@ public:
 	GDRESettings();
 	~GDRESettings();
 };
-
-VARIANT_ENUM_CAST(GDRESettings::PackInfo::PackType);

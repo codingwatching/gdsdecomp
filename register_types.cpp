@@ -539,7 +539,7 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<GDRESettings>();
 
 	ClassDB::register_class<PackedFileInfo>();
-	ClassDB::register_class<GDRESettings::PackInfo>();
+	ClassDB::register_class<PackInfo>();
 
 	ClassDB::register_class<GDREAudioStreamPreviewGeneratorNode>();
 	ClassDB::register_class<GDREAudioStreamPreviewGenerator>();

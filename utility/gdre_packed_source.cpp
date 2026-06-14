@@ -443,10 +443,10 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 	godot_ver = GodotVer::parse(ver_string);
 
 	// Everything worked, now set the data
-	Ref<GDRESettings::PackInfo> pckinfo;
+	Ref<PackInfo> pckinfo;
 	pckinfo.instantiate();
 	pckinfo->init(
-			pck_path, godot_ver, version, pack_flags, file_base, file_count, is_exe ? GDRESettings::PackInfo::EXE : GDRESettings::PackInfo::PCK, enc_directory, suspect_version, non_standard_header);
+			pck_path, godot_ver, version, pack_flags, file_base, file_count, is_exe ? PackInfo::EXE : PackInfo::PCK, enc_directory, suspect_version, non_standard_header);
 	GDRESettings::get_singleton()->add_pack_info(pckinfo);
 
 	bool opened_encrypted_file = false;

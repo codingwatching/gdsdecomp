@@ -286,7 +286,7 @@ bool GDRESettings::has_valid_version() const {
 	return is_pack_loaded() && current_project->version.is_valid() && current_project->version->is_valid_semver();
 }
 
-GDRESettings::PackInfo::PackType GDRESettings::get_pack_type() const {
+PackInfo::PackType GDRESettings::get_pack_type() const {
 	return is_pack_loaded() ? current_project->type : PackInfo::UNKNOWN;
 }
 String GDRESettings::get_pack_path() const {
@@ -1447,7 +1447,7 @@ Vector<Ref<PackedFileInfo>> GDRESettings::get_file_info_list(const Vector<String
 	return GDREPackedData::get_singleton()->get_file_info_list(filters);
 }
 
-TypedArray<GDRESettings::PackInfo> GDRESettings::get_pack_info_list() const {
+TypedArray<PackInfo> GDRESettings::get_pack_info_list() const {
 	TypedArray<PackInfo> ret;
 	for (const auto &pack : packs) {
 		ret.push_back(pack);

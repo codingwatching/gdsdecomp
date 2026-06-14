@@ -57,8 +57,8 @@ Error PckDumper::_check_md5_all_files(Vector<String> &broken_files, int &checked
 	reset();
 	auto packs = GDRESettings::get_singleton()->get_pack_info_list();
 	bool no_packs = true;
-	for (Ref<GDRESettings::PackInfo> pack : packs) {
-		if (pack->get_type() == GDRESettings::PackInfo::PCK || pack->get_type() == GDRESettings::PackInfo::EXE) {
+	for (Ref<PackInfo> pack : packs) {
+		if (pack->get_type() == PackInfo::PCK || pack->get_type() == PackInfo::EXE) {
 			no_packs = false;
 			break;
 		}
