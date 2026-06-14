@@ -509,6 +509,9 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 	Ref<Shader> shader = p_shader_material->get_shader();
 	ERR_FAIL_COND_V_MSG(shader.is_null(), {}, "Shader on ShaderMaterial is NULL: " + p_shader_material->get_path());
 
+	Ref<ResourceInfo> resource_info = ResourceInfo::get_info_from_resource(p_shader_material);
+	bool is_deprecated = resource_info.is_valid() && resource_info->get_ver_major() < 4;
+
 	List<PropertyInfo> prop_list;
 	HashSet<String> global_uniforms;
 	HashSet<String> instance_uniforms;
@@ -797,7 +800,7 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 		return filtered_candidates;
 	};
 
-	auto remap_param_name = [&](const String &param_name) -> String {
+	auto remap_param_name = [&](const String &param_name, Variant &val) -> String {
 		if (shader_texture_name_to_base_material_texture_param.has(param_name)) {
 			return shader_texture_name_to_base_material_texture_param.get(param_name);
 		}
@@ -811,6 +814,14 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 		}
 		if (param_name.contains("use") && param_name.contains("vertex_color") && p_shader_material->get_shader_parameter(param_name).get_type() == Variant::BOOL) {
 			return "vertex_color_use_as_albedo";
+		}
+		if (is_deprecated) {
+			if (param_name == "emission_intensity" && val.get_type() == Variant::FLOAT && val.operator double() < 1000.0f) {
+				return "emission_energy_multiplier";
+			} else if (param_name == "clearcoat_gloss" && val.get_type() == Variant::FLOAT) {
+				val = 1.0 - val.operator double();
+				return "clearcoat_roughness";
+			}
 		}
 
 		return param_name;
@@ -839,7 +850,7 @@ Pair<Ref<BaseMaterial3D>, Pair<bool, bool>> ShaderMaterialConverter::convert_sha
 				val = instance_val;
 			}
 		}
-		param_name = remap_param_name(param_name);
+		param_name = remap_param_name(param_name, val);
 
 		if (base_material_params.has(param_name)) {
 			Variant base_material_val = base_material->get(param_name);
