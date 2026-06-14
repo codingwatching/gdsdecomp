@@ -29,6 +29,8 @@ public:
 	static Error save_image_as_hdr(const String &p_path, const Ref<Image> &p_image, bool p_duplicate = true);
 	static Vector<String> get_supported_extensions();
 	static bool is_supported_extension(const String &p_ext);
+	static int64_t get_image_data_size(int p_width, int p_height, Image::Format p_format, bool p_mipmaps);
+	static Image::CompressMode get_compress_mode_from_format(Image::Format format);
 
 protected:
 	static void _bind_methods();

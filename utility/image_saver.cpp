@@ -611,10 +611,34 @@ Error ImageSaver::_save_image(const String &p_path, const Ref<Image> &p_image, b
 	return save_image(p_path, p_image, p_lossy, p_quality, true);
 }
 
+int64_t ImageSaver::get_image_data_size(int p_width, int p_height, Image::Format p_format, bool p_mipmaps) {
+	return Image::get_image_data_size(p_width, p_height, p_format, p_mipmaps);
+}
+
+Image::CompressMode ImageSaver::get_compress_mode_from_format(Image::Format format) {
+	if (!Image::is_format_compressed(format)) {
+		return Image::CompressMode::COMPRESS_MAX;
+	}
+	if (((format >= Image::FORMAT_DXT1 && format <= Image::FORMAT_RGTC_RG) || (format == Image::FORMAT_DXT5_RA_AS_RG))) {
+		return Image::CompressMode::COMPRESS_S3TC;
+	} else if (format >= Image::FORMAT_BPTC_RGBA && format <= Image::FORMAT_BPTC_RGBFU) {
+		return Image::CompressMode::COMPRESS_BPTC;
+	} else if (format == Image::FORMAT_ETC) {
+		return Image::CompressMode::COMPRESS_ETC;
+	} else if (format >= Image::FORMAT_ETC2_R11 && format <= Image::FORMAT_ETC2_RA_AS_RG) {
+		return Image::CompressMode::COMPRESS_ETC2;
+	} else if (format >= Image::FORMAT_ASTC_4x4 && format <= Image::FORMAT_ASTC_8x8_HDR) {
+		return Image::CompressMode::COMPRESS_ASTC;
+	}
+	return Image::CompressMode::COMPRESS_MAX;
+}
+
 void ImageSaver::_bind_methods() {
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("decompress_image", "image"), &ImageSaver::decompress_image);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("save_image", "dest_path", "image", "lossy", "quality"), &ImageSaver::_save_image, DEFVAL(false), DEFVAL(1.0));
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("save_images_as_animated_gif", "dest_path", "images", "frame_durations_s", "quality"), &ImageSaver::_save_images_as_animated_gif, DEFVAL(100));
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_supported_extensions"), &ImageSaver::get_supported_extensions);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("is_supported_extension", "ext"), &ImageSaver::is_supported_extension);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_image_data_size", "width", "height", "format", "mipmaps"), &ImageSaver::get_image_data_size);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_compress_mode_from_format", "format"), &ImageSaver::get_compress_mode_from_format);
 }
