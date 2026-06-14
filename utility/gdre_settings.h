@@ -241,11 +241,6 @@ private:
 
 	static ResourceUID::ID _get_uid_for_path(const String &p_path, bool _generate = false);
 
-	// Loads the encryption key from the global settings into `script_encryption_key`
-	// so that native classes (e.g. FileAccessPCK) can use it during project recovery
-	void load_encryption_key();
-	// Unloads the encryption key
-	void unload_encryption_key();
 	Error reload_dotnet_assembly(const String &p_path);
 	// Finds and loads the .NET assembly for the project
 	Error load_project_dotnet_assembly();

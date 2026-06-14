@@ -355,7 +355,6 @@ void GDRESettings::remove_current_pack() {
 	packs.clear();
 	import_files.clear();
 	remap_iinfo.clear();
-	unload_encryption_key();
 }
 
 String get_standalone_pck_path() {
@@ -717,7 +716,6 @@ Error GDRESettings::load_project(const Vector<String> &p_paths, bool _cmd_line_e
 		logger->start_prebuffering();
 		log_sysinfo();
 	}
-	load_encryption_key();
 
 	Error err = ERR_CANT_OPEN;
 	Vector<String> pck_files = sort_and_validate_pck_files(p_paths);
@@ -1316,18 +1314,6 @@ void GDRESettings::_set_error_encryption(bool is_encryption_error) {
 	error_encryption = is_encryption_error;
 }
 
-void GDRESettings::load_encryption_key() {
-	if (enc_key.size() == 32) {
-		memcpy(script_encryption_key, enc_key.ptr(), 32);
-	} else {
-		memset(script_encryption_key, 0, 32);
-	}
-}
-
-void GDRESettings::unload_encryption_key() {
-	memset(script_encryption_key, 0, 32);
-}
-
 Vector<uint8_t> GDRESettings::get_encryption_key() {
 	return enc_key;
 }
@@ -1344,9 +1330,6 @@ Error GDRESettings::set_encryption_key(Vector<uint8_t> key) {
 		return ERR_INVALID_PARAMETER;
 	}
 	enc_key = key;
-	if (is_pack_loaded()) {
-		load_encryption_key();
-	}
 	return OK;
 }
 
@@ -1421,9 +1404,6 @@ void GDRESettings::reset_custom_decryptor() {
 
 void GDRESettings::reset_encryption_key() {
 	enc_key.clear();
-	if (is_pack_loaded()) {
-		load_encryption_key();
-	}
 }
 
 Vector<String> GDRESettings::get_file_list(const Vector<String> &filters) {

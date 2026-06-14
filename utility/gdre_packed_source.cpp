@@ -405,11 +405,7 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 	uint32_t file_count = f->get_32();
 	ERR_FAIL_COND_V_MSG(file_count > 0 && file_base >= pck_end_pos, false, "file_base is out of bounds: " + String::num_int64(file_base) + " (file length: " + String::num_int64(pck_size) + ")");
 	if (enc_directory) {
-		Vector<uint8_t> key;
-		key.resize(32);
-		for (int i = 0; i < key.size(); i++) {
-			key.write[i] = script_encryption_key[i];
-		}
+		Vector<uint8_t> key = GDRESettings::get_singleton()->get_encryption_key();
 		Error err = OK;
 		if (GDRESettings::get_singleton()->get_custom_decryptor().is_valid()) {
 			Ref<FileAccessEncryptedCustom> fae = FileAccessEncryptedCustom::create(GDRESettings::get_singleton()->get_custom_decryptor());
@@ -547,11 +543,7 @@ Ref<FileAccess> GDREPackedSource::get_file(const String &p_path, PackedData::Pac
 			fae.instantiate();
 			ERR_FAIL_COND_V_MSG(fae.is_null(), nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
 
-			Vector<uint8_t> key;
-			key.resize(32);
-			for (int i = 0; i < key.size(); i++) {
-				key.write[i] = script_encryption_key[i];
-			}
+			Vector<uint8_t> key = GDRESettings::get_singleton()->get_encryption_key();
 
 			Error err = fae->open_and_parse(file, key, FileAccessEncrypted::MODE_READ, false);
 			ERR_FAIL_COND_V_MSG(err, nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
@@ -565,11 +557,7 @@ Ref<FileAccess> GDREPackedSource::get_file(const String &p_path, PackedData::Pac
 
 			Ref<FileAccessEncryptedCustom> fae = FileAccessEncryptedCustom::create(GDRESettings::get_singleton()->get_custom_decryptor());
 			ERR_FAIL_COND_V_MSG(fae.is_null(), nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
-			Vector<uint8_t> key;
-			key.resize(32);
-			for (int i = 0; i < key.size(); i++) {
-				key.write[i] = script_encryption_key[i];
-			}
+			Vector<uint8_t> key = GDRESettings::get_singleton()->get_encryption_key();
 			Error err = fae->open_and_parse(base, key, FileAccessEncryptedCustom::MODE_READ, false);
 			ERR_FAIL_COND_V_MSG(err, nullptr, vformat("Can't open encrypted pack-referenced file '%s'.", String(p_path)));
 			file = fae;
