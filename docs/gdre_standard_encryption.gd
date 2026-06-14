@@ -17,7 +17,7 @@ extends CustomDecryptor
 #   - the key to use for decryption.
 # - non_pack_file: bool
 #   - false means that the file being loaded is part of a PCK, which means that the file does not have a magic number at the beginning (99% of cases)
-#   - true means that the file being loaded is not part of a PCK, which means that the file will have a magic number at the beginning
+#   - true means that the file being loaded is not part of a PCK, which means that the file may have a magic number at the beginning
 #
 # *Returns*:
 #   a Dictionary that must contain the following keys:
