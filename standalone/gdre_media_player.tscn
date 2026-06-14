@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://cuifra52kkek"]
+[gd_scene format=3 uid="uid://cuifra52kkek"]
 
 [ext_resource type="Script" uid="uid://b75xge8xdomov" path="res://gdre_media_player.gd" id="1_3jmtn"]
 [ext_resource type="Theme" uid="uid://crq1fwn0ajw7b" path="res://gdre_theme.tres" id="1_ykcsx"]
@@ -10,7 +10,7 @@
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wtasi"]
 bg_color = Color(0, 0, 0, 1)
 
-[node name="MediaPlayer" type="Control"]
+[node name="MediaPlayer" type="Control" unique_id=1730597578]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -20,9 +20,9 @@ grow_vertical = 2
 theme = ExtResource("1_ykcsx")
 script = ExtResource("1_3jmtn")
 
-[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="."]
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="." unique_id=1239073489]
 
-[node name="BarHBox" type="HBoxContainer" parent="."]
+[node name="BarHBox" type="HBoxContainer" parent="." unique_id=194730088]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.033
@@ -34,24 +34,24 @@ offset_top = -89.0
 offset_right = 0.991943
 offset_bottom = -58.0
 
-[node name="TimeLabel" type="Label" parent="BarHBox"]
-layout_direction = 2
+[node name="TimeLabel" type="Label" parent="BarHBox" unique_id=312598558]
 layout_mode = 2
+layout_direction = 2
 text = "0:00.0 / 0:00.0"
 horizontal_alignment = 2
 vertical_alignment = 1
 
-[node name="Spacer" type="Label" parent="BarHBox"]
+[node name="Spacer" type="Label" parent="BarHBox" unique_id=382946252]
 layout_mode = 2
 text = " "
 
-[node name="ProgressBar" type="HSlider" parent="BarHBox"]
+[node name="ProgressBar" type="HSlider" parent="BarHBox" unique_id=1975088300]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 step = 0.1
 
-[node name="MediaControlsHBox" type="HBoxContainer" parent="."]
+[node name="MediaControlsHBox" type="HBoxContainer" parent="." unique_id=134619065]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.5
@@ -66,13 +66,13 @@ grow_horizontal = 2
 grow_vertical = 0
 alignment = 1
 
-[node name="Play" type="Button" parent="MediaControlsHBox"]
+[node name="Play" type="Button" parent="MediaControlsHBox" unique_id=1724807303]
 layout_mode = 2
 theme_type_variation = &"FlatButton"
 icon = ExtResource("2_u82do")
 flat = true
 
-[node name="Pause" type="Button" parent="MediaControlsHBox"]
+[node name="Pause" type="Button" parent="MediaControlsHBox" unique_id=191127019]
 layout_mode = 2
 size_flags_horizontal = 6
 theme_type_variation = &"FlatButton"
@@ -80,15 +80,16 @@ disabled = true
 icon = ExtResource("3_ykcsx")
 flat = true
 
-[node name="Stop" type="Button" parent="MediaControlsHBox"]
+[node name="Stop" type="Button" parent="MediaControlsHBox" unique_id=2131331742]
 layout_mode = 2
 theme_type_variation = &"FlatButton"
 icon = ExtResource("4_hkamq")
 flat = true
 
-[node name="AudioViewBox" type="Control" parent="."]
+[node name="AudioViewBox" type="Control" parent="." unique_id=1368951095]
 visible = false
 layout_mode = 1
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -1.0
@@ -96,7 +97,7 @@ offset_bottom = -103.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="AudioPreviewBox" type="ColorRect" parent="AudioViewBox"]
+[node name="AudioPreviewBox" type="ColorRect" parent="AudioViewBox" unique_id=828882885]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -107,8 +108,7 @@ color = Color(0.129412, 0.14902, 0.176471, 1)
 script = ExtResource("3_ooril")
 metadata/_custom_type_script = "uid://qmyh4wh5voec"
 
-[node name="AudioStreamInfo" type="Label" parent="AudioViewBox"]
-layout_direction = 2
+[node name="AudioStreamInfo" type="Label" parent="AudioViewBox" unique_id=561309970]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 1.0
@@ -119,6 +119,7 @@ offset_left = -155.0
 offset_top = -43.0
 grow_horizontal = 0
 grow_vertical = 0
+layout_direction = 2
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 8
@@ -126,15 +127,16 @@ theme_override_font_sizes/font_size = 14
 text = "Sampling Rate: 48000
 Loop: No"
 
-[node name="VideoViewBox" type="Control" parent="."]
+[node name="VideoViewBox" type="Control" parent="." unique_id=1323826717]
 layout_mode = 1
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_bottom = -103.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="AspectRatioContainer" type="AspectRatioContainer" parent="VideoViewBox"]
+[node name="AspectRatioContainer" type="AspectRatioContainer" parent="VideoViewBox" unique_id=232503494]
 clip_contents = true
 layout_mode = 1
 anchors_preset = 15
@@ -144,11 +146,11 @@ grow_horizontal = 2
 grow_vertical = 2
 ratio = 1.7778
 
-[node name="BG" type="Panel" parent="VideoViewBox/AspectRatioContainer"]
+[node name="BG" type="Panel" parent="VideoViewBox/AspectRatioContainer" unique_id=1349121247]
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_wtasi")
 
-[node name="VideoStreamPlayer" type="VideoStreamPlayer" parent="VideoViewBox/AspectRatioContainer"]
+[node name="VideoStreamPlayer" type="VideoStreamPlayer" parent="VideoViewBox/AspectRatioContainer" unique_id=824291810]
 custom_minimum_size = Vector2(16, 9)
 layout_mode = 2
 expand = true
