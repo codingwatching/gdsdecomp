@@ -25,13 +25,12 @@ func open_encrypted_file(base: FileAccess, key: PackedByteArray) -> FileAccess:
 		return FileAccessEncryptedCustom.create_and_parse_custom(GDRESettings.get_custom_decryptor(), base, key, FileAccessEncryptedCustom.MODE_READ, false)
 	return FileAccessEncryptedCustom.create_and_parse_non_custom(base, key, FileAccessEncryptedCustom.MODE_READ, false)
 
-func _try_open_pack(p_path: String, p_replace_files: bool, p_offset: int, p_decryption_key: PackedByteArray) -> bool:
+func _try_open_pack(pck_path: String, p_replace_files: bool, p_offset: int, p_decryption_key: PackedByteArray) -> bool:
 	var ext: String = p_path.get_extension().to_lower()
 	if ext == "apk" or ext == "zip":
 		return false
 
-	var pck_path: String = p_path.replace("_GDRE_a_really_dumb_hack", "")
-	var f = FileAccess.open(p_path, FileAccess.READ)
+	var f = FileAccess.open(pck_path, FileAccess.READ)
 	f.seek(p_offset)
 
 	var is_exe: bool = false
