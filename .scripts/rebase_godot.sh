@@ -37,6 +37,8 @@ BRANCHES_TO_MERGE=(
 	gltf-fix-skeleton-bone
 	gltf-fix-double-precision
 	gltf-fix-vertex-colors
+	ensure-bptc-textures
+	fix-v3-meshes
 )
 
 # set fail on error
