@@ -173,7 +173,8 @@ inline void test_script_binary(const String &script_name, const Vector<uint8_t> 
 		// test with the latest GDScriptTokenizer
 		auto reference_result = GDScriptTokenizerBuffer::parse_code_string(helper_script_text, GDScriptTokenizerBuffer::CompressMode::COMPRESS_ZSTD);
 		CHECK(reference_result.size() > 0);
-		err = decomp->test_bytecode_match(bytecode, reference_result);
+		err = decomp->test_bytecode_match(bytecode, reference_result, true);
+		CHECK(decomp->get_error_message() == "");
 		CHECK(err == OK);
 	}
 	CHECK(decomp->get_error_message() == "");
