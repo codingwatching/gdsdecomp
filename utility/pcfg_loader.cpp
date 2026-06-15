@@ -361,6 +361,7 @@ Error ProjectConfigLoader::_load_settings_text(Ref<FileAccess> f, const String &
 	}
 }
 
+namespace {
 struct _VCSort {
 	String name;
 	Variant::Type type = Variant::VARIANT_MAX;
@@ -369,6 +370,7 @@ struct _VCSort {
 
 	bool operator<(const _VCSort &p_vcs) const { return order == p_vcs.order ? name < p_vcs.name : order < p_vcs.order; }
 };
+} //namespace
 
 RBMap<String, List<String>> ProjectConfigLoader::get_save_proops() const {
 	RBSet<_VCSort> vclist;
