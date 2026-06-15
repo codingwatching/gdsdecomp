@@ -67,7 +67,7 @@ env_spirv_interop.disable_warnings()
 env_spirv_interop.add_source_files(spirv_interop_obj, spirv_interop_sources)
 if env.msvc:
     if "_HAS_EXCEPTIONS" in env_spirv_interop["CPPDEFINES"]:
-        env_spirv_interop.remove("_HAS_EXCEPTIONS")
+        env_spirv_interop["CPPDEFINES"].remove("_HAS_EXCEPTIONS")
     env_spirv_interop.Append(CXXFLAGS=["/EHsc"])
 else:
     if "-fno-exceptions" in env_spirv_interop["CXXFLAGS"]:
