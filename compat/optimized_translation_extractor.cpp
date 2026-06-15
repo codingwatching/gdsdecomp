@@ -305,6 +305,7 @@ bool OptimizedTranslationExtractor::get_use_old_hash() const {
 
 void OptimizedTranslationExtractor::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("generate", "from"), &OptimizedTranslationExtractor::generate);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("create_from", "from"), &OptimizedTranslationExtractor::create_from);
 }
 
 HashSet<uint32_t> OptimizedTranslationExtractor::get_message_hash_set() const {
@@ -649,7 +650,7 @@ Ref<OptimizedTranslationExtractor> OptimizedTranslationExtractor::create_from(co
 	if ((!ri.is_valid() || ri->resource_format != "binary") && GDRESettings::get_singleton() && GDRESettings::get_singleton()->is_pack_loaded()) {
 		ver_major = GDRESettings::get_singleton()->get_ver_major();
 		ver_minor = GDRESettings::get_singleton()->get_ver_minor();
-	} else {
+	} else if (ri.is_valid()) {
 		ver_major = ri->ver_major;
 		ver_minor = ri->ver_minor;
 	}
@@ -657,6 +658,9 @@ Ref<OptimizedTranslationExtractor> OptimizedTranslationExtractor::create_from(co
 		ote->use_old_hash = false;
 	} else {
 		ote->use_old_hash = true;
+	}
+	if (ver_major != 0 && ver_major <= 3) {
+		ote->set_original_class("PHashTranslation");
 	}
 	return ote;
 }
