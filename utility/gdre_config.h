@@ -59,10 +59,10 @@ class GDREConfig : public Object {
 
 	ParallelFlatHashMap<String, Variant> settings;
 	static GDREConfig *singleton;
-	Vector<Ref<GDREConfigSetting>> default_settings;
+	HashMap<String, Ref<GDREConfigSetting>> default_settings;
 	ParallelFlatHashMap<String, Variant> ephemeral_settings;
 
-	static Vector<Ref<GDREConfigSetting>> _init_default_settings();
+	static HashMap<String, Ref<GDREConfigSetting>> _init_default_settings();
 
 	static String get_config_path();
 

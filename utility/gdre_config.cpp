@@ -206,8 +206,8 @@ public:
 	virtual bool is_dirpicker() const override { return true; }
 };
 
-Vector<Ref<GDREConfigSetting>> GDREConfig::_init_default_settings() {
-	return {
+HashMap<String, Ref<GDREConfigSetting>> GDREConfig::_init_default_settings() {
+	Vector<Ref<GDREConfigSetting>> settings = {
 		memnew(GDREConfigSetting(
 				"download_plugins",
 				"Download plugins",
@@ -394,6 +394,11 @@ Vector<Ref<GDREConfigSetting>> GDREConfig::_init_default_settings() {
 				false,
 				true)),
 	};
+	HashMap<String, Ref<GDREConfigSetting>> default_settings;
+	for (const auto &setting : settings) {
+		default_settings[setting->full_name] = setting;
+	}
+	return default_settings;
 }
 
 // static const HashMap<String, String> deprecated_setting_mappings = {
@@ -415,13 +420,20 @@ GDREConfig::~GDREConfig() {
 }
 
 TypedArray<GDREConfigSetting> GDREConfig::get_all_settings() const {
-	return gdre::vector_to_typed_array(default_settings);
+	TypedArray<GDREConfigSetting> settings;
+	settings.resize(default_settings.size());
+	int i = 0;
+	for (const auto &[key, setting] : default_settings) {
+		settings.set(i, setting);
+		i++;
+	}
+	return settings;
 }
 
 void GDREConfig::load_config() {
 	settings.clear();
 
-	for (const auto &setting : default_settings) {
+	for (const auto &[key, setting] : default_settings) {
 		if (setting->is_virtual_setting()) {
 			continue;
 		}
@@ -451,7 +463,10 @@ void GDREConfig::save_config() {
 	auto cfg_path = get_config_path();
 	Ref<ConfigFile> config = memnew(ConfigFile);
 	for (const auto &[key, value] : settings) {
-		config->set_value(get_section_from_key(key), get_name_from_key(key), value);
+		String name = get_name_from_key(key);
+		if (!default_settings.has(key) || get_default_value(key) != value) {
+			config->set_value(get_section_from_key(key), name, value);
+		}
 	}
 	gdre::ensure_dir(cfg_path.get_base_dir());
 	Error err = config->save(cfg_path);
@@ -461,7 +476,7 @@ void GDREConfig::save_config() {
 }
 
 String get_full_name(const String &p_setting) {
-	if (!p_setting.contains("/")) {
+	if (!p_setting.contains_char('/')) {
 		return "General/" + p_setting;
 	}
 	return p_setting;
@@ -489,11 +504,10 @@ Variant GDREConfig::get_setting(const String &p_setting, const Variant &p_defaul
 }
 
 String GDREConfig::get_section_from_key(const String &p_setting) {
-	auto parts = p_setting.split("/", true, 1);
-	if (parts.size() == 1) {
+	if (!p_setting.contains_char('/')) {
 		return "General";
 	}
-	return parts[0];
+	return p_setting.get_slice("/", 0);
 }
 
 String GDREConfig::get_name_from_key(const String &p_setting) {
@@ -506,17 +520,15 @@ String GDREConfig::get_name_from_key(const String &p_setting) {
 
 Variant GDREConfig::get_default_value(const String &p_setting) const {
 	String full_name = get_full_name(p_setting);
-	for (const auto &setting : default_settings) {
-		if (setting->get_full_name() == full_name) {
-			return setting->get_default_value();
-		}
+	if (default_settings.has(full_name)) {
+		return default_settings[full_name]->get_default_value();
 	}
 	return Variant();
 }
 
 void GDREConfig::reset_ephemeral_settings() {
 	ephemeral_settings.clear();
-	for (const auto &setting : default_settings) {
+	for (const auto &[key, setting] : default_settings) {
 		if (setting->is_ephemeral()) {
 			Variant default_value = setting->get_default_value();
 			settings.if_contains(setting->get_full_name(), [&](const auto &v) { default_value = v.second; });
