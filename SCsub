@@ -153,6 +153,7 @@ else:
 
 if env["tests"]:
     import glob
+    import sys
 
     test_obj = []
     env_tests: SConsEnvironment = env_gdsdecomp.Clone()
@@ -161,13 +162,16 @@ if env["tests"]:
     add_source_groups(env_tests, test_obj, ["#modules/gdsdecomp/tests/*.cpp"])
     env.modules_sources += test_obj  # pyright: ignore[reportAttributeAccessIssue]
 
-    from tests.test_builders import force_link_builder  # pyright: ignore[reportMissingImports]
+    test_builders_module_dir = env.Dir("#tests").abspath
+    sys.path.insert(0, test_builders_module_dir)
+    from test_builders import force_link_builder  # pyright: ignore[reportMissingImports]
 
     def gen_tests_header_fixed(target, source, env):
         force_link_builder(target, source, env)
         contents = open(str(target[0].abspath), "r", encoding="utf-8").read()
         with open(str(target[0].abspath), "w", encoding="utf-8") as file:
             file.write(contents.replace("force_link_tests()", "force_link_gdre_tests()"))
+    sys.path.remove(test_builders_module_dir)
 
     force_link_header = env.CommandNoCache(
         "#modules/gdsdecomp/tests/gdre_tests_force_link.gen.h",
