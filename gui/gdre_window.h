@@ -1,6 +1,7 @@
 #pragma once
 
 #include "scene/gui/dialogs.h"
+#include "scene/gui/file_dialog.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
 
@@ -43,4 +44,30 @@ public:
 
 	GDREAcceptDialogBase();
 	~GDREAcceptDialogBase();
+};
+
+class GDREConfirmationDialogBase : public ConfirmationDialog {
+	GDCLASS(GDREConfirmationDialogBase, ConfirmationDialog);
+
+	ConfirmationDialog *confirmation_dialog;
+	AcceptDialog *error_dialog;
+
+protected:
+	static void _bind_methods();
+
+	void _notification(int p_what);
+
+public:
+	void popup_confirm_box(const String &p_message, const String &p_title, const Callable &p_confirm_callback = Callable(), const Callable &p_cancel_callback = Callable(), const String &p_ok_button_text = "OK", const String &p_cancel_button_text = "Cancel");
+	void popup_error_box(const String &p_message, const String &p_title = "Error", const Callable &p_callback = Callable());
+
+	GDREConfirmationDialogBase();
+	~GDREConfirmationDialogBase();
+};
+
+class GDREFileDialog : public FileDialog {
+	GDCLASS(GDREFileDialog, FileDialog);
+
+protected:
+	void _notification(int p_what);
 };

@@ -472,6 +472,8 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 
 	ClassDB::register_class<GDREWindow>();
 	ClassDB::register_class<GDREAcceptDialogBase>();
+	ClassDB::register_class<GDREConfirmationDialogBase>();
+	ClassDB::register_class<GDREFileDialog>();
 
 	ClassDB::register_class<SemVer>();
 	ClassDB::register_class<GodotVer>();

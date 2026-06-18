@@ -130,7 +130,7 @@ editable = false
 script = ExtResource("4_p6tj5")
 metadata/_custom_type_script = "uid://d3gw3xp1peanv"
 
-[node name="AddFilesDialog" type="FileDialog" parent="." unique_id=859410602]
+[node name="AddFilesDialog" type="GDREFileDialog" parent="." unique_id=859410602]
 unique_name_in_owner = true
 title = "Open File(s)"
 ok_button_text = "Open"
@@ -140,7 +140,7 @@ filters = PackedStringArray("*.gdc,*.gde;GDScript binary files")
 show_hidden_files = true
 use_native_dialog = true
 
-[node name="DestinationFolderDialog" type="FileDialog" parent="." unique_id=1958416791]
+[node name="DestinationFolderDialog" type="GDREFileDialog" parent="." unique_id=1958416791]
 unique_name_in_owner = true
 title = "Open a Directory"
 ok_button_text = "Select Current Folder"

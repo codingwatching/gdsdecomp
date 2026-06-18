@@ -78,6 +78,8 @@ void GDREWindow::set_window_autoscaling(Window *p_window, Size2i p_min_size) {
 void GDREWindow::_notification(int p_what) {
 	if (p_what == NOTIFICATION_ENTER_TREE) {
 		GDREWindow::set_window_autoscaling(this, get_min_size());
+		GDREWindow::set_window_autoscaling(confirmation_dialog, confirmation_dialog->get_min_size());
+		GDREWindow::set_window_autoscaling(error_dialog, error_dialog->get_min_size());
 	}
 }
 
@@ -132,6 +134,46 @@ void GDREAcceptDialogBase::popup_error_box(const String &p_message, const String
 void GDREAcceptDialogBase::_notification(int p_what) {
 	if (p_what == NOTIFICATION_ENTER_TREE) {
 		GDREWindow::set_window_autoscaling(this, get_min_size());
+		GDREWindow::set_window_autoscaling(confirmation_dialog, confirmation_dialog->get_min_size());
+		GDREWindow::set_window_autoscaling(error_dialog, error_dialog->get_min_size());
+	}
+}
+
+GDREConfirmationDialogBase::GDREConfirmationDialogBase() {
+	if (GDREProgressDialog::get_singleton()) {
+		GDREProgressDialog::get_singleton()->add_host_window(this);
+	}
+	confirmation_dialog = memnew(ConfirmationDialog);
+	error_dialog = memnew(AcceptDialog);
+	add_child(confirmation_dialog);
+	add_child(error_dialog);
+}
+
+GDREConfirmationDialogBase::~GDREConfirmationDialogBase() {
+	if (GDREProgressDialog::get_singleton()) {
+		GDREProgressDialog::get_singleton()->remove_host_window(this);
+	}
+}
+
+void GDREConfirmationDialogBase::_notification(int p_what) {
+	if (p_what == NOTIFICATION_ENTER_TREE) {
+		GDREWindow::set_window_autoscaling(this, get_min_size());
+		GDREWindow::set_window_autoscaling(confirmation_dialog, confirmation_dialog->get_min_size());
+		GDREWindow::set_window_autoscaling(error_dialog, error_dialog->get_min_size());
+	}
+}
+
+void GDREConfirmationDialogBase::popup_confirm_box(const String &p_message, const String &p_title, const Callable &p_confirm_callback, const Callable &p_cancel_callback, const String &p_ok_button_text, const String &p_cancel_button_text) {
+	GDREWindow::popup_box(this, confirmation_dialog, p_message, p_title, p_confirm_callback, p_cancel_callback, p_ok_button_text, p_cancel_button_text);
+}
+
+void GDREConfirmationDialogBase::popup_error_box(const String &p_message, const String &p_title, const Callable &p_callback) {
+	GDREWindow::popup_box(this, error_dialog, p_message, p_title, p_callback);
+}
+
+void GDREFileDialog::_notification(int p_what) {
+	if (p_what == NOTIFICATION_ENTER_TREE) {
+		GDREWindow::set_window_autoscaling(this, get_min_size());
 	}
 }
 
@@ -144,4 +186,9 @@ void GDREWindow::_bind_methods() {
 void GDREAcceptDialogBase::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("popup_confirm_box", "p_message", "p_title", "p_confirm_callback", "p_cancel_callback", "p_ok_button_text", "p_cancel_button_text"), &GDREAcceptDialogBase::popup_confirm_box, DEFVAL(Callable()), DEFVAL(Callable()), DEFVAL("OK"), DEFVAL("Cancel"));
 	ClassDB::bind_method(D_METHOD("popup_error_box", "p_message", "p_title", "p_callback"), &GDREAcceptDialogBase::popup_error_box, DEFVAL("Error"), DEFVAL(Callable()));
+}
+
+void GDREConfirmationDialogBase::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("popup_confirm_box", "p_message", "p_title", "p_confirm_callback", "p_cancel_callback", "p_ok_button_text", "p_cancel_button_text"), &GDREConfirmationDialogBase::popup_confirm_box, DEFVAL(Callable()), DEFVAL(Callable()), DEFVAL("OK"), DEFVAL("Cancel"));
+	ClassDB::bind_method(D_METHOD("popup_error_box", "p_message", "p_title", "p_callback"), &GDREConfirmationDialogBase::popup_error_box, DEFVAL("Error"), DEFVAL(Callable()));
 }

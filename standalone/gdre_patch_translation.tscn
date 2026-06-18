@@ -92,7 +92,7 @@ popup/item_1/id = 1
 popup/item_2/text = "Patch PCK directly"
 popup/item_2/id = 2
 
-[node name="SelectProjectDialog" type="FileDialog" parent="." unique_id=1797558310]
+[node name="SelectProjectDialog" type="GDREFileDialog" parent="." unique_id=1797558310]
 unique_name_in_owner = true
 title = "Open a File or Directory"
 file_mode = 3
@@ -101,7 +101,7 @@ access = 2
 filters = PackedStringArray("\"*.exe,*.bin,*.32,*.64,*.x86_64,*.x86,*.arm64,*.universal,*.pck,*.apk,*.app;Supported files\"")
 use_native_dialog = true
 
-[node name="SelectCSVDialog" type="FileDialog" parent="." unique_id=2034872773]
+[node name="SelectCSVDialog" type="GDREFileDialog" parent="." unique_id=2034872773]
 unique_name_in_owner = true
 title = "Open a File"
 file_mode = 0
@@ -111,7 +111,7 @@ filters = PackedStringArray("*.csv;Translation source file")
 show_hidden_files = true
 use_native_dialog = true
 
-[node name="SelectOutputDialog" type="FileDialog" parent="." unique_id=1387266648]
+[node name="SelectOutputDialog" type="GDREFileDialog" parent="." unique_id=1387266648]
 unique_name_in_owner = true
 title = "Open a Directory"
 file_mode = 2
