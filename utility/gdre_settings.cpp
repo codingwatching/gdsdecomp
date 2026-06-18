@@ -1896,6 +1896,10 @@ bool GDRESettings::is_headless() const {
 }
 
 float GDRESettings::get_auto_display_scale() {
+	if (!DisplayServer::get_singleton()) {
+		WARN_PRINT("DisplayServer not available, returning 1.0");
+		return 1.0;
+	}
 #ifdef LINUXBSD_ENABLED
 	if (DisplayServer::get_singleton()->get_name() == "Wayland") {
 		float main_window_scale = DisplayServer::get_singleton()->screen_get_scale(DisplayServerEnums::SCREEN_OF_MAIN_WINDOW);
