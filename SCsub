@@ -156,7 +156,7 @@ if env["tests"]:
     import sys
 
     test_obj = []
-    env_tests: SConsEnvironment = env_gdsdecomp.Clone()
+    env_tests = env_gdsdecomp.Clone()
     force_link_sources = glob.glob(os.path.join(MODULE_DIR, "tests", "*.cpp"))
 
     add_source_groups(env_tests, test_obj, ["#modules/gdsdecomp/tests/*.cpp"])

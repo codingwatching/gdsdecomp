@@ -140,9 +140,9 @@ def get_dotnet_publish_cmd(build_env, mono_native_lib_type, target_arch, godot_m
 
 
 def godot_mono_builder(
-    target: list[SConsFile],
-    source: list[SConsFile],
-    build_env: SConsEnvironment,
+    target,
+    source,
+    build_env,
     mono_native_lib_type,
     godot_mono_decomp_dir,
     godot_mono_decomp_libs,
@@ -237,7 +237,7 @@ def get_android_lib_dest(build_env) -> str:
     return build_env.Dir(out_dir).abspath
 
 
-def lipo_libs(target: list[SConsFile], source: list[SConsFile], env: SConsEnvironment):
+def lipo_libs(target, source, env):
     if len(target) != 1:
         raise Exception("Lipo command requires exactly 1 target file")
     if len(source) != 2:
@@ -257,8 +257,8 @@ def lipo_libs(target: list[SConsFile], source: list[SConsFile], env: SConsEnviro
 
 
 def build_godot_mono_decomp(
-    env: SConsEnvironment,
-    env_gdsdecomp: SConsEnvironment,
+    env,
+    env_gdsdecomp,
     module_obj,
 ):
     from SCons.Defaults import Copy
@@ -296,7 +296,7 @@ def build_godot_mono_decomp(
         "godot-mono-decomp-aot-test",
     ]
 
-    def _builder_action(target: list[SConsFile], source: list[SConsFile], env: SConsEnvironment):
+    def _builder_action(target, source, env):
         return godot_mono_builder(
             target,
             source,

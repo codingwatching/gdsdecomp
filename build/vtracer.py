@@ -114,10 +114,10 @@ def get_vtracer_lib_paths(build_env, vtracer_build_dir, vtracer_libs):
 
 
 def cargo_builder(
-    build_env: SConsEnvironment,
+    build_env,
     source_dir: str,
     build_dir: str,
-    libs: list[SConsFile],
+    libs,
     module_dir: str,
     vtracer_prefix: str,
 ):
@@ -164,8 +164,8 @@ def cargo_builder(
 
 
 def build_vtracer(
-    root_env: SConsEnvironment,
-    env_gdsdecomp: SConsEnvironment,
+    root_env,
+    env_gdsdecomp,
     module_obj,
 ):
     module_dir = get_module_dir(root_env)
