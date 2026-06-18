@@ -272,6 +272,9 @@ Error ObjExporter::_write_meshes_to_obj(const Vector<Ref<Mesh>> &p_meshes, const
 			String v_line = format_obj_line(force_single_precision, "v %.6f %.6f %.6f", v.x, v.y, v.z);
 			if (t.has_color) {
 				v_line += format_obj_line(force_single_precision, " %.6f %.6f %.6f", t.vc.r, t.vc.g, t.vc.b);
+				if (t.vc.a != 1.0f) {
+					v_line += format_obj_line(force_single_precision, " %.6f", t.vc.a);
+				}
 			}
 			f->store_line(v_line);
 			if (t.has_uv) {
