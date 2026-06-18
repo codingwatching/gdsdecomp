@@ -322,7 +322,9 @@ def build_godot_mono_decomp(
     )
     copy_commands = []
     if mono_native_lib_type == "Shared":
-        if env["platform"] == "macos":
+        if env.msvc:
+            all_libs += [lib.replace(".lib", ".dll") for lib in all_libs]
+        elif env["platform"] == "macos":
             new_arch = "x86_64" if env["arch"] == "arm64" else "arm64"
             other_libs = _get_godot_mono_decomp_lib_paths(
                 env["platform"],
