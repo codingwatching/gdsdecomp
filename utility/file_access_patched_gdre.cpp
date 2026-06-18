@@ -33,6 +33,7 @@
 #include "core/io/file_access_pack.h"
 
 #include "core/io/delta_encoding.h"
+#include "core/object/class_db.h"
 #include "core/os/os.h"
 
 #include "file_access_gdre.h"
@@ -202,4 +203,16 @@ void FileAccessPatchedGDRE::close() {
 bool FileAccessPatchedGDRE::file_exists(const String &p_name) {
 	ERR_FAIL_COND_V(old_file.is_null(), false);
 	return old_file->file_exists(p_name);
+}
+
+Ref<FileAccessPatchedGDRE> FileAccessPatchedGDRE::create(Ref<FileAccess> p_old_file) {
+	Ref<FileAccessPatchedGDRE> file;
+	file.instantiate();
+	Error err = file->open_custom(p_old_file);
+	ERR_FAIL_COND_V(err != OK, Ref<FileAccessPatchedGDRE>());
+	return file;
+}
+
+void FileAccessPatchedGDRE::_bind_methods() {
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("create", "old_file"), &FileAccessPatchedGDRE::create);
 }

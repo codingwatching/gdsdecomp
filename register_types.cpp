@@ -9,10 +9,14 @@
 #include "exporters/dialogue_exporter.h"
 #include "exporters/func_godot_exporter.h"
 #include "gui/gdre_audio_stream_preview.h"
+#include "gui/gdre_color_channel_selector.h"
 #include "gui/gdre_progress.h"
 #include "gui/gdre_standalone.h"
+#include "gui/texture_layered_previewer.h"
 #include "modules/regex/regex.h"
+#include "utility/app_version_getter.h"
 #include "utility/file_access_gdre.h"
+#include "utility/file_access_patched_gdre.h"
 #include "utility/image_saver.h"
 #include "utility/text_diff.h"
 #ifdef TOOLS_ENABLED
@@ -55,6 +59,7 @@
 #include "exporters/resource_exporter.h"
 #include "exporters/sample_exporter.h"
 #include "exporters/scene_exporter.h"
+#include "exporters/shaderfile_exporter.h"
 #include "exporters/spine_exporter.h"
 #include "exporters/texture_exporter.h"
 #include "exporters/translation_exporter.h"
@@ -137,11 +142,13 @@ static Ref<Mp3StrExporter> mp3str_exporter = nullptr;
 static Ref<OggStrExporter> oggstr_exporter = nullptr;
 static Ref<SampleExporter> sample_exporter = nullptr;
 static Ref<SceneExporter> scene_exporter = nullptr;
+static Ref<ShaderFileExporter> shaderfile_exporter = nullptr;
 static Ref<SpineAtlasExporter> spine_atlas_exporter = nullptr;
 static Ref<SpineSkeletonExporter> spine_skeleton_exporter = nullptr;
 static Ref<TextureExporter> texture_exporter = nullptr;
 static Ref<TranslationExporter> translation_exporter = nullptr;
 static Ref<ObjExporter> obj_exporter = nullptr;
+static GDREPackedData *gdre_packeddata_singleton = nullptr;
 
 //plugin manager sources
 static Ref<CodebergSource> codeberg_source = nullptr;
@@ -223,6 +230,7 @@ void init_exporters() {
 	gdscript_exporter = memnew(GDScriptExporter);
 	csharp_exporter = memnew(CSharpExporter);
 	gdextension_exporter = memnew(GDExtensionExporter);
+	shaderfile_exporter = memnew(ShaderFileExporter);
 	spine_atlas_exporter = memnew(SpineAtlasExporter);
 	spine_skeleton_exporter = memnew(SpineSkeletonExporter);
 	Exporter::add_exporter(auto_converted_exporter);
@@ -241,6 +249,7 @@ void init_exporters() {
 	Exporter::add_exporter(gdscript_exporter);
 	Exporter::add_exporter(csharp_exporter);
 	Exporter::add_exporter(gdextension_exporter);
+	Exporter::add_exporter(shaderfile_exporter);
 	Exporter::add_exporter(spine_atlas_exporter);
 	Exporter::add_exporter(spine_skeleton_exporter);
 }
@@ -314,6 +323,9 @@ void deinit_exporters() {
 	if (csharp_exporter.is_valid()) {
 		Exporter::remove_exporter(csharp_exporter);
 	}
+	if (shaderfile_exporter.is_valid()) {
+		Exporter::remove_exporter(shaderfile_exporter);
+	}
 	if (spine_atlas_exporter.is_valid()) {
 		Exporter::remove_exporter(spine_atlas_exporter);
 	}
@@ -345,6 +357,7 @@ void deinit_exporters() {
 	obj_exporter = nullptr;
 	dialogue_exporter = nullptr;
 	csharp_exporter = nullptr;
+	shaderfile_exporter = nullptr;
 	spine_atlas_exporter = nullptr;
 	spine_skeleton_exporter = nullptr;
 	func_godot_lmp_exporter = nullptr;
@@ -470,6 +483,7 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<ResourceImportMetadatav2>();
 	ClassDB::register_abstract_class<ImportInfo>();
 	ClassDB::register_class<ProjectConfigLoader>();
+	ClassDB::register_class<AppVersionGetter>();
 
 	ClassDB::register_class<Exporter>();
 	ClassDB::register_class<ExportReport>();
@@ -481,6 +495,7 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<SampleExporter>();
 	ClassDB::register_class<SceneExporter>();
 	ClassDB::register_class<TextureExporter>();
+	ClassDB::register_class<ShaderFileExporter>();
 	ClassDB::register_class<TranslationExporter>();
 	ClassDB::register_class<GDScriptExporter>();
 	ClassDB::register_class<GDExtensionExporter>();
@@ -524,11 +539,13 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<GDRESettings>();
 
 	ClassDB::register_class<PackedFileInfo>();
-	ClassDB::register_class<GDRESettings::PackInfo>();
+	ClassDB::register_class<PackInfo>();
 
 	ClassDB::register_class<GDREAudioStreamPreviewGeneratorNode>();
 	ClassDB::register_class<GDREAudioStreamPreviewGenerator>();
 	ClassDB::register_class<GDREAudioStreamPreview>();
+
+	ClassDB::register_class<FileAccessPatchedGDRE>();
 
 	// crypto classes
 	ClassDB::register_class<CustomDecryptor>(true);
@@ -550,9 +567,13 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<ScenePreviewer3D>();
 	ClassDB::register_class<ScenePreviewer2D>();
 	ClassDB::register_class<ScenePreviewer>();
+	ClassDB::register_class<GDREColorChannelSelector>();
+	ClassDB::register_class<TextureLayeredPreviewer>();
 	ClassDB::register_class<GDREFindReplaceBar>();
 	ClassDB::register_class<GDREXMLHighlighter>();
 	ClassDB::register_class<GodotMonoDecompWrapper>();
+	ClassDB::register_class<CoreBind::PackedFile>();
+	ClassDB::register_class<PackSourceCustom>();
 
 	ClassDB::register_class<GDREConfig>();
 	ClassDB::register_class<GDREConfigSetting>();
@@ -560,7 +581,11 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 
 	ClassDB::register_class<ConfigFileCompat>();
 	ClassDB::register_class<GDRESceneTree>();
+	ClassDB::register_class<GDREMainLoop>();
 
+	ClassDB::register_class<GDREPackedData>();
+	gdre_packeddata_singleton = memnew(GDREPackedData);
+	Engine::get_singleton()->add_singleton(Engine::Singleton("GDREPackedData", GDREPackedData::get_singleton()));
 	gui_icons = memnew(GDREGuiIcons);
 	gdre_main_loop = memnew(GDREMainLoop);
 	Engine::get_singleton()->add_singleton(Engine::Singleton("GDREMainLoop", GDREMainLoop::get_singleton()));
@@ -583,12 +608,14 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	// Register ICO image loader
 	ico_loader.instantiate();
 	ImageLoader::add_image_format_loader(ico_loader);
+	TextureLayeredPreviewer::init_shaders();
 }
 
 void uninitialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
 	}
+	TextureLayeredPreviewer::finish_shaders();
 	if (ico_loader.is_valid()) {
 		ImageLoader::remove_image_format_loader(ico_loader);
 		ico_loader.unref();
@@ -620,5 +647,9 @@ void uninitialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	if (gui_icons) {
 		memdelete(gui_icons);
 		gui_icons = nullptr;
+	}
+	if (gdre_packeddata_singleton) {
+		memdelete(gdre_packeddata_singleton);
+		gdre_packeddata_singleton = nullptr;
 	}
 }

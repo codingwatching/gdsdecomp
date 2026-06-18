@@ -37,12 +37,12 @@
 #define ENCRYPTED_HEADER_MAGIC 0x43454447
 
 class FileAccessEncryptedCustom : public FileAccess {
-	GDSOFTCLASS(FileAccessEncryptedCustom, FileAccess);
+	GDCLASS(FileAccessEncryptedCustom, FileAccess);
 
 public:
 	enum Mode : int32_t {
 		MODE_READ,
-		MODE_WRITE_CUSTOM,
+		MODE_WRITE,
 		MODE_MAX
 	};
 
@@ -61,6 +61,11 @@ private:
 	void _close();
 
 	static CryptoCore::RandomGenerator *_fae_static_rng;
+
+protected:
+	static void _bind_methods();
+	static Ref<FileAccess> _create_and_parse_non_custom(Ref<FileAccess> p_base, const Vector<uint8_t> &p_key, Mode p_mode, bool p_with_magic = true, const Vector<uint8_t> &p_iv = Vector<uint8_t>());
+	static Ref<FileAccess> _create_and_parse_custom(Ref<CustomDecryptor> p_decryptor, Ref<FileAccess> p_base, const Vector<uint8_t> &p_key, Mode p_mode, bool p_with_magic = true, const Vector<uint8_t> &p_iv = Vector<uint8_t>());
 
 public:
 	virtual Error open_internal(const String &p_path, int p_mode_flags) override; ///< open a file
@@ -123,3 +128,5 @@ public:
 
 	~FileAccessEncryptedCustom();
 };
+
+VARIANT_ENUM_CAST(FileAccessEncryptedCustom::Mode);

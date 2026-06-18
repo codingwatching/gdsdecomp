@@ -28,15 +28,22 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 #include "file_access_apk.h"
+#include "core/error/error_list.h"
+#include "core/error/error_macros.h"
+#include "core/io/file_access_memory.h"
+#include "core/io/zip_io.h"
 
 #ifdef MINIZIP_ENABLED
 #include "thirdparty/minizip/ioapi.h"
 
-#include "axml_parser.h"
 #include "file_access_gdre.h"
 #include "gdre_settings.h"
 
 #include "core/io/file_access.h"
+#include "core/io/json.h"
+#include "modules/zip/zip_reader.h"
+
+#include "external/axmldec/include/jitana/util/axml_parser.hpp"
 
 APKArchive *APKArchive::instance = nullptr;
 
@@ -49,6 +56,14 @@ struct APKData {
 static void *godot_open(voidpf opaque, const void *p_fname, int mode) {
 	if (mode & ZLIB_FILEFUNC_MODE_WRITE) {
 		return nullptr;
+	}
+	if (opaque != nullptr) {
+		APKData *zd = memnew(APKData);
+		Ref<FileAccessMemory> fab = memnew(FileAccessMemory);
+		const Vector<uint8_t> *data = static_cast<const Vector<uint8_t> *>(opaque);
+		fab->open_custom(data->ptr(), data->size());
+		zd->f = fab;
+		return zd;
 	}
 
 	Ref<FileAccess> f = FileAccess::open(String::utf8((const char *)p_fname), FileAccess::READ);
@@ -126,7 +141,7 @@ unzFile APKArchive::get_file_handle(String p_file) const {
 	zlib_filefunc64_def io;
 	memset(&io, 0, sizeof(io));
 
-	io.opaque = nullptr;
+	io.opaque = packages[file.package].install_pack_buf.is_empty() ? nullptr : const_cast<Vector<uint8_t> *>(&packages[file.package].install_pack_buf);
 	io.zopen64_file = godot_open;
 	io.zread_file = godot_read;
 	io.zwrite_file = godot_write;
@@ -150,21 +165,151 @@ unzFile APKArchive::get_file_handle(String p_file) const {
 	return pkg;
 }
 
-Error APKArchive::get_version_string_from_manifest(String &version_string) {
-	AXMLParser parser;
+Error APKArchive::get_manifest_info(ManifestInfo &r_manifest_info) {
 	Ref<FileAccessAPK> thing = memnew(FileAccessAPK("AndroidManifest.xml"));
 	Vector<uint8_t> buf;
 	buf.resize(thing->get_length());
 	thing->get_buffer(buf.ptrw(), thing->get_length());
-	Error err = parser.parse_manifest(buf);
-	ERR_FAIL_COND_V_MSG(err, err, "Failed to parse manifest!");
-	//right now we are only interested in the version
-	version_string = parser.get_godot_library_version_string();
-	// Godot 2.x did not write version strings to the manifest
-	if (version_string.is_empty()) {
-		version_string = "unknown";
+
+	return get_manifest_info_from_buffer(buf, r_manifest_info);
+}
+
+namespace {
+std::vector<jitana::xml_node>::const_iterator find_first_node(const jitana::xml_node &node, const std::string &name) {
+	auto result = std::find_if(node.children.begin(), node.children.end(), [name](const jitana::xml_node &child) {
+		return child.name == name;
+	});
+	return result;
+}
+
+std::vector<jitana::xml_node>::const_iterator find_first_node_with_attribute_value(const jitana::xml_node &node, const std::string &name, const std::string &attribute_name, const std::string &attribute_value) {
+	auto result = std::find_if(node.children.begin(), node.children.end(), [&name, &attribute_name, &attribute_value](const jitana::xml_node &child) {
+		if (child.name == name) {
+			auto attribute = child.get_attribute_value(attribute_name);
+			return attribute.has_value() && *attribute == attribute_value;
+		}
+		return false;
+	});
+	return result;
+}
+} //namespace
+
+Error APKArchive::get_manifest_info_from_buffer(Vector<uint8_t> &p_buf, ManifestInfo &r_manifest_info) {
+	jitana::xml_node root;
+	if (auto err = jitana::read_axml(p_buf.ptr(), p_buf.size(), root); err) {
+		return ERR_FILE_CORRUPT;
+	}
+	if (root.children.size() == 0) {
+		return ERR_FILE_CORRUPT;
+	}
+	auto manifest_node = root.children[0];
+	if (auto version_name = manifest_node.get_attribute_value("android:versionName")) {
+		r_manifest_info.app_version_name.append_utf8(version_name->c_str(), version_name->size());
+	}
+	if (auto version_code = manifest_node.get_attribute_value("android:versionCode")) {
+		r_manifest_info.app_version_code = std::stoi(*version_code);
+	}
+	if (auto package_name = manifest_node.get_attribute_value("package")) {
+		r_manifest_info.package_name.append_utf8(package_name->c_str(), package_name->size());
+	}
+	if (auto application_node = find_first_node(manifest_node, "application"); application_node != manifest_node.children.end()) {
+		if (auto editor_version_node = find_first_node_with_attribute_value(*application_node, "meta-data", "android:name", "org.godotengine.editor.version"); editor_version_node != application_node->children.end()) {
+			if (auto value = editor_version_node->get_attribute_value("android:value")) {
+				r_manifest_info.godot_editor_version_string.append_utf8(value->c_str(), value->size());
+			}
+		}
+		if (auto library_version_node = find_first_node_with_attribute_value(*application_node, "meta-data", "android:name", "org.godotengine.library.version"); library_version_node != application_node->children.end()) {
+			if (auto value = library_version_node->get_attribute_value("android:value")) {
+				r_manifest_info.godot_library_version_string.append_utf8(value->c_str(), value->size());
+			}
+		}
 	}
 	return OK;
+}
+namespace {
+static void *dummy_open(voidpf opaque, const char *p_fname, int mode) {
+	return opaque;
+}
+class fake_zip_reader : public RefCounted {
+	GDCLASS(fake_zip_reader, RefCounted)
+
+public:
+	Ref<FileAccess> fa;
+	unzFile uzf = nullptr;
+};
+static_assert(sizeof(fake_zip_reader) == sizeof(ZIPReader));
+
+class EmbeddedZipReader : public ZIPReader {
+public:
+	Error open_file(Ref<FileAccess> f) {
+		// TODO: Stupid UB here, but it works for now; need to reimplement ZipReader properly
+		fake_zip_reader *fzr = reinterpret_cast<fake_zip_reader *>(this);
+		fzr->fa = f;
+		auto io = zipio_create_io(&fzr->fa);
+		io.zopen_file = dummy_open;
+		fzr->uzf = unzOpen2(f->get_path().utf8().get_data(), &io);
+		return fzr->uzf != nullptr ? OK : FAILED;
+	}
+};
+
+} //namespace
+
+bool APKArchive::handle_xapk(const String &pack_path, ManifestInfo &r_manifest_info, Vector<uint8_t> &install_pack_f) {
+	// TODO: handle expansions too
+	Ref<ZIPReader> zip_reader = memnew(ZIPReader);
+	Error err = zip_reader->open(pack_path);
+	ERR_FAIL_COND_V(err != OK, false);
+	PackedStringArray files = zip_reader->get_files();
+	bool found_manifest = false;
+	for (int i = 0; i < files.size(); i++) {
+		String file = files[i];
+		if (file == "manifest.json") {
+			found_manifest = true;
+			break;
+		}
+	}
+	String install_time_pack_name;
+	String base_pack_name;
+	if (found_manifest) {
+		Vector<uint8_t> manifest = zip_reader->read_file("manifest.json", false);
+		String manifest_string;
+		Error err = manifest_string.append_utf8((const char *)manifest.ptr(), manifest.size());
+		ERR_FAIL_COND_V_MSG(err != OK, false, "Could not parse manifest.json");
+		Dictionary manifest_dict = JSON::parse_string(manifest_string);
+		ERR_FAIL_COND_V_MSG(manifest_dict.is_empty(), false, "Manifest.json is empty");
+		Array split_apks = manifest_dict.get("split_apks", Dictionary());
+		for (const Variant &E : split_apks) {
+			Dictionary split_apk = E;
+			String id = split_apk.get("id", "");
+			// "installTime" or "assetPackInstallTime"
+			if (id.contains("nstallTime")) {
+				install_time_pack_name = split_apk.get("file", "");
+			} else if (id == "base") {
+				base_pack_name = split_apk.get("file", "");
+			}
+		}
+	}
+	if (install_time_pack_name.is_empty()) {
+		return false;
+	}
+	if (!base_pack_name.is_empty()) {
+		Vector<uint8_t> base_pack = zip_reader->read_file(base_pack_name, false);
+		if (!base_pack.is_empty()) {
+			Ref<FileAccessMemory> base_pack_f = memnew(FileAccessMemory);
+			base_pack_f->open_custom(base_pack.ptr(), base_pack.size());
+			Ref<EmbeddedZipReader> base_pack_reader = memnew(EmbeddedZipReader);
+			Error err = base_pack_reader->open_file(base_pack_f);
+			if (err == OK) {
+				auto manifest_buf = base_pack_reader->read_file("AndroidManifest.xml", false);
+				err = APKArchive::get_manifest_info_from_buffer(manifest_buf, r_manifest_info);
+			}
+			if (err != OK) {
+				WARN_PRINT("Failed to parse base APK manifest!");
+			}
+		}
+	}
+	install_pack_f = zip_reader->read_file(install_time_pack_name, false);
+	return true;
 }
 
 bool APKArchive::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key) {
@@ -173,14 +318,22 @@ bool APKArchive::try_open_pack(const String &p_path, bool p_replace_files, uint6
 	String pack_path = p_path.replace("_GDRE_a_really_dumb_hack", "");
 	String ext = pack_path.get_extension().to_lower();
 	// This handles zip files, too
-	if (ext != "apk" && ext != "zip") {
+	bool is_xapk = ext == "xapk";
+	bool is_apk = ext == "apk" || is_xapk;
+	if (!is_apk && ext != "zip" && !is_xapk) {
 		return false;
 	}
-	bool is_apk = ext == "apk";
+	ManifestInfo manifest_info;
 	zlib_filefunc64_def io;
 	memset(&io, 0, sizeof(io));
+	Package pkg;
+	pkg.filename = pack_path;
 
-	io.opaque = nullptr;
+	if (is_xapk && !handle_xapk(pack_path, manifest_info, pkg.install_pack_buf)) {
+		return false;
+	}
+
+	io.opaque = pkg.install_pack_buf.is_empty() ? nullptr : &pkg.install_pack_buf;
 	io.zopen64_file = godot_open;
 	io.zread_file = godot_read;
 	io.zwrite_file = godot_write;
@@ -200,8 +353,6 @@ bool APKArchive::try_open_pack(const String &p_path, bool p_replace_files, uint6
 	int err = unzGetGlobalInfo64(zfile, &gi);
 	ERR_FAIL_COND_V(err != UNZ_OK, false);
 
-	Package pkg;
-	pkg.filename = pack_path;
 	pkg.zfile = zfile;
 	packages.push_back(pkg);
 	int pkg_num = packages.size() - 1;
@@ -209,7 +360,6 @@ bool APKArchive::try_open_pack(const String &p_path, bool p_replace_files, uint6
 	uint32_t fmt_ver = 1;
 	Ref<GodotVer> godot_ver;
 	godot_ver.instantiate();
-	String ver_string = "unknown";
 	for (uint64_t i = 0; i < gi.number_entry; i++) {
 		char filename_inzip[256];
 
@@ -226,17 +376,9 @@ bool APKArchive::try_open_pack(const String &p_path, bool p_replace_files, uint6
 		if (is_apk) {
 			if (original_fname == "AndroidManifest.xml") {
 				files[original_fname] = f;
-				if (get_version_string_from_manifest(ver_string) != OK) {
+				if (get_manifest_info(manifest_info) != OK) {
 					WARN_PRINT("Failed to parse APK manifest!");
 				}
-				if (ver_string == "unknown" || ver_string.is_empty()) {
-					// Godot 2.x did not set a version string in the manifest, and there's no other easy way to get it
-					// get it from the bin resources
-					WARN_PRINT("Could not retrieve version string from AndroidManifest.xml");
-				} else {
-					godot_ver = GodotVer::parse(ver_string);
-				}
-
 				// reset the position
 				unzGoToFilePos(zfile, &f.file_pos);
 				if ((i + 1) < gi.number_entry) {
@@ -273,9 +415,17 @@ bool APKArchive::try_open_pack(const String &p_path, bool p_replace_files, uint6
 			unzGoToNextFile(zfile);
 		}
 	}
-	Ref<GDRESettings::PackInfo> pckinfo;
+	if (manifest_info.godot_library_version_string == "unknown" || manifest_info.godot_library_version_string.is_empty()) {
+		// Godot 2.x did not set a version string in the manifest, and there's no other easy way to get it
+		// get it from the bin resources
+		WARN_PRINT("Could not retrieve version string from AndroidManifest.xml");
+	} else {
+		godot_ver = GodotVer::parse(manifest_info.godot_library_version_string);
+	}
+
+	Ref<PackInfo> pckinfo;
 	pckinfo.instantiate();
-	pckinfo->init(pack_path, godot_ver, fmt_ver, 0, 0, asset_count, is_apk ? GDRESettings::PackInfo::APK : GDRESettings::PackInfo::ZIP);
+	pckinfo->init(pack_path, godot_ver, fmt_ver, 0, 0, asset_count, is_apk ? PackInfo::APK : PackInfo::ZIP, false, false, "", manifest_info.app_version_name);
 	GDRESettings::get_singleton()->add_pack_info(pckinfo);
 
 	return true;
@@ -316,6 +466,8 @@ APKArchive::~APKArchive() {
 Error FileAccessAPK::open_internal(const String &p_path, int p_mode_flags) {
 	_close();
 
+	path = p_path;
+
 	ERR_FAIL_COND_V(p_mode_flags & FileAccess::WRITE, FAILED);
 	APKArchive *arch = APKArchive::get_singleton();
 	ERR_FAIL_COND_V(!arch, FAILED);
@@ -341,6 +493,14 @@ void FileAccessAPK::_close() {
 
 bool FileAccessAPK::is_open() const {
 	return zfile != nullptr;
+}
+
+String FileAccessAPK::get_path() const {
+	return path;
+}
+
+String FileAccessAPK::get_path_absolute() const {
+	return path;
 }
 
 void FileAccessAPK::seek(uint64_t p_position) {

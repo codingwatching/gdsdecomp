@@ -36,13 +36,21 @@ public:
 		TEXTURE_TYPE_LAYERED,
 		TEXTURE_TYPE_ATLAS
 	};
-	static Error _load_data_ctexlayered_v4(const String &p_path, Vector<Ref<Image>> &r_data, Image::Format &r_format, int &r_width, int &r_height, int &r_depth, int &r_type, bool &r_mipmaps, int &r_data_format);
-	static Error _load_layered_texture_v3(const String &p_path, Vector<Ref<Image>> &r_data, Image::Format &r_format, int &r_width, int &r_height, int &r_depth, bool &r_mipmaps);
+
+	enum V4LayeredMode {
+		V4_MODE_2D_ARRAY,
+		V4_MODE_CUBEMAP,
+		V4_MODE_CUBEMAP_ARRAY,
+		V4_MODE_3D,
+	};
+
+	static Error _load_data_ctexlayered_v4(const String &p_path, Vector<Ref<Image>> &r_data, Image::Format &r_format, int &r_width, int &r_height, int &r_depth, int &r_type, bool &r_mipmaps, uint32_t &r_texture_flags, uint32_t &r_data_format);
+	static Error _load_layered_texture_v3(const String &p_path, Vector<Ref<Image>> &r_data, Image::Format &r_format, int &r_width, int &r_height, int &r_depth, bool &r_mipmaps, uint32_t &r_texture_flags, uint32_t &r_data_format);
 	static Ref<ResourceInfo> _get_resource_info(const String &original_path, TextureLoaderCompat::TextureVersionType t);
 	static Ref<ResourceInfo> get_resource_info(const String &p_path, Error *r_error);
 	static Error load_image_from_fileV3(Ref<FileAccess> f, int tw, int th, int tw_custom, int th_custom, int flags, int p_size_limit, uint32_t df, Ref<Image> &image);
-	static Error _load_data_ctex2d_v4(const String &p_path, int &tw, int &th, Ref<Image> &image, int &r_data_format, int &r_texture_flags, int p_size_limit = 0);
-	static Error _load_data_stex2d_v3(const String &p_path, int &tw, int &th, int &tw_custom, int &th_custom, int &flags, Ref<Image> &image, int p_size_limit = 0);
+	static Error _load_data_ctex2d_v4(const String &p_path, int &tw, int &th, Ref<Image> &image, uint32_t &r_texture_flags, uint32_t &r_data_format, int p_size_limit = 0);
+	static Error _load_data_stex2d_v3(const String &p_path, int &tw, int &th, int &tw_custom, int &th_custom, uint32_t &r_flags, uint32_t &r_data_format, Ref<Image> &image, int p_size_limit = 0);
 
 	static Ref<ImageTexture> create_image_texture(const String &p_path, ResourceInfo::LoadType p_type, int tw, int th, int tw_custom, int th_custom, bool mipmaps, Ref<Image> image);
 	static bool is_binary_resource(TextureVersionType t);
@@ -51,6 +59,8 @@ public:
 	static TextureType get_type_enum_from_version_type(TextureVersionType type);
 	static String get_type_name_from_textype(TextureVersionType type);
 	static Vector<Ref<Image>> load_images_from_layered_tex(const String p_path, Error *r_err);
+
+	static Error save_image_to_stex_v3(const Ref<Image> &p_image, const String &p_to_path, int p_compress_mode, Image::CompressMode p_vram_compression, uint32_t p_texture_flags, uint32_t p_data_format, bool force_rgbe, bool force_normal);
 };
 
 class ResourceConverterTexture2D : public ResourceCompatConverter {
@@ -94,7 +104,7 @@ public:
 	virtual bool handles_type(const String &p_type) const override;
 	virtual String get_resource_type(const String &p_path) const override;
 
-	static Ref<CompressedTexture2D> _set_tex(const String &p_path, ResourceInfo::LoadType p_type, int tw, int th, int tw_custom, int th_custom, int flags, Ref<Image> image);
+	static Ref<CompressedTexture2D> _set_tex(const String &p_path, ResourceInfo::LoadType p_type, int tw, int th, int tw_custom, int th_custom, uint32_t flags, Ref<Image> image);
 	virtual Ref<Resource> custom_load(const String &p_path, const String &p_original_path, ResourceInfo::LoadType p_type, Error *r_error = nullptr, bool use_threads = true, ResourceFormatLoader::CacheMode p_cache_mode = CACHE_MODE_REUSE) override;
 	virtual Ref<ResourceInfo> get_resource_info(const String &p_path, Error *r_error) const override;
 	virtual bool handles_fake_load() const override { return false; }

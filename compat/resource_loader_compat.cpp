@@ -279,6 +279,16 @@ String _validate_local_path(const String &p_path) {
 	}
 	return p_path;
 }
+
+void _ensure_path(const Ref<Resource> &res, const String &p_path, bool is_real_load, ResourceCompatLoader::CacheMode p_cache_mode) {
+	if (res.is_valid() && res->get_path().is_empty()) {
+		if (is_real_load && p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE_DEEP && p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE) {
+			res->set_path(p_path, p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE || p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE_DEEP);
+		} else {
+			res->set_path_cache(p_path);
+		}
+	}
+}
 } //namespace
 
 thread_local HashSet<String> currently_loading_paths;
@@ -299,13 +309,7 @@ Ref<Resource> ResourceCompatLoader::custom_load(const String &p_path, const Stri
 		currently_loading_paths.insert(res_path);
 		Ref<Resource> res = load_with_real_resource_loader(local_path, p_type_hint, r_error, use_threads, p_cache_mode);
 		currently_loading_paths.erase(res_path);
-		if (res.is_valid() && res->get_path() != local_path) {
-			if (is_real_load && p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE_DEEP && p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE) {
-				res->set_path(local_path, p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE || p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE_DEEP);
-			} else {
-				res->set_path_cache(local_path);
-			}
-		}
+		_ensure_path(res, local_path, is_real_load, p_cache_mode);
 		return res;
 	}
 	FAIL_LOADER_NOT_FOUND(loader);
@@ -316,39 +320,27 @@ Ref<Resource> ResourceCompatLoader::custom_load(const String &p_path, const Stri
 	currently_loading_paths.insert(res_path);
 	Ref<Resource> res = loader->custom_load(res_path, local_path, p_type, r_error, use_threads, p_cache_mode);
 	currently_loading_paths.erase(res_path);
-	if (res.is_valid()) {
-		if (res->get_path().is_empty()) {
-			if (is_real_load && p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE_DEEP && p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE) {
-				res->set_path(local_path, p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE || p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE_DEEP);
-			} else {
-				res->set_path_cache(local_path);
-			}
-		}
-	}
+	_ensure_path(res, local_path, is_real_load, p_cache_mode);
 	return res;
 }
 
 Ref<Resource> ResourceCompatLoader::load_with_real_resource_loader(const String &p_path, const String &p_type_hint, Error *r_error, bool use_threads, ResourceCompatLoader::CacheMode p_cache_mode) {
 	String local_path = _validate_local_path(p_path);
+	Ref<Resource> res;
 	if (use_threads) {
-		return ResourceLoader::load(local_path, p_type_hint, p_cache_mode, r_error);
-	}
-	auto load_token = ResourceLoader::_load_start(local_path, p_type_hint, ResourceLoader::LoadThreadMode::LOAD_THREAD_FROM_CURRENT, p_cache_mode);
-	if (!load_token.is_valid()) {
-		if (r_error) {
-			*r_error = FAILED;
+		res = ResourceLoader::load(local_path, p_type_hint, p_cache_mode, r_error);
+	} else {
+		auto load_token = ResourceLoader::_load_start(local_path, p_type_hint, ResourceLoader::LoadThreadMode::LOAD_THREAD_FROM_CURRENT, p_cache_mode);
+		if (!load_token.is_valid()) {
+			if (r_error) {
+				*r_error = FAILED;
+			}
+			return Ref<Resource>();
 		}
-		return Ref<Resource>();
+		res = ResourceLoader::_load_complete(*load_token.ptr(), r_error);
 	}
 
-	Ref<Resource> res = ResourceLoader::_load_complete(*load_token.ptr(), r_error);
-	if (res.is_valid() && res->get_path().is_empty()) {
-		if (p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE_DEEP && p_cache_mode != ResourceFormatLoader::CACHE_MODE_IGNORE) {
-			res->set_path(local_path, p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE || p_cache_mode == ResourceFormatLoader::CACHE_MODE_REPLACE_DEEP);
-		} else {
-			res->set_path_cache(local_path);
-		}
-	}
+	_ensure_path(res, local_path, true, p_cache_mode);
 
 	return res;
 }
@@ -873,6 +865,11 @@ bool ResourceCompatConverter::is_external_resource(Ref<MissingResource> mr) {
 Ref<MissingResource> ResourceCompatConverter::get_missing_resource_from_real(Ref<Resource> res, int ver_major, const HashMap<String, String> &required_prop_map) {
 	Ref<MissingResource> mr;
 	mr.instantiate();
+	set_missing_resource_from_real(mr, res, ver_major, required_prop_map);
+	return mr;
+}
+
+void ResourceCompatConverter::set_missing_resource_from_real(Ref<MissingResource> mr, Ref<Resource> res, int ver_major, const HashMap<String, String> &required_prop_map) {
 	mr->set_original_class(res->get_class());
 	mr->set_recording_properties(true);
 	mr->set_path_cache(res->get_path());
@@ -882,12 +879,15 @@ Ref<MissingResource> ResourceCompatConverter::get_missing_resource_from_real(Ref
 	mr->set_scene_unique_id(res->get_scene_unique_id());
 	List<PropertyInfo> property_info;
 	res->get_property_list(&property_info);
+	HashSet<String> properties_to_set;
 	for (auto &property : property_info) {
-		if (required_prop_map.has(property.name)) {
-			mr->set(required_prop_map[property.name], res->get(property.name));
+		properties_to_set.insert(property.name);
+	}
+	for (auto &[new_prop, old_prop] : required_prop_map) {
+		if (properties_to_set.has(new_prop)) {
+			mr->set(old_prop, res->get(new_prop));
 		}
 	}
-	return mr;
 }
 
 Ref<Resource> ResourceCompatConverter::get_real_from_missing_resource(Ref<MissingResource> mr, ResourceInfo::LoadType load_type, const HashMap<String, String> &prop_map) {
@@ -919,4 +919,26 @@ Ref<Resource> ResourceCompatConverter::get_real_from_missing_resource(Ref<Missin
 
 bool CompatFormatLoader::resource_is_resource(Ref<Resource> p_res, int ver_major) {
 	return p_res.is_valid() && !(ver_major <= 2 && (p_res->get_save_class() == "Image" || Ref<InputEvent>(p_res).is_valid()));
+}
+
+bool CompatFormatLoader::try_force_set_property(const Ref<Resource> &p_res, const StringName &p_name, const Variant &p_value) {
+	if (p_res.is_null()) {
+		return false;
+	}
+	ScriptInstance *si = p_res->get_script_instance();
+	if (si) {
+		if (FakeScriptInstance *fsi = dynamic_cast<FakeScriptInstance *>(si); fsi != nullptr) {
+			Ref<FakeScript> script = fsi->get_script();
+#if DEBUG_ENABLED
+			// If the script is recording properties and is not a fake embedded script, then this is a bug in the script parsing.
+			if (script.is_valid() && script->is_instance_recording_properties() && script->get_class() != "FakeScript") {
+				WARN_PRINT(vformat("Script %s is recording properties, but initial property set failed! Please report this!", script->get_path()));
+			}
+#endif
+			fsi->force_set_property(p_name, p_value);
+			return true;
+		}
+		return false;
+	}
+	return false;
 }

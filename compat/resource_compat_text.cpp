@@ -805,12 +805,16 @@ Error ResourceLoaderCompatText::load() {
 						bool valid = false;
 						res->set(assign, value, &valid);
 						if (!valid) {
-							missing_resource_properties[assign] = value;
+							if (!CompatFormatLoader::try_force_set_property(res, assign, value)) {
+								missing_resource_properties[assign] = value;
 #ifdef DEBUG_ENABLED
-							if (ver_major < GODOT_VERSION_MAJOR) {
-								WARN_PRINT(vformat("Failed to set deprecated %d.%d property '%s' (type: %s) on res class '%s' (class remap: %s)", ver_major, ver_minor, assign, Variant::get_type_name(value.get_type()), type, res->get_class()));
-							}
+								if (ver_major < GODOT_VERSION_MAJOR) {
+									WARN_PRINT(vformat("Failed to set deprecated %d.%d property '%s' (type: %s) on res class '%s' (remap: %s)", ver_major, ver_minor, assign, Variant::get_type_name(value.get_type()), type, res->get_class()));
+								}
 #endif
+							} else {
+								valid = true;
+							}
 						}
 					}
 				}
@@ -1023,12 +1027,16 @@ Error ResourceLoaderCompatText::load() {
 					bool valid = false;
 					resource->set(assign, value, &valid);
 					if (!valid) {
-						missing_resource_properties[assign] = value;
+						if (!CompatFormatLoader::try_force_set_property(resource, assign, value)) {
+							missing_resource_properties[assign] = value;
 #ifdef DEBUG_ENABLED
-						if (ver_major < GODOT_VERSION_MAJOR) {
-							WARN_PRINT(vformat("Failed to set deprecated %d.%d property '%s' (type: %s) on res class '%s' (class remap: %s)", ver_major, ver_minor, assign, Variant::get_type_name(value.get_type()), res_type, resource->get_class()));
-						}
+							if (ver_major < GODOT_VERSION_MAJOR) {
+								WARN_PRINT(vformat("Failed to set deprecated %d.%d property '%s' (type: %s) on res class '%s' (class remap: %s)", ver_major, ver_minor, assign, Variant::get_type_name(value.get_type()), res_type, resource->get_class()));
+							}
 #endif
+						} else {
+							valid = true;
+						}
 					}
 				}
 				//it's assignment
@@ -2163,6 +2171,8 @@ Error ResourceFormatSaverCompatTextInstance::save_to_file(const Ref<FileAccess> 
 
 	if (p_path.ends_with(".tscn") || p_path.ends_with(".escn")) {
 		// If this is a MissingResource holder for a PackedScene, we need to instance it for reals
+		// We don't have to worry about replacing `p_resource` with the instantiated PackedScene because the only property
+		// that is modifed is `_bundled`, which is a Dictionary and is shared between the original and the instantiated PackedScene.
 		packed_scene = ensure_packed_scenes(p_resource);
 	}
 
@@ -3127,8 +3137,12 @@ bool is_packed_scene(const Ref<Resource> &p_resource) {
 	return p_resource.is_valid() && _resource_get_class(p_resource) == "PackedScene";
 }
 
-Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resource, HashMap<String, Ref<Resource>> &p_seen_resources, HashSet<Object *> &seen_objects, int recursion_depth) {
+Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resource, int recursion_depth) {
 	Ref<PackedScene> r_packed_scene = p_resource;
+	if (recursion_depth > 256) {
+		ERR_PRINT("Recursion depth exceeded.");
+		return r_packed_scene;
+	}
 	if (_resource_get_class(p_resource) == "PackedScene") {
 		Dictionary bundle = p_resource->get("_bundled");
 		// we need to go through the variants in the bundle and ensure that any MissingResources that are PackedScenes are also replaced with instantiated packed scenes
@@ -3139,7 +3153,7 @@ Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resourc
 			for (int i = 0; i < arr.size(); i++) {
 				Ref<Resource> res = arr[i];
 				if (res.is_valid() && res->get_save_class() == "PackedScene") {
-					arr[i] = _ensure_resource_is_packed_scene(res, p_seen_resources, seen_objects, recursion_depth);
+					arr[i] = _ensure_resource_is_packed_scene(res, recursion_depth);
 				}
 			}
 			bundle.set("variants", arr);
@@ -3149,7 +3163,11 @@ Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resourc
 			if (!bundle.is_empty()) {
 				r_packed_scene->set("_bundled", bundle);
 			}
+			r_packed_scene->set_script(p_resource->get_script());
+			r_packed_scene->set_local_to_scene(p_resource->is_local_to_scene());
 			r_packed_scene->set_path_cache(p_resource->get_path());
+			r_packed_scene->set_name(p_resource->get_name());
+			r_packed_scene->set_scene_unique_id(p_resource->get_scene_unique_id());
 			r_packed_scene->merge_meta_from(p_resource.ptr());
 		}
 	}
@@ -3165,7 +3183,5 @@ Ref<PackedScene> ResourceFormatSaverCompatTextInstance::ensure_packed_scenes(con
 	} else if (p_resource->get_class() == "PackedScene") {
 		return p_resource;
 	}
-	HashMap<String, Ref<Resource>> seen_resources;
-	HashSet<Object *> seen_objects;
-	return _ensure_resource_is_packed_scene(p_resource, seen_resources, seen_objects, 0);
+	return _ensure_resource_is_packed_scene(p_resource, 0);
 }

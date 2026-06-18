@@ -1,13 +1,19 @@
-#pragma once
+#include "core/io/marshalls.h"
+#include "tests/test_macros.h"
+#include "tests/test_utils.h"
 
-#include "../bytecode/bytecode_base.h"
+#include "bytecode/bytecode_base.h"
 #include "bytecode/bytecode_versions.h"
 #include "bytecode/gdscript_tokenizer_compat.h"
-#include "core/io/image.h"
-#include "core/math/quaternion.h"
+#include "core/object/property_info.h"
+#include "core/version.h"
+#include "modules/gdscript/gdscript.h"
 #include "modules/gdscript/gdscript_tokenizer.h"
+#include "modules/gdscript/tests/gdscript_test_runner.h"
 #include "test_common.h"
-#include "tests/test_macros.h"
+#include "utility/gdre_logger.h"
+#include "utility/gdre_settings.h"
+#include "utility/text_diff.h"
 #include <compat/fake_gdscript.h>
 #include <compat/resource_compat_text.h>
 #include <compat/resource_loader_compat.h>
@@ -17,7 +23,12 @@
 #include <utility/common.h>
 #include <utility/glob.h>
 
+TEST_FORCE_LINK(test_bytecode)
 namespace TestBytecode {
+
+void test_fake_script();
+
+Vector<String> get_gdscript2_0_scripts();
 
 struct ScriptToRevision {
 	const char *script;
@@ -74,16 +85,50 @@ static constexpr const char *test_unique_id_modulo = R"(
 extends AnimationPlayer
 
 func _ready() -> void :
-    %BlinkTimer.timeout.connect(check_for_blink)
-    var thingy = 10 % 3
-    var thingy2 = 10 % thingy
-    var thingy3 = thingy % 20
+	%BlinkTimer.timeout.connect(check_for_blink)
+	var thingy = 10 % 3
+	var thingy2 = 10 % thingy
+	var thingy3 = thingy % 20
+)";
+
+static constexpr const char *test_indent = R"(
+extends Object
+
+func set_worldspawn_layers(new_worldspawn_layers: Array) -> void :
+	if worldspawn_layers != new_worldspawn_layers:
+		worldspawn_layers = new_worldspawn_layers
+
+		for i in range(0, worldspawn_layers.size()):
+			if not worldspawn_layers[i]:
+				worldspawn_layers[i] = QodotWorldspawnLayer.new()
+
+)";
+
+static constexpr const char *test_indent_current = R"(
+extends Object
+func foo():
+	var bar = 1;
+	if bar == 1:
+		print("bar is 1")
+	else:
+		print("bar is not 1")
+	return bar
+)";
+
+static constexpr const char *test_multiline_string = R"(
+static func find_or_null(arr: Array[Node], index: int = 0) -> Node:
+	if (arr.is_empty()):
+		push_error("""Node that is needed for Script-IDE not found.
+Plugin will not work correctly.
+This might be due to some other plugins or changes in the Engine.
+Please report this to Script-IDE, so we can figure out a fix.""")
+		return null
+	return arr[index]
 )";
 
 // should pass on all versions of GDScript
 static constexpr const char *test_reserved_word_as_accessor_name = R"(
 extends Object
-
 
 func _ready():
 	var thingy = {}
@@ -105,12 +150,42 @@ func _ready():
 )";
 
 // clang-format off
-static constexpr const char *test_eof_newline = R"(
+	static constexpr const char *test_eof_newline = R"(
 extends RefCounted
 func _ready():
 	pass
 	)";
 // clang-format on
+
+inline void output_file(const String &path, const String &text) {
+	gdre::ensure_dir(path.get_base_dir());
+	auto fa = FileAccess::open(path, FileAccess::WRITE);
+	if (fa.is_valid()) {
+		fa->store_string(text);
+		fa->flush();
+		fa->close();
+	}
+}
+
+inline void debug_output(const String &script_name, const String &helper_script_text_stripped, const String &decompiled_string_stripped) {
+	auto diff = TextDiff::get_diff_with_header(script_name + "_original", script_name + "_decompiled", helper_script_text_stripped, decompiled_string_stripped);
+	TextDiff::print_diff(diff);
+	auto base_path = get_tmp_path().path_join(script_name.get_basename());
+	output_file(base_path + ".diff", diff);
+	output_file(base_path + ".decompiled.gd", decompiled_string_stripped);
+}
+
+inline String strip_script_text(const String &script_text) {
+	return remove_comments(script_text).replace("\"\"\"", "\"").replace("'", "\"");
+}
+
+inline Vector<PropertyInfo> list_to_vector(const List<PropertyInfo> &list) {
+	Vector<PropertyInfo> vector;
+	for (auto &E : list) {
+		vector.push_back(E);
+	}
+	return vector;
+}
 
 inline void test_script_binary(const String &script_name, const Vector<uint8_t> &bytecode, const String &helper_script_text, int revision, bool helper_script, bool no_text_equality_check, bool compare_whitespace = false) {
 	auto decomp = GDScriptDecomp::create_decomp_for_commit(revision);
@@ -134,17 +209,16 @@ inline void test_script_binary(const String &script_name, const Vector<uint8_t> 
 	CHECK(decomp->get_error_message() == "");
 	// no whitespace
 	auto decompiled_string = decomp->get_script_text();
-	auto helper_script_text_stripped = remove_comments(helper_script_text).replace("\"\"\"", "\"").replace("'", "\"");
+	auto helper_script_text_stripped = strip_script_text(helper_script_text);
 	if (!helper_script_text_stripped.strip_edges().is_empty()) {
 		CHECK(decompiled_string != "");
 	}
 
-	auto decompiled_string_stripped = remove_comments(decompiled_string).replace("\"\"\"", "\"").replace("'", "\"");
+	auto decompiled_string_stripped = strip_script_text(decompiled_string);
 
 #if DEBUG_ENABLED
 	if (!no_text_equality_check && gdre::remove_whitespace(decompiled_string_stripped) != gdre::remove_whitespace(helper_script_text_stripped)) {
-		TextDiff::print_diff(TextDiff::get_diff_with_header(script_name, script_name, decompiled_string_stripped, helper_script_text_stripped));
-		output_diff(script_name, decompiled_string_stripped, helper_script_text_stripped);
+		debug_output(script_name, helper_script_text_stripped, decompiled_string_stripped);
 	}
 #endif
 	if (!no_text_equality_check) {
@@ -152,7 +226,7 @@ inline void test_script_binary(const String &script_name, const Vector<uint8_t> 
 	}
 	if (compare_whitespace) {
 		if (decompiled_string_stripped != helper_script_text_stripped) {
-			TextDiff::print_diff(TextDiff::get_diff_with_header(script_name + "_original", script_name + "_decompiled", helper_script_text_stripped, decompiled_string_stripped));
+			debug_output(script_name, helper_script_text_stripped, decompiled_string_stripped);
 		}
 		CHECK(decompiled_string_stripped == helper_script_text_stripped);
 	}
@@ -161,22 +235,70 @@ inline void test_script_binary(const String &script_name, const Vector<uint8_t> 
 	CHECK(recompiled_bytecode.size() > 0);
 	auto recompiled_result = decomp->test_bytecode(recompiled_bytecode, false);
 	CHECK(recompiled_result == GDScriptDecomp::BYTECODE_TEST_PASS);
-	err = decomp->test_bytecode_match(bytecode, recompiled_bytecode);
+	err = decomp->test_bytecode_match(bytecode, recompiled_bytecode, !compare_whitespace, false);
 #if DEBUG_ENABLED
 	if (err) {
-		TextDiff::print_diff(TextDiff::get_diff_with_header(script_name + "_original", script_name + "_decompiled", helper_script_text_stripped, decompiled_string_stripped));
-		output_diff(script_name, decompiled_string_stripped, helper_script_text_stripped);
+		debug_output(script_name, helper_script_text_stripped, decompiled_string_stripped);
 	}
 #endif
 
-	if (revision == GDScriptDecompVersion::LATEST_GDSCRIPT_COMMIT) {
+	CHECK(decomp->get_error_message() == "");
+	if (script_name != "super" && revision == GDScriptDecompVersion::LATEST_GDSCRIPT_COMMIT) {
 		// test with the latest GDScriptTokenizer
 		auto reference_result = GDScriptTokenizerBuffer::parse_code_string(helper_script_text, GDScriptTokenizerBuffer::CompressMode::COMPRESS_ZSTD);
 		CHECK(reference_result.size() > 0);
-		err = decomp->test_bytecode_match(bytecode, reference_result);
+		err = decomp->test_bytecode_match(bytecode, reference_result, true, false);
+		CHECK(decomp->get_error_message() == "");
 		CHECK(err == OK);
+		err = decomp->decompile_buffer(reference_result);
+		CHECK(err == OK);
+		String decompiled_ref = decomp->get_script_text();
+		auto decompiled_ref_stripped = strip_script_text(decompiled_ref);
+		if (!no_text_equality_check) {
+			CHECK_MESSAGE(gdre::remove_whitespace(decompiled_ref_stripped) == gdre::remove_whitespace(helper_script_text_stripped), (String("No whitespace text diff failed: \n") + TextDiff::get_diff_with_header(script_name, script_name, decompiled_ref_stripped, helper_script_text_stripped)));
+		}
+		auto recompiled_ref = GDScriptTokenizerBuffer::parse_code_string(decompiled_ref, GDScriptTokenizerBuffer::CompressMode::COMPRESS_ZSTD);
+		CHECK(decomp->get_error_message() == "");
+		CHECK(recompiled_ref.size() > 0);
+		err = decomp->test_bytecode_match(reference_result, recompiled_ref, true, false);
+		CHECK(decomp->get_error_message() == "");
+		CHECK(err == OK);
+		if (script_name != "super") {
+			auto buffer = GDScriptTokenizerBuffer();
+			err = buffer.set_code_buffer(bytecode);
+			REQUIRE(err == OK);
+			auto recompiled_buffer = GDScriptTokenizerBuffer();
+			err = recompiled_buffer.set_code_buffer(reference_result);
+			REQUIRE(err == OK);
+			auto token = buffer.scan();
+			auto recompiled_token = recompiled_buffer.scan();
+			CHECK(token.type == recompiled_token.type);
+			while (token.type != GDScriptTokenizer::Token::TK_EOF) {
+				token = buffer.scan();
+				recompiled_token = recompiled_buffer.scan();
+				if (token.type != recompiled_token.type) {
+					debug_output(script_name, helper_script_text_stripped, decompiled_ref_stripped);
+				}
+				CHECK(token.type == recompiled_token.type);
+			}
+		}
 	}
-	CHECK(decomp->get_error_message() == "");
+
+	{
+		auto buffer = GDScriptTokenizerCompat::create_buffer_tokenizer(decomp.ptr(), bytecode);
+		REQUIRE(buffer.is_valid());
+		auto recompiled_buffer = GDScriptTokenizerCompat::create_buffer_tokenizer(decomp.ptr(), recompiled_bytecode);
+		REQUIRE(recompiled_buffer.is_valid());
+		auto token = buffer->scan();
+		auto recompiled_token = recompiled_buffer->scan();
+		CHECK(token.type == recompiled_token.type);
+		while (token.type != GDScriptDecomp::G_TK_EOF) {
+			token = buffer->scan();
+			recompiled_token = recompiled_buffer->scan();
+			CHECK(token.type == recompiled_token.type);
+		}
+	}
+
 	CHECK(err == OK);
 
 	Ref<FakeGDScript> fake_script = memnew(FakeGDScript);
@@ -256,21 +378,7 @@ TEST_CASE("[GDSDecomp][Bytecode][GDScript1.0] Compiling Helper Scripts") {
 
 TEST_CASE("[GDSDecomp][Bytecode][GDScript2.0] Compiling GDScript Tests") {
 	REQUIRE(GDRESettings::get_singleton());
-	auto cwd = GDRESettings::get_singleton()->get_cwd();
-	String gdscript_tests_path = get_gdscript_tests_path();
-	auto gdscript_test_scripts = Glob::rglob(gdscript_tests_path.path_join("**/*.gd"), true);
-	auto gdscript_test_error_scripts = Vector<String>();
-	for (int i = 0; i < gdscript_test_scripts.size(); i++) {
-		// remove any that contain ".notest." or "/error/"
-		auto script_path = gdscript_test_scripts[i].trim_prefix(cwd + "/");
-		if (script_path.contains(".notest.") || script_path.contains("error") || script_path.contains("completion")) {
-			gdscript_test_error_scripts.push_back(script_path);
-			gdscript_test_scripts.erase(gdscript_test_scripts[i]);
-			i--;
-		} else {
-			gdscript_test_scripts.write[i] = script_path;
-		}
-	}
+	auto gdscript_test_scripts = get_gdscript2_0_scripts();
 
 	for (int64_t i = 0; i < gdscript_test_scripts.size(); i++) {
 		auto &script_path = gdscript_test_scripts[i];
@@ -280,6 +388,18 @@ TEST_CASE("[GDSDecomp][Bytecode][GDScript2.0] Compiling GDScript Tests") {
 			test_script(script_path, GDScriptDecompVersion::LATEST_GDSCRIPT_COMMIT, false, true);
 		}
 	}
+}
+
+TEST_CASE("[GDSDecomp][Bytecode][GDScript2.0] Test indenting") {
+	test_script_text("test_indent_current", test_indent_current, GDScriptDecompVersion::LATEST_GDSCRIPT_COMMIT, false, false, true);
+}
+
+TEST_CASE("[GDSDecomp][Bytecode][GDScript2.0] Test multi-line strings") {
+	test_script_text("test_multiline_string", test_multiline_string, GDScriptDecompVersion::LATEST_GDSCRIPT_COMMIT, false, false, true);
+}
+
+TEST_CASE("[GDSDecomp][Bytecode] Test indenting") {
+	test_script_text("test_indent", test_indent, 0xa7aad78, false, false, true);
 }
 
 TEST_CASE("[GDSDecomp][Bytecode][GDScript2.0] Test unique_id modulo operator") {
@@ -311,14 +431,14 @@ TEST_CASE("[GDSDecomp][Bytecode] Test sample GDScript bytecode") {
 				auto compiled_bytecode = decomp->compile_code_string(original_script_text);
 				CHECK(decomp->get_error_message() == "");
 				CHECK(compiled_bytecode.size() > 0);
-				CHECK(decomp->test_bytecode_match(bytecode, compiled_bytecode) == OK);
+				CHECK(decomp->test_bytecode_match(bytecode, compiled_bytecode, false, false) == OK);
 				test_script_binary(original_file, bytecode, original_script_text, revision, false, true);
 			}
 		}
 	}
 }
 
-void simple_pass_fail_test(const String &script_name, const String &helper_script_text, int revision, bool expect_fail) {
+inline void simple_pass_fail_test(const String &script_name, const String &helper_script_text, int revision, bool expect_fail) {
 	SUBCASE(vformat("Testing %s, revision %07x", script_name, revision).utf8().get_data()) {
 		auto decomp = GDScriptDecomp::create_decomp_for_commit(revision);
 		CHECK(decomp.is_valid());
@@ -341,15 +461,15 @@ TEST_CASE("[GDSDecomp][Bytecode] Test reserved words as global function names") 
 	Vector<GDScriptDecompVersion> versions = GDScriptDecompVersion::get_decomp_versions(true, 0);
 
 	static constexpr const char *test_global_function_name = R"(
-extends Object
+	extends Object
 
-func %s():
-	pass
-)";
+	func %s():
+		pass
+	)";
 	static constexpr const char *func_call_fragment = R"(
-func _ready():
-	%s()
-)";
+	func _ready():
+		%s()
+	)";
 
 	// TODO: We should test all reserved words to see if they're being used in a function declaration in _test_bytecode
 	Vector<Pair<bool, String>> keywords_to_test = {
@@ -380,17 +500,17 @@ func _ready():
 
 TEST_CASE("[GDSDecomp][Bytecode] Test reserved words as member function names") {
 	static constexpr const char *test_member_function_name = R"(
-extends Object
+	extends Object
 
-class test_class:
-	func %s():
-		pass
-)";
+	class test_class:
+		func %s():
+			pass
+	)";
 	static constexpr const char *func_call_fragment = R"(
-func _ready():
-	var test = test_class.new()
-	test.%s()
-)";
+	func _ready():
+		var test = test_class.new()
+		test.%s()
+	)";
 
 	auto versions = GDScriptDecompVersion::get_decomp_versions(true, 0);
 	Vector<Pair<bool, String>> keywords_to_test = {
@@ -468,5 +588,149 @@ TEST_CASE("[GDSDecomp][Bytecode][EOFNewline] Test indented newline at EOF") {
 		test_script_text("indented_newline_at_eof", test_eof_newline, revision, false, true, false);
 	}
 }
+TEST_CASE("[GDSDecomp][FakeScript] test FakeScript") {
+	test_fake_script();
+}
+void test_individual_script(const String &script_path, const String &helper_script_text) {
+	// disable this for now
+	CoreGlobals::print_error_enabled = false;
+	Ref<FakeGDScript> fake_script = memnew(FakeGDScript);
+	fake_script->set_override_bytecode_revision(GDScriptDecompVersion::LATEST_GDSCRIPT_COMMIT);
+	fake_script->load_source_code(script_path);
+	Error err = fake_script->reload(false);
+	CHECK(err == OK);
 
-} //namespace TestBytecode
+	auto cwd = GDRESettings::get_singleton()->get_cwd();
+
+	String local_path = cwd.path_join(script_path); //ProjectSettings::get_singleton()->localize_path(script_path);
+
+	Ref<GDScript> real_script = memnew(GDScript);
+	real_script->set_path(local_path);
+	err = real_script->load_source_code(local_path);
+	CHECK(err == OK);
+	err = real_script->reload(false);
+	// TODO: Figure out why the real loader fails to load some scripts
+	if (err != OK) {
+		CoreGlobals::print_error_enabled = true;
+		return;
+	}
+	CHECK(err == OK);
+	List<PropertyInfo> decompiled_list;
+	fake_script->get_script_property_list(&decompiled_list);
+	// Vector<PropertyInfo> decompiled_vector = list_to_vector(decompiled_list);
+	HashMap<String, PropertyInfo> decompiled_map;
+	for (auto &E : decompiled_list) {
+		decompiled_map[E.name] = E;
+	}
+	List<PropertyInfo> real_list;
+	real_script->get_script_property_list(&real_list);
+	Vector<PropertyInfo> real_vector = list_to_vector(real_list);
+
+	for (int i = 0; i < real_vector.size(); i++) {
+		if (((real_vector[i].usage & PropertyUsageFlags::PROPERTY_USAGE_STORAGE) == 0) || real_vector[i].usage & PROPERTY_USAGE_GROUP || real_vector[i].usage & PROPERTY_USAGE_CATEGORY || real_vector[i].usage & PROPERTY_USAGE_SUBGROUP) {
+			continue;
+		}
+		CHECK(decompiled_map.has(real_vector[i].name));
+	}
+	CoreGlobals::print_error_enabled = true;
+}
+
+static bool generate_class_index_recursive(const String &p_dir) {
+	Error err = OK;
+	Ref<DirAccess> dir(DirAccess::open(p_dir, &err));
+
+	if (err != OK) {
+		return false;
+	}
+
+	String current_dir = dir->get_current_dir();
+
+	dir->list_dir_begin();
+	String next = dir->get_next();
+
+	StringName gdscript_name = GDScriptLanguage::get_singleton()->get_name();
+	while (!next.is_empty()) {
+		if (dir->current_is_dir()) {
+			if (next == "." || next == ".." || next == "completion" || next == "lsp") {
+				next = dir->get_next();
+				continue;
+			}
+			if (!generate_class_index_recursive(current_dir.path_join(next))) {
+				return false;
+			}
+		} else {
+			if (!next.ends_with(".gd")) {
+				next = dir->get_next();
+				continue;
+			}
+			String base_type;
+			String source_file = current_dir.path_join(next);
+			bool is_abstract = false;
+			bool is_tool = false;
+			String class_name = GDScriptLanguage::get_singleton()->get_global_class_name(source_file, &base_type, nullptr, &is_abstract, &is_tool);
+			if (class_name.is_empty()) {
+				next = dir->get_next();
+				continue;
+			}
+			ERR_FAIL_COND_V_MSG(ScriptServer::is_global_class(class_name), false,
+					"Class name '" + class_name + "' from " + source_file + " is already used in " + ScriptServer::get_global_class_path(class_name));
+
+			ScriptServer::add_global_class(class_name, base_type, gdscript_name, source_file, is_abstract, is_tool);
+		}
+
+		next = dir->get_next();
+	}
+
+	dir->list_dir_end();
+
+	return true;
+}
+
+bool generate_class_index(const String &source_dir) {
+	Error err = OK;
+	Ref<DirAccess> dir(DirAccess::open(source_dir, &err));
+
+	ERR_FAIL_COND_V_MSG(err != OK, false, "Could not open specified test directory.");
+
+	return generate_class_index_recursive(dir->get_current_dir());
+}
+void test_fake_script() {
+	GDScriptTests::GDScriptTestRunner runner(get_gdscript_tests_path(), true, false, false);
+	generate_class_index(get_gdscript_tests_path());
+	GDRESettings::get_singleton()->_set_version_override(GODOT_VERSION_FULL_CONFIG);
+	String project_path = GDRESettings::get_singleton()->get_project_path();
+	GDRESettings::get_singleton()->set_project_path(get_gdscript_tests_path());
+	Error err = GDRESettings::get_singleton()->load_project({ get_gdscript_tests_path() });
+	CHECK(err == OK);
+	auto gdscript_test_scripts = get_gdscript2_0_scripts();
+	for (int i = 0; i < gdscript_test_scripts.size(); i++) {
+		auto script_path = gdscript_test_scripts[i];
+		auto sub_case_name = vformat("Testing compiling script %s", script_path);
+		String script_text = FileAccess::get_file_as_string(script_path);
+		test_individual_script(script_path, script_text);
+	}
+	GDRESettings::get_singleton()->unload_project();
+	GDRESettings::get_singleton()->_set_version_override("");
+	GDRESettings::get_singleton()->set_project_path(project_path);
+}
+
+Vector<String> get_gdscript2_0_scripts() {
+	REQUIRE(GDRESettings::get_singleton());
+	auto cwd = GDRESettings::get_singleton()->get_cwd();
+	String gdscript_tests_path = get_gdscript_tests_path();
+	auto gdscript_test_scripts = Glob::rglob(gdscript_tests_path.path_join("**/*.gd"), true);
+	auto gdscript_test_error_scripts = Vector<String>();
+	for (int i = 0; i < gdscript_test_scripts.size(); i++) {
+		// remove any that contain ".notest." or "/error/"
+		auto script_path = gdscript_test_scripts[i].trim_prefix(cwd + "/");
+		if (script_path.contains(".notest.") || script_path.contains("error") || script_path.contains("completion")) {
+			gdscript_test_error_scripts.push_back(script_path);
+			gdscript_test_scripts.erase(gdscript_test_scripts[i]);
+			i--;
+		} else {
+			gdscript_test_scripts.write[i] = script_path;
+		}
+	}
+	return gdscript_test_scripts;
+}
+} // namespace TestBytecode

@@ -52,6 +52,7 @@ public:
 	Vector<int> continuation_lines;
 	RBMap<int, int> token_lines;
 	RBMap<int, int> token_columns;
+	int tab_size = 0;
 	Vector<Token> tokens;
 	int current = 0;
 	uint32_t current_line = 1;

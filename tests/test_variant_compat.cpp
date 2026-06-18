@@ -1,5 +1,3 @@
-
-#pragma once
 #include "compat/image_enum_compat.h"
 #include "compat/image_parser_v2.h"
 #include "compat/input_event_parser_v2.h"
@@ -21,6 +19,8 @@
 #else
 #define REQUIRES_DOUBLE_PRECISION false
 #endif
+
+TEST_FORCE_LINK(test_variant_compat)
 
 namespace TestVariantCompat {
 

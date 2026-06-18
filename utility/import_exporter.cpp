@@ -705,7 +705,7 @@ Error ImportExporter::unzip_and_copy_addon(const Ref<ImportInfoGDExt> &iinfo, co
 					// If not, don't overwrite the existing file
 					Vector<uint8_t> plugin_bytes = decomp->compile_code_string(plugin_text);
 					Vector<uint8_t> existing_bytes = decomp->compile_code_string(existing_text);
-					if (decomp->test_bytecode_match(plugin_bytes, existing_bytes, true, false) != OK) {
+					if (decomp->test_bytecode_match(plugin_bytes, existing_bytes, true, true, false) != OK) {
 #if DEBUG_ENABLED
 						print_line(vformat("\n\n***** Different code for %s *****\n", file));
 						// print_line(decomp->get_error_message());
@@ -734,6 +734,12 @@ void ImportExporter::_do_export(uint32_t i, ExportToken *tokens) {
 	}
 
 	tokens[i].report = Exporter::export_resource(output_dir, tokens[i].iinfo);
+	if (tokens[i].report.is_valid() && tokens[i].report->get_error() == OK) {
+		Error err = Exporter::recreate_missing_variants(output_dir, tokens[i].iinfo);
+		if (err && err != ERR_UNAVAILABLE) {
+			// ignore it for now
+		}
+	}
 	rewrite_metadata(tokens[i]);
 	if (tokens[i].supports_multithread) {
 		tokens[i].report->append_error_messages(GDRELogger::get_thread_errors());
@@ -1538,13 +1544,13 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 
 	if (get_settings()->is_project_config_loaded()) { // some pcks do not have project configs
 		write_project_metadata_cfg(output_dir);
-		if constexpr (GDScriptDecomp::FORCE_SPACES_FOR_2_0) {
-			// if we're at v4.5 or higher (<4.5 doesn't support editor_overrides), we want to set "editor_overrides/text_editor/behavior/indent/type" to "Spaces"
-			// This avoids editor churn on the scripts when they're resaved by the editor
-			if (get_ver_major() == 4 && get_ver_minor() >= 5 && !get_settings()->has_project_setting("editor_overrides/text_editor/behavior/indent/type")) {
-				get_settings()->set_project_setting("editor_overrides/text_editor/behavior/indent/type", 1);
-			}
-		}
+		// if constexpr (GDScriptDecomp::FORCE_SPACES_FOR_2_0) {
+		// 	// if we're at v4.5 or higher (<4.5 doesn't support editor_overrides), we want to set "editor_overrides/text_editor/behavior/indent/type" to "Spaces"
+		// 	// This avoids editor churn on the scripts when they're resaved by the editor
+		// 	if (get_ver_major() == 4 && get_ver_minor() >= 5 && get_ver_minor() < 7 && !get_settings()->has_project_setting("editor_overrides/text_editor/behavior/indent/type")) {
+		// 		get_settings()->set_project_setting("editor_overrides/text_editor/behavior/indent/type", 1);
+		// 	}
+		// }
 		if (get_settings()->save_project_config(output_dir) != OK) {
 			print_line("ERROR: Failed to save project config!");
 		} else {

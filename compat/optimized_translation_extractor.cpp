@@ -30,6 +30,8 @@
 
 #include "optimized_translation_extractor.h"
 
+#include "core/string/optimized_translation.h"
+#include "utility/gdre_settings.h"
 #include "utility/resource_info.h"
 
 #include "core/object/class_db.h"
@@ -293,8 +295,17 @@ void OptimizedTranslationExtractor::_get_property_list(List<PropertyInfo> *p_lis
 	p_list->push_back(PropertyInfo(Variant::OBJECT, "load_from", PROPERTY_HINT_RESOURCE_TYPE, "Translation", PROPERTY_USAGE_EDITOR));
 }
 
+void OptimizedTranslationExtractor::set_use_old_hash(bool p_use_old_hash) {
+	use_old_hash = p_use_old_hash;
+}
+
+bool OptimizedTranslationExtractor::get_use_old_hash() const {
+	return use_old_hash;
+}
+
 void OptimizedTranslationExtractor::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("generate", "from"), &OptimizedTranslationExtractor::generate);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("create_from", "from"), &OptimizedTranslationExtractor::create_from);
 }
 
 HashSet<uint32_t> OptimizedTranslationExtractor::get_message_hash_set() const {
@@ -428,7 +439,7 @@ String OptimizedTranslationExtractor::get_message_str(const char *p_src_text) co
 	int htsize = hash_table.size();
 
 	if (htsize == 0) {
-		return StringName();
+		return String();
 	}
 
 	uint32_t h = hash(0, p_src_text);
@@ -633,6 +644,24 @@ Ref<OptimizedTranslationExtractor> OptimizedTranslationExtractor::create_from(co
 	ote->set("hash_table", p_otr->get("hash_table"));
 	ote->set("bucket_table", p_otr->get("bucket_table"));
 	ote->set("strings", p_otr->get("strings"));
+	Ref<ResourceInfo> ri = ResourceInfo::get_info_from_resource(p_otr);
+	int ver_major = 0;
+	int ver_minor = 0;
+	if ((!ri.is_valid() || ri->resource_format != "binary") && GDRESettings::get_singleton() && GDRESettings::get_singleton()->is_pack_loaded()) {
+		ver_major = GDRESettings::get_singleton()->get_ver_major();
+		ver_minor = GDRESettings::get_singleton()->get_ver_minor();
+	} else if (ri.is_valid()) {
+		ver_major = ri->ver_major;
+		ver_minor = ri->ver_minor;
+	}
+	if (ver_major >= 4 || (ver_major == 4 && ver_minor >= 5)) {
+		ote->use_old_hash = false;
+	} else {
+		ote->use_old_hash = true;
+	}
+	if (ver_major != 0 && ver_major <= 3) {
+		ote->set_original_class("PHashTranslation");
+	}
 	return ote;
 }
 

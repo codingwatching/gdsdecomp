@@ -38,7 +38,7 @@
 // Copy and paste of FileAccessPatched
 // Doing this solely because _apply_patch() makes a call to PackedData::get_singleton()->get_delta_patches()
 class FileAccessPatchedGDRE : public FileAccess {
-	GDSOFTCLASS(FileAccessPatchedGDRE, FileAccess);
+	GDCLASS(FileAccessPatchedGDRE, FileAccess);
 
 	Ref<FileAccess> old_file;
 	mutable Vector<uint8_t> patched_file_data;
@@ -64,6 +64,8 @@ protected:
 
 	virtual Error open_internal(const String &p_path, int p_mode_flags) override { return ERR_UNAVAILABLE; }
 
+	static void _bind_methods();
+
 public:
 	Error open_custom(const Ref<FileAccess> &p_old_file);
 
@@ -85,6 +87,8 @@ public:
 	virtual void close() override;
 
 	virtual bool file_exists(const String &p_name) override;
+
+	static Ref<FileAccessPatchedGDRE> create(Ref<FileAccess> p_old_file);
 };
 // To detect changes to FileAccessPatched
 CHECK_SIZE_MATCH_NO_PADDING(FileAccessPatched, FileAccessPatchedGDRE);

@@ -73,6 +73,7 @@ enum Format {
 	FORMAT_ETC2_RGB8,
 	FORMAT_ETC2_RGBA8,
 	FORMAT_ETC2_RGB8A1,
+	FORMAT_ASTC_8x8, // custom to Sonic Colors Ultimate
 	FORMAT_MAX
 };
 }
@@ -90,6 +91,7 @@ public:
 
 	static String get_v4_format_identifier(Image::Format p_format);
 
+	static V3Image::Format convert_image_format_enum_v4_to_v3(Image::Format p_format);
 	static Image::Format convert_image_format_enum_v3_to_v4(V3Image::Format fmt);
 	static V2Image::Format convert_image_format_enum_v4_to_v2(Image::Format p_format);
 	static Image::Format convert_image_format_enum_v2_to_v4(V2Image::Format p_format);

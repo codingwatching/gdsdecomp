@@ -50,15 +50,25 @@ private:
 	struct Package {
 		String filename;
 		unzFile zfile = nullptr;
+		Vector<uint8_t> install_pack_buf;
+	};
+	struct ManifestInfo {
+		String package_name;
+		String app_version_name;
+		int64_t app_version_code;
+		String godot_editor_version_string;
+		String godot_library_version_string;
 	};
 	Vector<Package> packages;
 
 	HashMap<String, File> files;
 
 	static APKArchive *instance;
+	bool handle_xapk(const String &pack_path, ManifestInfo &r_manifest_info, Vector<uint8_t> &install_pack_f);
+	Error get_manifest_info(ManifestInfo &r_manifest_info);
 
 public:
-	Error get_version_string_from_manifest(String &version_string);
+	static Error get_manifest_info_from_buffer(Vector<uint8_t> &p_buf, ManifestInfo &r_manifest_info);
 
 	void close_handle(unzFile p_file) const;
 	unzFile get_file_handle(String p_file) const;
@@ -80,6 +90,7 @@ class FileAccessAPK : public FileAccess {
 	GDSOFTCLASS(FileAccessAPK, FileAccess);
 	unzFile zfile = nullptr;
 	unz_file_info64 file_info;
+	String path;
 
 	mutable bool at_eof = false;
 
@@ -88,6 +99,9 @@ class FileAccessAPK : public FileAccess {
 public:
 	virtual Error open_internal(const String &p_path, int p_mode_flags) override; ///< open a file
 	virtual bool is_open() const override; ///< true when file is open
+
+	virtual String get_path() const override; /// returns the path for the current open file
+	virtual String get_path_absolute() const override; /// returns the absolute path for the current open file
 
 	virtual void seek(uint64_t p_position) override; ///< seek to a given position
 	virtual void seek_end(int64_t p_position = 0) override; ///< seek from the end of file

@@ -160,6 +160,11 @@ String GDScriptDecomp::get_constant_string(const Vector<Variant> &constants, uin
 	String constString;
 	GDSDECOMP_FAIL_COND_V_MSG(constId >= constants.size(), "", "Invalid constant ID.");
 	const Variant &var = constants[constId];
+	return get_constant_string(var);
+}
+
+String GDScriptDecomp::get_constant_string(const Variant &var) {
+	String constString;
 	// negative decimal constants are encoded as `op_sub, num` instead of `-num` in GDScript 1.0, this is a hex number
 	if (get_bytecode_version() < GDSCRIPT_2_0_VERSION && var.get_type() == Variant::INT && var.operator int64_t() < 0) {
 		if (var.operator int64_t() < INT_MIN) {
@@ -611,26 +616,49 @@ Error GDScriptDecomp::debug_print(Vector<uint8_t> p_buffer) {
 }
 
 Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
-#if 0
-	debug_print(p_buffer);
-#endif
-	//Cleanup
+	error_message = "";
 	script_text = String();
 
-	ScriptState state;
-	//Load bytecode
-	Error err = get_script_state(p_buffer, state);
+	ScriptState s;
+	Error err = get_script_state(p_buffer, s);
 	ERR_FAIL_COND_V(err != OK, err);
-	Vector<StringName> &identifiers = state.identifiers;
-	Vector<Variant> &constants = state.constants;
-	Vector<uint32_t> &tokens = state.tokens;
-	HashMap<uint32_t, uint32_t> &lines = state.lines;
-	HashMap<uint32_t, uint32_t> &columns = state.columns;
-	int version = state.bytecode_version;
 
+	int tab_size = 4;
+
+	if (s.columns.size() > 0) {
+		Vector<int> diffs;
+		int prev_column = 1;
+		for (auto &[key, value] : s.columns) {
+			int curr_column = value;
+			if (curr_column > prev_column) {
+				diffs.push_back(curr_column - prev_column);
+			}
+			prev_column = curr_column;
+		}
+		tab_size = gdre::get_most_popular_value(diffs);
+		if (tab_size <= 1) {
+			tab_size = 4;
+		}
+	}
+
+	Ref<GDScriptTokenizerCompat> tokenizer = GDScriptTokenizerCompat::create_buffer_tokenizer(this, p_buffer);
+	if (tokenizer.is_null()) {
+		return ERR_INVALID_DATA;
+	}
+	using Token = GDScriptTokenizerCompat::Token;
+	tokenizer->set_multiline_mode(false);
+
+	Token current = tokenizer->scan();
+	Vector<Token> tokens;
+	while (current.type != Token::Type::G_TK_EOF) {
+		tokens.push_back(current);
+		current = tokenizer->scan();
+	}
+
+	bool use_spaces = false;
+	bool first_line = true;
+	int version = s.bytecode_version;
 	int bytecode_version = get_bytecode_version();
-	int variant_ver_major = get_variant_ver_major();
-	uint32_t FUNC_MAX = get_function_count();
 	GDSDECOMP_FAIL_COND_V(version != get_bytecode_version(), ERR_INVALID_DATA);
 
 	//Decompile script
@@ -638,35 +666,36 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 	int indent = 0;
 
 	GlobalToken prev_token = G_TK_NEWLINE;
-	GlobalToken prev_prev_token = G_TK_MAX;
 	uint32_t prev_line = 1;
-	uint32_t prev_line_start_column = 1;
 
-	int tab_size = 1;
-	bool use_spaces = false;
-	if constexpr (FORCE_SPACES_FOR_2_0) {
-		if (columns.size() > 0) {
-			use_spaces = true;
-		}
-	}
-	bool first_line = true;
-
-	auto handle_newline = [&](int i, GlobalToken curr_token) {
-		auto curr_line = state.get_token_line(i);
-		auto curr_column = state.get_token_column(i);
-		for (int j = 0; j < indent; j++) {
-			script_text += use_spaces ? " " : "\t";
+	auto write_current_line = [&](int p_indent) {
+		for (int j = 0; j < p_indent; j++) {
+			if (use_spaces) {
+				for (int i = 0; i < tab_size; i++) {
+					script_text += " ";
+				}
+			} else {
+				script_text += "\t";
+			}
 		}
 		script_text += line;
+	};
+
+	auto handle_newline = [&](int i, GlobalToken curr_token) {
+		auto curr_line = tokens[i].end_line;
+		write_current_line(indent);
 		if (curr_line <= prev_line) {
 			curr_line = prev_line + 1; // force new line
 		}
+		bool was_escaped = false;
 		while (curr_line > prev_line) {
 			if (curr_token != G_TK_NEWLINE && bytecode_version < GDSCRIPT_2_0_VERSION) {
 				script_text += "\\"; // line continuation
-			} else if (bytecode_version >= GDSCRIPT_2_0_VERSION && !lines.has(i)) {
+				was_escaped = true;
+			} else if (bytecode_version >= GDSCRIPT_2_0_VERSION && tokens[i].start_line != tokens[i].end_line) {
 				if (!first_line || (!gdre::remove_whitespace(line).is_empty())) {
 					script_text += "\\";
+					was_escaped = true;
 				}
 			}
 			script_text += "\n";
@@ -674,34 +703,27 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 		}
 		first_line = false;
 		line = String();
-		if (curr_token == G_TK_NEWLINE) {
-			indent = tokens[i] >> TOKEN_BITS;
-		} else if (bytecode_version >= GDSCRIPT_2_0_VERSION) {
-			prev_token = G_TK_NEWLINE;
-			int col_diff = (int)curr_column - (int)prev_line_start_column;
-			if (col_diff != 0) {
-				int tabs = col_diff / tab_size;
-				if (tabs == 0) {
-					indent += (col_diff > 0 ? 1 : -1);
-				} else {
-					indent += tabs;
-				}
-			}
-			prev_line_start_column = curr_column;
-		}
 		prev_token = G_TK_NEWLINE;
 	};
 
 	auto check_new_line = [&](int i) {
-		auto ln = state.get_token_line(i);
+		auto ln = tokens[i].start_line;
+		if (ln > prev_line && ln != 0) {
+			return true;
+		}
+		ln = tokens[i].end_line;
 		if (ln != prev_line && ln != 0) {
 			return true;
 		}
 		return false;
 	};
 
+	auto is_token_newline_or_indent = [](GlobalToken p_token) {
+		return p_token == G_TK_NEWLINE || p_token == G_TK_DEDENT || p_token == G_TK_INDENT;
+	};
+
 	auto ensure_space_func = [&]() {
-		if (!line.ends_with(" ") && prev_token != G_TK_NEWLINE) {
+		if (!line.ends_with(" ") && !is_token_newline_or_indent(prev_token)) {
 			line += " ";
 		}
 	};
@@ -709,17 +731,27 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 	auto ensure_ending_space_func([&](int idx, GlobalToken check_tk = G_TK_NEWLINE) {
 		if (
 				!line.ends_with(" ") && idx < tokens.size() - 1 &&
-				(get_global_token(tokens[idx + 1]) != G_TK_NEWLINE &&
+				(!is_token_newline_or_indent(tokens[idx + 1].type) &&
 						!check_new_line(idx + 1)) &&
-				(check_tk == G_TK_NEWLINE || get_global_token(tokens[idx + 1]) != check_tk)) {
+				(check_tk == G_TK_NEWLINE || tokens[idx + 1].type != check_tk)) {
 			line += " ";
 		}
 	});
 
 	for (int i = 0; i < tokens.size(); i++) {
-		uint32_t local_token = tokens[i] & TOKEN_MASK;
-		GlobalToken curr_token = get_global_token(local_token);
-		if (curr_token != G_TK_NEWLINE && check_new_line(i)) {
+		const Token &token = tokens[i];
+		GlobalToken curr_token = tokens[i].type;
+		if (!is_token_newline_or_indent(curr_token) && check_new_line(i)) {
+			if (curr_token == G_TK_CONSTANT && tokens[i].literal.get_type() == Variant::Type::STRING) {
+				String str = tokens[i].literal.operator String().c_escape_multiline();
+				int num_newlines = str.count("\n");
+				int num_lines = token.end_line - token.start_line;
+				if (num_newlines == num_lines) {
+					line += "\"\"\"" + str + "\"\"\"";
+					prev_line = token.end_line;
+					continue;
+				}
+			}
 			handle_newline(i, curr_token);
 		}
 		switch (curr_token) {
@@ -728,26 +760,34 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 			} break;
 			case G_TK_ANNOTATION: // fallthrough
 			case G_TK_IDENTIFIER: {
-				uint32_t identifier = tokens[i] >> TOKEN_BITS;
-				GDSDECOMP_FAIL_COND_V(identifier >= (uint32_t)identifiers.size(), ERR_INVALID_DATA);
-				line += String(identifiers[identifier]);
+				line += tokens[i].literal.operator String();
 			} break;
 			case G_TK_CONSTANT: {
-				uint32_t constant = tokens[i] >> TOKEN_BITS;
-				GDSDECOMP_FAIL_COND_V(constant >= (uint32_t)constants.size(), ERR_INVALID_DATA);
+				if (bytecode_version >= GDSCRIPT_2_0_VERSION && token.literal.get_type() == Variant::Type::STRING && check_new_line(i + 1)) {
+					auto &next_token = tokens[i + 1];
+					if (next_token.type != G_TK_NEWLINE && token.start_line == next_token.start_line) {
+						String str = tokens[i].literal.operator String().c_escape_multiline();
+						int num_newlines = str.count("\n");
+						int num_lines = next_token.end_line - next_token.start_line;
+						if (num_newlines == num_lines) {
+							line += "\"\"\"" + str + "\"\"\"";
+							prev_line = next_token.end_line;
+							continue;
+						}
+					}
+				}
 				// TODO: handle GDScript 2.0 multi-line strings: we have to check the number of newlines
 				// in the string and if the next token has a line number difference >= the number of newlines
-				line += get_constant_string(constants, constant);
+				line += get_constant_string(tokens[i].literal);
 			} break;
 			case G_TK_SELF: {
 				line += "self";
 			} break;
 			case G_TK_BUILT_IN_TYPE: {
-				line += VariantDecoderCompat::get_variant_type_name(tokens[i] >> TOKEN_BITS, variant_ver_major);
+				line += token.literal.operator String();
 			} break;
 			case G_TK_BUILT_IN_FUNC: {
-				GDSDECOMP_FAIL_COND_V(tokens[i] >> TOKEN_BITS >= FUNC_MAX, ERR_INVALID_DATA);
-				line += get_function_name(tokens[i] >> TOKEN_BITS);
+				line += token.literal.operator String();
 			} break;
 			case G_TK_OP_IN: {
 				ensure_space_func();
@@ -948,7 +988,8 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 				line += "onready ";
 			} break;
 			case G_TK_PR_TOOL: {
-				line += "tool ";
+				line += "tool";
+				ensure_ending_space_func(i);
 			} break;
 			case G_TK_PR_STATIC: {
 				line += "static ";
@@ -1059,8 +1100,12 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 				line += "->";
 				ensure_ending_space_func(i);
 			} break;
-			case G_TK_INDENT:
-			case G_TK_DEDENT:
+			case G_TK_INDENT: {
+				indent++;
+			} break;
+			case G_TK_DEDENT: {
+				indent--;
+			} break;
 			case G_TK_NEWLINE: {
 				handle_newline(i, curr_token);
 			} break;
@@ -1160,36 +1205,26 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 				//skip - invalid
 			} break;
 			case G_TK_MAX: {
-				GDSDECOMP_FAIL_V_MSG(ERR_INVALID_DATA, "Invalid token: TK_MAX (" + itos(local_token) + ")");
+				GDSDECOMP_FAIL_V_MSG(ERR_INVALID_DATA, "Invalid token: TK_MAX (" + itos(tokens[i].type) + ")");
 			} break;
 			default: {
-				GDSDECOMP_FAIL_V_MSG(ERR_INVALID_DATA, "Invalid token: " + itos(local_token));
+				GDSDECOMP_FAIL_V_MSG(ERR_INVALID_DATA, "Invalid token: " + itos(tokens[i].type));
 			}
 		}
-		prev_prev_token = prev_token;
 		prev_token = curr_token;
 	}
 
-	if (!line.is_empty() || (prev_prev_token == G_TK_NEWLINE && bytecode_version < GDSCRIPT_2_0_VERSION && indent > 0)) {
-		for (int j = 0; j < indent; j++) {
-			script_text += use_spaces ? " " : "\t";
-		}
-		script_text += line;
+	if (!line.is_empty() || (is_token_newline_or_indent(prev_token) && bytecode_version < GDSCRIPT_2_0_VERSION && indent > 0)) {
+		write_current_line(indent);
 	}
-
-	// GDScript 2.0 can have parsing errors if the script does not end with a newline
-	if (bytecode_version >= GDSCRIPT_2_0_VERSION && !script_text.ends_with("\n")) {
-		script_text += "\n";
-	}
-
 	if (script_text == String()) {
-		if (identifiers.size() == 0 && constants.size() == 0 && tokens.size() == 0) {
+		if (s.identifiers.size() == 0 && s.constants.size() == 0 && s.tokens.size() == 0) {
 			return OK;
 		}
 		error_message = RTR("Invalid token");
 		return ERR_INVALID_DATA;
 	}
-	error_message = "";
+
 	return OK;
 }
 
@@ -1779,7 +1814,7 @@ static int64_t continuity_tester(const HashMap<K, V> &p_vector, const HashMap<K,
 	return -1;
 }
 
-Error GDScriptDecomp::test_bytecode_match(const Vector<uint8_t> &p_buffer1, const Vector<uint8_t> &p_buffer2, bool ignore_lines_cols, bool is_printing_verbose) {
+Error GDScriptDecomp::test_bytecode_match(const Vector<uint8_t> &p_buffer1, const Vector<uint8_t> &p_buffer2, bool ignore_columns, bool ignore_lines, bool is_printing_verbose) {
 	int64_t discontinuity = -1;
 	if (p_buffer1 == p_buffer2) {
 		return OK;
@@ -1853,7 +1888,7 @@ Error GDScriptDecomp::test_bytecode_match(const Vector<uint8_t> &p_buffer1, cons
 	auto old_tokens_size = state1.tokens.size();
 	auto new_tokens_size = state2.tokens.size();
 	discontinuity = continuity_tester(state1.tokens, state2.tokens, "Tokens");
-	if (discontinuity == -1 && ignore_lines_cols && err == OK) {
+	if (discontinuity == -1 && ignore_lines && ignore_columns && err == OK) {
 		return OK;
 	}
 
@@ -1984,9 +2019,39 @@ Error GDScriptDecomp::test_bytecode_match(const Vector<uint8_t> &p_buffer1, cons
 		}
 	};
 
-	do_vmap_thing("Lines", state1.lines, state2.lines);
-	do_vmap_thing("Columns", state1.columns, state2.columns);
-	do_vmap_thing("End Lines", state1.end_lines, state2.end_lines);
+	if (!ignore_lines) {
+		do_vmap_thing("Lines", state1.lines, state2.lines);
+	}
+	if (!ignore_columns) {
+		do_vmap_thing("Columns", state1.columns, state2.columns);
+	} else if (!ignore_lines) {
+		auto buffer = GDScriptTokenizerCompat::create_buffer_tokenizer(this, p_buffer1);
+		ERR_FAIL_COND_V_MSG(buffer.is_null(), ERR_INVALID_DATA, "Error creating buffer tokenizer");
+		buffer->set_multiline_mode(false);
+		auto buffer2 = GDScriptTokenizerCompat::create_buffer_tokenizer(this, p_buffer2);
+		ERR_FAIL_COND_V_MSG(buffer2.is_null(), ERR_INVALID_DATA, "Error creating buffer tokenizer");
+		buffer2->set_multiline_mode(false);
+		auto token = buffer->scan();
+		auto recompiled_token = buffer2->scan();
+		while (token.type != GDScriptTokenizerCompat::Token::Type::G_TK_EOF) {
+			if (token.type != recompiled_token.type) {
+				REPORT_DIFF("Different Tokens: " + GDScriptTokenizerCompat::get_token_name(token.type) + " != " + GDScriptTokenizerCompat::get_token_name(recompiled_token.type));
+			}
+			token = buffer->scan();
+			recompiled_token = buffer2->scan();
+		}
+		if (recompiled_token.type != GDScriptTokenizerCompat::Token::Type::G_TK_EOF) {
+			int number_of_other_tokens = 1;
+			while (recompiled_token.type != GDScriptTokenizerCompat::Token::Type::G_TK_EOF) {
+				number_of_other_tokens++;
+				recompiled_token = buffer2->scan();
+			}
+			REPORT_DIFF("Different Token sizes: " + itos(number_of_other_tokens));
+		}
+	}
+	if (!ignore_lines) {
+		do_vmap_thing("End Lines", state1.end_lines, state2.end_lines);
+	}
 	return err;
 }
 

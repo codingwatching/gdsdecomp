@@ -248,7 +248,7 @@ func _validate():
 		get_ok_button().disabled = false
 
 func _on_select_project_dialog_files_selected(paths: PackedStringArray) -> void:
-	call_on_next_process(call_on_next_process.bind(_load_project.bind(paths)))
+	GDREMainLoop.call_on_next_process(GDREMainLoop.call_on_next_process.bind(_load_project.bind(paths)))
 
 func _on_select_project_dialog_file_selected(path: String) -> void:
 	_on_select_project_dialog_files_selected([path])
@@ -367,10 +367,10 @@ func do_it(output: String):
 		self.hide()
 
 func _on_select_output_dialog_dir_selected(dir: String) -> void:
-	call_on_next_process(call_on_next_process.bind(do_it.bind(dir)))
+	GDREMainLoop.call_on_next_process(GDREMainLoop.call_on_next_process.bind(do_it.bind(dir)))
 
 func _on_select_output_dialog_file_selected(path: String) -> void:
-	call_on_next_process(call_on_next_process.bind(do_it.bind(path)))
+	GDREMainLoop.call_on_next_process(GDREMainLoop.call_on_next_process.bind(do_it.bind(path)))
 
 func _on_select_project_button_pressed() -> void:
 	%SelectProjectDialog.popup_centered()

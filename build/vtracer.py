@@ -3,14 +3,39 @@ import platform
 import shutil
 from subprocess import check_output
 
-from .common import get_cmd_env, is_dev_build
+from .common import get_cmd_env, is_dev_build, find_llvm_prebuild_path, get_sources, add_libs_to_env
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from SCons.Node.FS import File as SConsFile
+    from ....misc.utility.scons_hints import *
+
+from .paths import VTRACER_LIBS, VTRACER_PREFIX, get_module_dir, get_vtracer_build_dir, get_vtracer_dir
+
+
+def get_cargo_arch(build_env):
+    if build_env["arch"] == "x86_32":
+        return "i686"
+    if build_env["arch"] == "x86_64":
+        return "x86_64"
+    if build_env["arch"] == "arm32":
+        return "armv7"
+    if build_env["arch"] == "arm64":
+        return "aarch64"
+    if build_env["arch"] == "riscv":
+        return "riscv32gc"
+    if build_env["arch"] == "riscv64":
+        return "riscv64gc"
+    raise Exception(f"Unsupported architecture: {build_env['arch']}")
 
 
 def get_cargo_target(build_env):
-    arch_part = "x86_64" if build_env["arch"] == "x86_64" else "aarch64"
+    arch_part = get_cargo_arch(build_env)
     if build_env["platform"] == "macos":
         return f"{arch_part}-apple-darwin"
     if build_env["platform"] == "linuxbsd":
+        if arch_part == "archv7":
+            return f"{arch_part}-unknown-linux-gnueabihf"
         return f"{arch_part}-unknown-linux-gnu"
     if build_env["platform"] == "windows":
         suffix = "msvc" if build_env.msvc else "gnu"
@@ -24,22 +49,17 @@ def get_cargo_target(build_env):
     raise Exception(f"Unsupported platform: {build_env['platform']}")
 
 
-def write_cargo_config_toml_file(build_env, module_dir, vtracer_prefix, find_llvm_prebuild_path):
+def write_cargo_config_toml_file(build_env, module_dir, vtracer_prefix):
     is_windows = platform.system().lower().startswith("win")
     llvm_prebuild_path = find_llvm_prebuild_path(build_env).replace("\\", "/")
-    ar = llvm_prebuild_path + "/llvm-ar"
+    ar_suffix = ".exe" if is_windows else ""
+    linker_suffix = ".cmd" if is_windows else ""
+    ar = llvm_prebuild_path + "/llvm-ar" + ar_suffix
     min_sdk_ver = build_env["ndk_platform"].split("-")[1]
-    arm64_linker = llvm_prebuild_path + f"/aarch64-linux-android{min_sdk_ver}-clang"
-    arm_linker = llvm_prebuild_path + f"/arm7a-linux-android{min_sdk_ver}-clang"
-    x86_linker = llvm_prebuild_path + f"/i686-linux-android{min_sdk_ver}-clang"
-    x86_64_linker = llvm_prebuild_path + f"/x86_64-linux-android{min_sdk_ver}-clang"
-
-    if is_windows:
-        ar += ".exe"
-        arm64_linker += ".cmd"
-        arm_linker += ".cmd"
-        x86_linker += ".cmd"
-        x86_64_linker += ".cmd"
+    arm64_linker = llvm_prebuild_path + f"/aarch64-linux-android{min_sdk_ver}-clang{linker_suffix}"
+    arm_linker = llvm_prebuild_path + f"/arm7a-linux-android{min_sdk_ver}-clang{linker_suffix}"
+    x86_linker = llvm_prebuild_path + f"/i686-linux-android{min_sdk_ver}-clang{linker_suffix}"
+    x86_64_linker = llvm_prebuild_path + f"/x86_64-linux-android{min_sdk_ver}-clang{linker_suffix}"
 
     text = f"""
 [target.aarch64-linux-android]
@@ -90,23 +110,18 @@ def get_vtracer_lib_dir(build_env, vtracer_build_dir):
 def get_vtracer_lib_paths(build_env, vtracer_build_dir, vtracer_libs):
     build_dir = get_vtracer_lib_dir(build_env, vtracer_build_dir)
     lib_paths = [os.path.join(build_dir, lib) for lib in get_vtracer_libs(build_env, vtracer_libs)]
-    print("LIB PATHS", lib_paths)
     return lib_paths
 
 
 def cargo_builder(
-    module_env,
-    external_dir,
-    source_dir,
-    build_dir,
-    libs,
     build_env,
-    module_dir,
-    vtracer_prefix,
-    find_llvm_prebuild_path,
+    source_dir: str,
+    build_dir: str,
+    libs,
+    module_dir: str,
+    vtracer_prefix: str,
 ):
-    if build_env is None:
-        raise Exception("build_env is required")
+    print("BUILDING VTRACER, LIBRARY PATH: ", str(libs[0].get_abspath()))
     build_variant = "Debug" if is_dev_build(build_env) else "Release"
     print("BUILD VARIANT", build_variant)
     cargo_target = get_cargo_target(build_env)
@@ -120,7 +135,7 @@ def cargo_builder(
 
     cargo_env = get_cmd_env(build_env)
     if build_env["platform"] == "android":
-        write_cargo_config_toml_file(build_env, module_dir, vtracer_prefix, find_llvm_prebuild_path)
+        write_cargo_config_toml_file(build_env, module_dir, vtracer_prefix)
     write_cargo_toolchain_toml_file(build_env, module_dir, vtracer_prefix)
     cargo_env["CARGO_TARGET_DIR"] = build_dir
     cargo_env["CBINDGEN_TARGET_DIR"] = cbindgen_dir
@@ -138,11 +153,13 @@ def cargo_builder(
     output = check_output(cargo_cmd, cwd=source_dir, env=cargo_env)
     print(output.decode("utf-8"))
 
-    if module_env.msvc:
-        destination_lib_dir = get_vtracer_lib_dir(module_env, build_dir)
+    if build_env.msvc:
+        destination_lib_dir = get_vtracer_lib_dir(build_env, build_dir)
         for lib in libs:
-            lib_path = os.path.join(destination_lib_dir, os.path.basename(lib).split(".")[0] + module_env["LIBSUFFIX"])
-            if os.path.exists(lib):
+            lib_path = os.path.join(
+                destination_lib_dir, os.path.basename(str(lib)).split(".")[0] + build_env["LIBSUFFIX"]
+            )
+            if os.path.exists(str(lib.get_abspath())):
                 shutil.copy(lib, lib_path)
 
 
@@ -150,45 +167,36 @@ def build_vtracer(
     root_env,
     env_gdsdecomp,
     module_obj,
-    module_dir,
-    external_dir,
-    vtracer_prefix,
-    vtracer_dir,
-    vtracer_build_dir,
-    vtracer_libs,
-    get_sources,
-    add_libs_to_env,
-    builder_class,
-    find_llvm_prebuild_path,
 ):
-    source_suffixes = ["*.h", "*.cpp", "*.rs", "*.txt"]
+    module_dir = get_module_dir(root_env)
+    vtracer_prefix = VTRACER_PREFIX
+    vtracer_dir = get_vtracer_dir(root_env)
+    vtracer_build_dir = get_vtracer_build_dir(root_env)
+    vtracer_libs = VTRACER_LIBS
+
+    root_env.Append(LIBPATH=[get_vtracer_lib_dir(root_env, vtracer_build_dir)])
+    source_suffixes = ["*.h", "*.cpp", "*.rs", "*.txt", "cargo.toml"]
+    libs = get_vtracer_lib_paths(root_env, vtracer_build_dir, vtracer_libs)
     lib_suffix = ".lib" if root_env.msvc else ".a"
 
     def vtracer_builder(target, source, env):
-        print("VTRACER BUILD")
-        print(str(target[0]))
-        print(source)
         cargo_builder(
-            root_env,
-            external_dir,
+            env,
             vtracer_dir,
             vtracer_build_dir,
-            get_vtracer_lib_paths(root_env, vtracer_build_dir, vtracer_libs),
-            env,
+            target,
             module_dir,
             vtracer_prefix,
-            find_llvm_prebuild_path,
         )
 
-    env_gdsdecomp["BUILDERS"]["vtracerBuilder"] = builder_class(
-        action=vtracer_builder,
-        suffix=lib_suffix,
+    env_gdsdecomp["BUILDERS"]["vtracerBuilder"] = env_gdsdecomp.Builder(
+        action=env_gdsdecomp.Run(vtracer_builder),
         src_suffix=source_suffixes,
     )
-    libs = get_vtracer_lib_paths(root_env, vtracer_build_dir, vtracer_libs)
-    vtracer_sources = get_sources(module_dir, vtracer_prefix, source_suffixes)
-    env_gdsdecomp.Alias("vtracerlib", [env_gdsdecomp.vtracerBuilder(libs, vtracer_sources)])
-    add_libs_to_env(root_env, env_gdsdecomp, module_obj, libs, vtracer_sources)
+    vtracer_sources = get_sources(module_dir, vtracer_prefix, source_suffixes, ["target/"])
+    vtracer_obj = env_gdsdecomp.vtracerBuilder(libs, vtracer_sources)
+    env_gdsdecomp.Alias("vtracer", [vtracer_obj])
+    add_libs_to_env(root_env, libs)
+    env_gdsdecomp.Requires(module_obj, vtracer_obj)
     if root_env.msvc:
         root_env.Append(LINKFLAGS=["userenv.lib"])
-

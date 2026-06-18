@@ -27,4 +27,6 @@ public:
 	virtual String get_default_export_extension(const String &res_path) const override;
 	virtual Vector<String> get_export_extensions(const String &res_path) const override;
 	virtual Error test_export(const Ref<ExportReport> &export_report, const String &original_project_dir) const override;
+
+	virtual Error recreate_missing_variants(const String &output_dir, Ref<ImportInfo> import_infos) const override;
 };

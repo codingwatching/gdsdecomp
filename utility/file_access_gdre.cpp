@@ -4,13 +4,115 @@
 
 #include "file_access_gdre.h"
 #include "core/io/file_access.h"
+#include "core/object/class_db.h"
 #include "core/os/os.h"
+#include "crypto/custom_decryptor.h"
+#include "crypto/file_access_encrypted_custom.h"
 #include "file_access_apk.h"
 #include "gdre_packed_source.h"
 #include "gdre_settings.h"
 #include "packed_file_info.h"
 #include "utility/common.h"
 #include "utility/file_access_buffer.h"
+
+namespace CoreBind {
+PackedFile::PackedFile(const PackedData::PackedFile &p_pf) : pf(p_pf) {}
+
+void PackedFile::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("get_pack"), &PackedFile::get_pack);
+	ClassDB::bind_method(D_METHOD("set_pack"), &PackedFile::set_pack);
+
+	ClassDB::bind_method(D_METHOD("get_offset"), &PackedFile::get_offset);
+	ClassDB::bind_method(D_METHOD("set_offset"), &PackedFile::set_offset);
+
+	ClassDB::bind_method(D_METHOD("get_size"), &PackedFile::get_size);
+	ClassDB::bind_method(D_METHOD("set_size"), &PackedFile::set_size);
+
+	ClassDB::bind_method(D_METHOD("get_md5"), &PackedFile::get_md5);
+	ClassDB::bind_method(D_METHOD("set_md5"), &PackedFile::set_md5);
+
+	// src doesn't work here because it's a pointer to a non-object class, and `try_open_file` won't need it
+	// ClassDB::bind_method(D_METHOD("get_src"), &PackedFile::get_src);
+	// ClassDB::bind_method(D_METHOD("set_src"), &PackedFile::set_src);
+
+	ClassDB::bind_method(D_METHOD("is_encrypted"), &PackedFile::is_encrypted);
+	ClassDB::bind_method(D_METHOD("set_encrypted"), &PackedFile::set_encrypted);
+
+	ClassDB::bind_method(D_METHOD("is_bundle"), &PackedFile::is_bundle);
+	ClassDB::bind_method(D_METHOD("set_bundle"), &PackedFile::set_bundle);
+
+	ClassDB::bind_method(D_METHOD("is_delta"), &PackedFile::is_delta);
+	ClassDB::bind_method(D_METHOD("set_delta"), &PackedFile::set_delta);
+
+	ClassDB::bind_method(D_METHOD("get_salt"), &PackedFile::get_salt);
+	ClassDB::bind_method(D_METHOD("set_salt"), &PackedFile::set_salt);
+
+	ADD_PROPERTY(PropertyInfo(Variant::STRING, "pack"), "set_pack", "get_pack");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "offset"), "set_offset", "get_offset");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "size"), "set_size", "get_size");
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_BYTE_ARRAY, "md5"), "set_md5", "get_md5");
+	// ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "src"), "set_src", "get_src");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "encrypted"), "set_encrypted", "is_encrypted");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "bundle"), "set_bundle", "is_bundle");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "delta"), "set_delta", "is_delta");
+	ADD_PROPERTY(PropertyInfo(Variant::STRING, "salt"), "set_salt", "get_salt");
+}
+} //namespace CoreBind
+
+bool PackSourceCustom::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key) {
+	bool result = false;
+	GDVIRTUAL_CALL(_try_open_pack, p_path, p_replace_files, p_offset, p_decryption_key, result);
+	return result;
+}
+
+Ref<FileAccess> PackSourceCustom::get_file(const String &p_path, Ref<CoreBind::PackedFile> p_file, const Vector<uint8_t> &p_decryption_key) {
+	Ref<FileAccess> result;
+	GDVIRTUAL_CALL(_get_file, p_path, p_file, p_decryption_key, result);
+	return result;
+}
+
+PackSourceCustom::PackSourceCustom() {
+	parent = std::make_unique<PackSourceCustomScript>(this);
+}
+
+PackSource *PackSourceCustom::get_parent() const {
+	return parent.get();
+}
+
+Ref<FileAccess> PackSourceCustom::create_file_access_pck(const String &p_path, const Ref<CoreBind::PackedFile> &p_file, const Vector<uint8_t> &p_decryption_key) {
+	return Ref<FileAccess>(memnew(FileAccessPack(p_path, p_file->get_packed_file(), p_decryption_key)));
+}
+
+int64_t PackSourceCustom::seek_pck_offset_from_exe(Ref<FileAccess> p_file, const String &p_path, const PackedByteArray &custom_magic) {
+	uint64_t ret = 0;
+	if (!GDREPackedSource::seek_offset_from_exe(p_file, p_path, ret, custom_magic)) {
+		return -1;
+	}
+	return static_cast<int64_t>(ret);
+}
+
+Ref<FileAccess> PackSourceCustom::get_bundled_file(const String &p_path, const Ref<CoreBind::PackedFile> &p_file, const Vector<uint8_t> &p_decryption_key) {
+	return GDREPackedSource::get_bundled_file(p_path, &p_file->get_packed_file(), p_decryption_key);
+}
+
+void PackSourceCustom::_bind_methods() {
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("create_file_access_pck", "path", "file", "decryption_key"), &PackSourceCustom::create_file_access_pck);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("seek_pck_offset_from_exe", "file", "path", "custom_magic"), &PackSourceCustom::seek_pck_offset_from_exe, DEFVAL(PackedByteArray()));
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_bundled_file", "path", "file", "decryption_key"), &PackSourceCustom::get_bundled_file);
+	GDVIRTUAL_BIND(_try_open_pack, "path", "replace_files", "offset", "decryption_key");
+	GDVIRTUAL_BIND(_get_file, "path", "file", "decryption_key");
+}
+
+bool PackSourceCustomScript::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key) {
+	return pack_source->try_open_pack(p_path, p_replace_files, p_offset, p_decryption_key.is_empty() && GDRESettings::get_singleton() ? GDRESettings::get_singleton()->get_encryption_key() : p_decryption_key);
+}
+
+Ref<FileAccess> PackSourceCustomScript::get_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key) {
+	return pack_source->get_file(p_path, Ref<CoreBind::PackedFile>(memnew(CoreBind::PackedFile(*p_file))), p_decryption_key.is_empty() && GDRESettings::get_singleton() ? GDRESettings::get_singleton()->get_encryption_key() : p_decryption_key);
+}
+
+PackSourceCustomScript::PackSourceCustomScript(PackSourceCustom *p_pack_source) : pack_source(p_pack_source) {
+}
 
 bool DirSource::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key) {
 	if (!DirAccess::exists(p_path)) {
@@ -26,9 +128,9 @@ bool DirSource::try_open_pack(const String &p_path, bool p_replace_files, uint64
 			print_verbose(s);
 		}
 	}
-	Ref<GDRESettings::PackInfo> pckinfo;
+	Ref<PackInfo> pckinfo;
 	pckinfo.instantiate();
-	pckinfo->init(p_path, Ref<GodotVer>(memnew(GodotVer)), 1, 0, 0, pa.size(), GDRESettings::PackInfo::DIR);
+	pckinfo->init(p_path, Ref<GodotVer>(memnew(GodotVer)), 1, 0, 0, pa.size(), PackInfo::DIR);
 	GDRESettings::get_singleton()->add_pack_info(pckinfo);
 	for (auto &path : pa) {
 		size_t size = 0;
@@ -138,6 +240,12 @@ Error GDREPackedData::add_pack(const String &p_path, bool p_replace_files, uint6
 		sources.push_back(memnew(GDREPackedSource));
 		sources.push_back(memnew(APKArchive));
 	}
+	for (int i = 0; i < custom_sources.size(); i++) {
+		if (custom_sources[i]->try_open_pack(p_path, p_replace_files, p_offset)) {
+			set_disabled(false);
+			return OK;
+		}
+	}
 	for (int i = 0; i < sources.size(); i++) {
 		if (sources[i]->try_open_pack(p_path, p_replace_files, p_offset)) {
 			// need to set the default file access to use our own
@@ -199,7 +307,7 @@ void GDREPackedData::add_path(const String &p_pkg_path, const String &p_path, ui
 	// Get the fixed path if this is from a PCK source
 	String path = p_pck_src ? pf_info->get_path() : abs_path.simplify_path();
 
-	PathMD5 pmd5(path.trim_prefix("res://").md5_buffer());
+	PathMD5 pmd5(path.simplify_path().trim_prefix("res://").md5_buffer());
 
 	bool exists = files.has(pmd5);
 
@@ -456,6 +564,7 @@ void GDREPackedData::_clear() {
 	for (int i = 0; i < sources.size(); i++) {
 		memdelete(sources[i]);
 	}
+	// don't clear custom pack sources, they are owned by the custom pack sources
 	sources.clear();
 	dir_source.reset();
 	set_disabled(true);
@@ -470,6 +579,37 @@ GDREPackedData::~GDREPackedData() {
 	if (root) {
 		_free_packed_dirs(root);
 	}
+}
+
+void GDREPackedData::add_custom_pack_source(Ref<PackSourceCustom> p_source) {
+	ERR_FAIL_COND_MSG(p_source.is_null(), "Pack source is null");
+	custom_sources.insert(0, p_source);
+}
+
+void GDREPackedData::clear_custom_pack_sources() {
+	custom_sources.clear();
+}
+
+void GDREPackedData::_add_path(const String &p_pkg_path, const String &p_path, uint64_t p_ofs, uint64_t p_size, const PackedByteArray &p_md5, Ref<PackSourceCustom> p_src, bool p_replace_files, bool p_encrypted, bool p_bundle, bool p_delta, const String &p_salt) {
+	PackSource *src = p_src->get_parent();
+	ERR_FAIL_COND_MSG(src == nullptr, "Pack source has no parent");
+	return add_path(p_pkg_path, p_path, p_ofs, p_size, p_md5.ptr(), src, p_replace_files, p_encrypted, p_bundle, p_delta, p_salt);
+}
+
+void GDREPackedData::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("try_open_path", "path"), &GDREPackedData::try_open_path);
+	ClassDB::bind_method(D_METHOD("has_path", "path"), &GDREPackedData::has_path);
+
+	ClassDB::bind_method(D_METHOD("try_open_directory", "path"), &GDREPackedData::try_open_directory);
+	ClassDB::bind_method(D_METHOD("has_directory", "path"), &GDREPackedData::has_directory);
+
+	ClassDB::bind_method(D_METHOD("has_delta_patches", "path"), &GDREPackedData::has_delta_patches);
+
+	ClassDB::bind_method(D_METHOD("get_file_size", "path"), &GDREPackedData::get_file_size);
+	ClassDB::bind_method(D_METHOD("add_path", "pkg_path", "path", "ofs", "size", "md5", "src", "replace_files", "encrypted", "bundle", "delta", "salt"), &GDREPackedData::_add_path, DEFVAL(false), DEFVAL(false), DEFVAL(false), DEFVAL(String()));
+	ClassDB::bind_method(D_METHOD("remove_path", "path"), &GDREPackedData::remove_path);
+	ClassDB::bind_method(D_METHOD("clear"), &GDREPackedData::clear);
+	ClassDB::bind_method(D_METHOD("is_disabled"), &GDREPackedData::is_disabled);
 }
 
 constexpr bool should_check_pack(int p_mode_flags) {
@@ -490,6 +630,14 @@ Error FileAccessGDRE::open_internal(const String &p_path, int p_mode_flags) {
 			if (is_gdre_file(p_path)) {
 				WARN_PRINT(vformat("Opening gdre file %s from a loaded external pack???? PLEASE REPORT THIS!!!!", p_path));
 			};
+			if (Ref<CustomDecryptor> custom_decryptor = GDRESettings::get_singleton()->get_custom_decryptor(); custom_decryptor.is_valid() && custom_decryptor->is_file_nonpck_encrypted(proxy)) {
+				auto fae = FileAccessEncryptedCustom::create(custom_decryptor);
+				Error err = fae->open_and_parse(proxy, GDRESettings::get_singleton()->get_encryption_key(), FileAccessEncryptedCustom::MODE_READ, true);
+				if (err != OK) {
+					return err;
+				}
+				proxy = fae;
+			}
 			return proxy->get_error();
 		}
 	}

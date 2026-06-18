@@ -18,6 +18,7 @@
 #include "modules/gdscript/gdscript_resource_format.h"
 #include "modules/zip/zip_reader.h"
 #include "plugin_manager/plugin_manager.h"
+#include "utility/app_version_getter.h"
 #include "utility/common.h"
 #include "utility/file_access_gdre.h"
 #include "utility/gdre_logger.h"
@@ -205,7 +206,6 @@ GDRESettings::GDRESettings() {
 	}
 #endif
 	singleton = this;
-	gdre_packeddata_singleton = memnew(GDREPackedData);
 	addCompatibilityClasses();
 #ifdef TOOLS_ENABLED
 	print_line("GDRE User path: " + get_gdre_user_path());
@@ -241,7 +241,6 @@ GDRESettings::GDRESettings() {
 GDRESettings::~GDRESettings() {
 	PluginManager::save_cache();
 	remove_current_pack();
-	memdelete(gdre_packeddata_singleton);
 	singleton = nullptr;
 	logger->_disable();
 	// logger doesn't get memdeleted because the OS singleton will do so
@@ -287,7 +286,7 @@ bool GDRESettings::has_valid_version() const {
 	return is_pack_loaded() && current_project->version.is_valid() && current_project->version->is_valid_semver();
 }
 
-GDRESettings::PackInfo::PackType GDRESettings::get_pack_type() const {
+PackInfo::PackType GDRESettings::get_pack_type() const {
 	return is_pack_loaded() ? current_project->type : PackInfo::UNKNOWN;
 }
 String GDRESettings::get_pack_path() const {
@@ -355,7 +354,6 @@ void GDRESettings::remove_current_pack() {
 	packs.clear();
 	import_files.clear();
 	remap_iinfo.clear();
-	unload_encryption_key();
 }
 
 String get_standalone_pck_path() {
@@ -717,7 +715,6 @@ Error GDRESettings::load_project(const Vector<String> &p_paths, bool _cmd_line_e
 		logger->start_prebuffering();
 		log_sysinfo();
 	}
-	load_encryption_key();
 
 	Error err = ERR_CANT_OPEN;
 	Vector<String> pck_files = sort_and_validate_pck_files(p_paths);
@@ -733,7 +730,11 @@ Error GDRESettings::load_project(const Vector<String> &p_paths, bool _cmd_line_e
 			if (err == ERR_ALREADY_IN_USE) {
 				continue;
 			}
+			bool crypto_error = had_encryption_error();
 			unload_project(true);
+			if (crypto_error) {
+				ERR_FAIL_COND_V_MSG(err, ERR_UNAUTHORIZED, "Can't load project! (Did you set the correct key?)");
+			}
 			ERR_FAIL_COND_V_MSG(err, err, "Can't load project!");
 		}
 	}
@@ -833,6 +834,7 @@ Error GDRESettings::_project_post_load(bool initial_load, const String &csharp_a
 	ResourceCompatLoader::make_globally_available();
 	_set_shader_globals();
 
+	_get_app_version();
 	// Log the project info for bug reporting
 	print_line(vformat("Detected Engine Version: %s", get_version_string()));
 	int bytecode_revision = get_bytecode_revision();
@@ -1238,13 +1240,17 @@ void GDRESettings::add_pack_info(Ref<PackInfo> packinfo) {
 	packs.push_back(packinfo);
 	if (!current_project.is_valid()) { // only set if we don't have a current pack
 		current_project = Ref<ProjectInfo>(memnew(ProjectInfo));
-		current_project->version = GodotVer::copy_from(packinfo->version);
+		current_project->version = version_override.is_valid() ? version_override : GodotVer::copy_from(packinfo->version);
 		current_project->pack_file = packinfo->pack_file;
 		current_project->type = packinfo->type;
 		current_project->suspect_version = packinfo->suspect_version;
 		current_project->non_standard_header = packinfo->non_standard_header;
+		current_project->app_version = packinfo->app_version;
 	} else {
-		if (!current_project->version->eq(packinfo->version)) {
+		if (current_project->app_version.is_empty() && !packinfo->app_version.is_empty()) {
+			current_project->app_version = packinfo->app_version;
+		}
+		if (!version_override.is_valid() && !current_project->version->eq(packinfo->version)) {
 			if ((!current_project->version->is_valid_semver() || current_project->version->get_major() == 0) &&
 					packinfo->version->is_valid_semver() && packinfo->version->get_major() != 0) {
 				current_project->version = GodotVer::copy_from(packinfo->version);
@@ -1253,6 +1259,40 @@ void GDRESettings::add_pack_info(Ref<PackInfo> packinfo) {
 			}
 		}
 	}
+}
+
+Error GDRESettings::add_custom_pack_source_script(const String &p_script_path) {
+	if (is_pack_loaded()) {
+		ERR_FAIL_V_MSG(ERR_ALREADY_IN_USE, "Cannot set custom pack source script after pack is loaded!");
+	}
+	if (p_script_path.is_empty()) {
+		GDREPackedData::get_singleton()->clear_custom_pack_sources();
+		return OK;
+	}
+	ERR_FAIL_COND_V_MSG(!FileAccess::exists(p_script_path), ERR_FILE_NOT_FOUND, "Custom pack source script file '" + p_script_path + "' does not exist");
+	ERR_FAIL_COND_V_MSG(p_script_path.get_extension().to_lower() != "gd", ERR_INVALID_PARAMETER, "Custom pack source script file must be a GDScript!");
+	Error err = OK;
+	ResourceFormatLoaderGDScript loader;
+	Ref<Script> script = loader.load(p_script_path, p_script_path, &err, false, nullptr, ResourceFormatLoader::CACHE_MODE_IGNORE);
+	ERR_FAIL_COND_V_MSG(script.is_null() || err != OK, err, "Failed to load custom pack source script!");
+	auto base_type = script->get_instance_base_type();
+	ERR_FAIL_COND_V_MSG(base_type != "PackSourceCustom", ERR_INVALID_PARAMETER, "Custom pack source script does not inherit from PackSourceCustom!");
+	Ref<PackSourceCustom> pack_source;
+	pack_source.instantiate();
+	pack_source->set_script(script);
+	ERR_FAIL_COND_V_MSG(Ref<Script>(pack_source->get_script()).is_null(), ERR_INVALID_PARAMETER, "Failed to instantiate custom pack source script!");
+	ERR_FAIL_NULL_V_MSG(pack_source->get_script_instance(), ERR_INVALID_PARAMETER, "Failed to get script instance from custom pack source script!");
+	GDREPackedData::get_singleton()->clear_custom_pack_sources();
+	GDREPackedData::get_singleton()->add_custom_pack_source(pack_source);
+	return OK;
+}
+
+void GDRESettings::clear_custom_pack_source_script() {
+	if (is_pack_loaded()) {
+		ERR_FAIL_MSG("Cannot clear custom pack source script after pack is loaded!");
+	}
+
+	GDREPackedData::get_singleton()->clear_custom_pack_sources();
 }
 
 StringName GDRESettings::get_cached_script_class(const String &p_path) {
@@ -1316,18 +1356,6 @@ void GDRESettings::_set_error_encryption(bool is_encryption_error) {
 	error_encryption = is_encryption_error;
 }
 
-void GDRESettings::load_encryption_key() {
-	if (enc_key.size() == 32) {
-		memcpy(script_encryption_key, enc_key.ptr(), 32);
-	} else {
-		memset(script_encryption_key, 0, 32);
-	}
-}
-
-void GDRESettings::unload_encryption_key() {
-	memset(script_encryption_key, 0, 32);
-}
-
 Vector<uint8_t> GDRESettings::get_encryption_key() {
 	return enc_key;
 }
@@ -1339,14 +1367,19 @@ String GDRESettings::get_encryption_key_string() {
 	return String::hex_encode_buffer(enc_key.ptr(), enc_key.size());
 }
 
+int GDRESettings::get_required_key_size_in_bytes() const {
+	int result = 32;
+	if (custom_decryptor.is_valid()) {
+		result = custom_decryptor->get_required_key_size_in_bytes();
+	}
+	return result;
+}
+
 Error GDRESettings::set_encryption_key(Vector<uint8_t> key) {
-	if (key.size() != 32) {
+	if (key.size() != get_required_key_size_in_bytes()) {
 		return ERR_INVALID_PARAMETER;
 	}
 	enc_key = key;
-	if (is_pack_loaded()) {
-		load_encryption_key();
-	}
 	return OK;
 }
 
@@ -1355,8 +1388,9 @@ Error GDRESettings::set_encryption_key_string(const String &key_str) {
 	ERR_FAIL_COND_V_MSG(!skey.is_valid_hex_number(false) || skey.size() < 64, ERR_INVALID_PARAMETER, "not a valid key");
 
 	Vector<uint8_t> key;
-	key.resize(32);
-	for (int i = 0; i < 32; i++) {
+	int key_size = get_required_key_size_in_bytes();
+	key.resize(key_size);
+	for (int i = 0; i < key_size; i++) {
 		int v = 0;
 		if (i * 2 < skey.length()) {
 			char32_t ct = skey.to_lower()[i * 2];
@@ -1421,9 +1455,6 @@ void GDRESettings::reset_custom_decryptor() {
 
 void GDRESettings::reset_encryption_key() {
 	enc_key.clear();
-	if (is_pack_loaded()) {
-		load_encryption_key();
-	}
 }
 
 Vector<String> GDRESettings::get_file_list(const Vector<String> &filters) {
@@ -1450,7 +1481,7 @@ Vector<Ref<PackedFileInfo>> GDRESettings::get_file_info_list(const Vector<String
 	return GDREPackedData::get_singleton()->get_file_info_list(filters);
 }
 
-TypedArray<GDRESettings::PackInfo> GDRESettings::get_pack_info_list() const {
+TypedArray<PackInfo> GDRESettings::get_pack_info_list() const {
 	TypedArray<PackInfo> ret;
 	for (const auto &pack : packs) {
 		ret.push_back(pack);
@@ -2110,11 +2141,14 @@ String GDRESettings::get_game_name() const {
 }
 
 String GDRESettings::get_game_app_version() const {
+	if (!is_pack_loaded()) {
+		return "";
+	}
 	if (is_project_config_loaded()) {
 		const char *version_setting = get_ver_major() <= 3 ? "application/version" : "application/config/version";
-		return current_project->pcfg->get_setting(version_setting, "");
+		return current_project->pcfg->get_setting(version_setting, current_project->app_version);
 	}
-	return "";
+	return current_project->app_version;
 }
 
 Error GDRESettings::load_pack_gdscript_cache(bool p_reset) {
@@ -2380,7 +2414,7 @@ Error GDRESettings::load_import_files() {
 		}
 		if (tokens[i].info->get_iitype() == ImportInfo::REMAP) {
 			if (tokens[i].err == ERR_FILE_MISSING_DEPENDENCIES) {
-				WARN_PRINT(vformat("Remapped path does not exist: %s -> %s", tokens[i].info->get_source_file(), tokens[i].info->get_path()));
+				print_line(vformat("WARNING: Remapped path does not exist: %s -> %s", tokens[i].info->get_source_file(), tokens[i].info->get_path()));
 			} else if (tokens[i].err) {
 #ifdef DEBUG_ENABLED
 				// WARN_PRINT("Can't load remap file: " + resource_files[i] + " (" + itos(tokens[i].err) + ")");
@@ -2533,6 +2567,15 @@ bool GDRESettings::detected_godotsteam_usage() const {
 
 bool GDRESettings::requires_double_precision() const {
 	return is_project_config_loaded() && current_project->pcfg->requires_double_precision();
+}
+
+void GDRESettings::_set_version_override(String ver_string) {
+	if (ver_string.is_empty()) {
+		version_override = Ref<GodotVer>();
+		return;
+	}
+	version_override = GodotVer::parse(ver_string);
+	ERR_FAIL_COND_MSG(!version_override.is_valid(), "Failed to parse version string: " + ver_string);
 }
 
 void GDRESettings::_do_string_load(uint32_t i, StringLoadToken *tokens) {
@@ -2955,6 +2998,46 @@ void GDRESettings::_detect_csharp() {
 	current_project->detected_csharp = false;
 }
 
+void GDRESettings::_get_app_version() {
+	if (!is_pack_loaded() || !current_project->app_version.is_empty()) {
+		return;
+	}
+	String pack_path = get_pack_path();
+	String pack_path_dir = pack_path.get_base_dir();
+	if (pack_path_dir.get_file() == "Resources") {
+		pack_path_dir = pack_path_dir.get_base_dir();
+		if (pack_path_dir.get_file() == "Contents") {
+			String info_plist_path = pack_path_dir.path_join("Info.plist");
+			if (!FileAccess::exists(info_plist_path)) {
+				auto paths = Glob::rglob(pack_path_dir.path_join("**/Info.plist"));
+				if (!paths.is_empty()) {
+					info_plist_path = paths[0];
+				} else {
+					info_plist_path = "";
+				}
+			}
+			if (!info_plist_path.is_empty()) {
+				current_project->app_version = AppVersionGetter::get_version_from_info_plist(info_plist_path);
+			}
+		}
+	}
+	if (current_project->app_version.is_empty()) {
+		String path_pack_exe = pack_path.get_basename() + ".exe";
+		if (FileAccess::exists(path_pack_exe)) {
+			current_project->app_version = AppVersionGetter::get_version_from_windows_exe_versioninfo(path_pack_exe);
+		}
+	}
+	if (!current_project->app_version.is_empty()) {
+		Ref<GodotVer> ver;
+		if (GodotVer::parse_valid(current_project->app_version, ver)) {
+			if (current_project->version.is_valid() && current_project->version->get_major() <= 3 && ver->get_major() == current_project->version->get_major() && ver->get_minor() == current_project->version->get_minor()) {
+				// Godot wrote the engine version to the executable by default in 3.x and below, so we'll ignore it
+				current_project->app_version = "";
+			}
+		}
+	}
+}
+
 String GDRESettings::get_temp_dotnet_assembly_dir() const {
 	if (!is_pack_loaded()) {
 		return "";
@@ -3027,6 +3110,7 @@ void GDRESettings::_bind_methods() {
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_gdre_tmp_path"), &GDRESettings::get_gdre_tmp_path);
 	ClassDB::bind_method(D_METHOD("get_encryption_key"), &GDRESettings::get_encryption_key);
 	ClassDB::bind_method(D_METHOD("get_encryption_key_string"), &GDRESettings::get_encryption_key_string);
+	ClassDB::bind_method(D_METHOD("get_required_key_size_in_bytes"), &GDRESettings::get_required_key_size_in_bytes);
 	ClassDB::bind_method(D_METHOD("is_pack_loaded"), &GDRESettings::is_pack_loaded);
 	ClassDB::bind_method(D_METHOD("_set_error_encryption", "is_encryption_error"), &GDRESettings::_set_error_encryption);
 	ClassDB::bind_method(D_METHOD("set_encryption_key_string", "key"), &GDRESettings::set_encryption_key_string);
@@ -3097,6 +3181,10 @@ void GDRESettings::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("update_from_ephemeral_settings"), &GDRESettings::update_from_ephemeral_settings);
 	ClassDB::bind_method(D_METHOD("get_recent_error_string", "filter_backtraces"), &GDRESettings::get_recent_error_string, DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("load_translation_key_hint_file", "p_path"), &GDRESettings::load_translation_key_hint_file);
+	ClassDB::bind_method(D_METHOD("add_pack_info", "p_pack_info"), &GDRESettings::add_pack_info);
+
+	ClassDB::bind_method(D_METHOD("add_custom_pack_source_script", "p_script_path"), &GDRESettings::add_custom_pack_source_script);
+	ClassDB::bind_method(D_METHOD("clear_custom_pack_source_script"), &GDRESettings::clear_custom_pack_source_script);
 }
 
 // This is at the bottom to account for the platform header files pulling in their respective OS headers and creating all sorts of issues

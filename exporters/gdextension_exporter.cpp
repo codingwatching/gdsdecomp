@@ -229,6 +229,19 @@ Ref<ExportReport> GDExtensionExporter::export_resource(const String &output_dir,
 				report->set_saved_path(zip_path);
 				report->set_extra_info(version.to_json());
 				return report;
+			} else {
+				Vector<PluginBin> deps;
+				for (const auto &E : dep_paths) {
+					deps.push_back(PluginSource::get_plugin_bin(E.value, E.key));
+				}
+				auto ver = GodotVer::parse(GDRESettings::get_singleton()->get_version_string());
+				Vector<PluginVersion> possibles = PluginManager::get_possibles_from_deps(plugin_name, ver, deps);
+				if (possibles.size() > 0) {
+					print_line(vformat("Found %d possible plugins for plugin %s", possibles.size(), import_infos->get_import_md_path()));
+					for (const auto &version : possibles) {
+						print_line(vformat("Possible plugin: %s version: %s download url: %s", version.plugin_name, version.release_info.version, version.release_info.download_url));
+					}
+				}
 			}
 		}
 	}

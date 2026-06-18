@@ -56,7 +56,6 @@ def get_version_info():
                     prerelease_num = prerelease_tag.split(".")[-1]
                     if prerelease_num.isdigit():
                         prerelease_num = str(int(prerelease_num) + 1)
-                        print("prerelease_num", prerelease_num)
                         prerelease_tag = f"{prerelease_name}.{prerelease_num}"
                     else:
                         prerelease_tag += ".1"
@@ -74,4 +73,3 @@ def write_version_header(output_header_path):
     version_info = get_version_info()
     with open(output_header_path, "w") as header_file:
         header_file.write(f'#define GDRE_VERSION "{version_info}"\n')
-

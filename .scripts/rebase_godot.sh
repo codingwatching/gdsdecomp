@@ -34,6 +34,13 @@ BRANCHES_TO_MERGE=(
 	fix-compat-array-shapes
 	fix-diraccess-windows
 	fix-cli-parser
+	gltf-fix-skeleton-bone
+	gltf-fix-double-precision
+	gltf-fix-vertex-colors
+	ensure-bptc-textures
+	fix-v3-meshes
+	fix-clearcoat-gloss
+	fix-blend-export
 )
 
 # set fail on error

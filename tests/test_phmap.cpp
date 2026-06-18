@@ -1,8 +1,12 @@
-#pragma once
 #include "tests/test_macros.h"
 
+#include "core/object/worker_thread_pool.h"
 #include "utility/gd_parallel_hashmap.h"
 #include "utility/gd_parallel_queue.h"
+
+TEST_FORCE_LINK(test_phmap)
+
+namespace TestPhmap {
 
 static constexpr int SIMPLE_TEST_MAX_ITERS = 50000;
 static constexpr int SIMPLE_TEST_DIVISOR = 4;
@@ -147,3 +151,4 @@ TEST_CASE("[GDSDecomp] Test StaticParallelQueue") {
 	auto val = test.pop();
 	CHECK(val == "test");
 }
+} //namespace TestPhmap

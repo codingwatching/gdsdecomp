@@ -185,6 +185,8 @@ public:
 
 	static bool resource_is_resource(Ref<Resource> p_res, int ver_major);
 
+	static bool try_force_set_property(const Ref<Resource> &p_res, const StringName &p_name, const Variant &p_value);
+
 	// virtual Ref<Resource> load(const String &p_path, const String &p_original_path = "", Error *r_error = nullptr, bool p_use_sub_threads = false, float *r_progress = nullptr, CacheMode p_cache_mode = CACHE_MODE_IGNORE);
 	// virtual void get_recognized_extensions_for_type(const String &p_type, List<String> *p_extensions) const;
 	// virtual void get_recognized_extensions(List<String> *p_extensions) const;
@@ -220,6 +222,7 @@ public:
 	virtual Ref<MissingResource> convert_back(const Ref<Resource> &res, int ver_major, Error *r_error = nullptr) { return Ref<MissingResource>(); }
 	// the required_prop_map MUST have all the properties that are required to be set in the missing resource
 	static Ref<MissingResource> get_missing_resource_from_real(Ref<Resource> res, int ver_major, const HashMap<String, String> &required_prop_map);
+	static void set_missing_resource_from_real(Ref<MissingResource> mr, Ref<Resource> res, int ver_major, const HashMap<String, String> &required_prop_map);
 	static Ref<Resource> get_real_from_missing_resource(Ref<MissingResource> mr, ResourceInfo::LoadType load_type, const HashMap<String, String> &prop_map = {});
 	static Ref<Resource> set_real_from_missing_resource(Ref<MissingResource> mr, Ref<Resource> res, ResourceInfo::LoadType load_type, const HashMap<String, String> &prop_map = {});
 	static bool is_external_resource(Ref<MissingResource> mr);

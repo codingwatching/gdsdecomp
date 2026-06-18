@@ -287,12 +287,12 @@ Vector<uint8_t> GDScriptTokenizerCompat::parse_code_string(const String &p_code,
 Ref<GDScriptTokenizerCompat> GDScriptTokenizerCompat::create_buffer_tokenizer(const GDScriptDecomp *p_decomp, const Vector<uint8_t> &p_buffer) {
 	if (p_decomp->get_bytecode_version() >= GDScriptDecomp::GDSCRIPT_2_0_VERSION) {
 		auto tokenizer = Ref<GDScriptV2TokenizerBufferCompat>(memnew(GDScriptV2TokenizerBufferCompat(p_decomp)));
-		tokenizer->set_code_buffer(p_buffer);
+		ERR_FAIL_COND_V_MSG(tokenizer->set_code_buffer(p_buffer) != OK, Ref<GDScriptTokenizerCompat>(), "Error setting code buffer.");
 		return tokenizer;
 	}
 
 	auto tokenizer = Ref<GDScriptV1TokenizerBufferCompat>(memnew(GDScriptV1TokenizerBufferCompat(p_decomp)));
-	tokenizer->set_code_buffer(p_buffer);
+	ERR_FAIL_COND_V_MSG(tokenizer->set_code_buffer(p_buffer) != OK, Ref<GDScriptTokenizerCompat>(), "Error setting code buffer.");
 	return tokenizer;
 }
 

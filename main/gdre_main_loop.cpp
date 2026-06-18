@@ -1,12 +1,12 @@
 #include "gdre_main_loop.h"
 
 #include "compat/resource_loader_compat.h"
+#include "core/object/class_db.h"
 #include "core/object/object.h"
 #include "core/os/os.h"
 #include "main/main.h"
 #include "scene/main/node.h"
 #include "servers/rendering/rendering_server.h"
-#include "utility/gdre_settings.h"
 #include "utility/task_manager.h"
 
 GDREMainLoop *GDREMainLoop::singleton = nullptr;
@@ -39,13 +39,44 @@ bool GDREMainLoop::physics_process(double p_time) {
 void GDREMainLoop::iteration_end() {
 }
 
+void GDREMainLoop::_process_next_process_calls() {
+	if (running_process_calls) {
+		return;
+	}
+	running_process_calls = true;
+	Vector<Callable> calls;
+	{
+		MutexLock lock(next_process_calls_mutex);
+		calls = next_process_calls;
+		next_process_calls.clear();
+	}
+	for (auto &callable : calls) {
+		callable.call();
+	}
+	running_process_calls = false;
+}
+
 bool GDREMainLoop::process(double p_time) {
 	last_process_time = p_time;
+	_process_next_process_calls();
 	_wait_until_next_frame(p_time * 1000000 / 2, true);
 	return false;
 }
 
 void GDREMainLoop::finalize() {
+	if (running_process_calls) {
+		WARN_PRINT("Finalize called while running process calls!!");
+		running_process_calls = false;
+	}
+	size_t size;
+	{
+		MutexLock lock(next_process_calls_mutex);
+		size = next_process_calls.size();
+	}
+	if (size > 0) {
+		WARN_PRINT("Finalize called while we still have process calls!!");
+		_process_next_process_calls();
+	}
 }
 
 bool GDREMainLoop::wait_until_next_frame(int64_t p_time_usec) {
@@ -55,9 +86,8 @@ bool GDREMainLoop::wait_until_next_frame(int64_t p_time_usec) {
 	return singleton->_wait_until_next_frame(p_time_usec, false);
 }
 
-bool GDREMainLoop::_wait_until_next_frame(int64_t input_time_usec, bool called_from_process) {
-	int64_t p_time_usec = MAX(1, input_time_usec);
-	uint64_t curr_time = OS::get_singleton()->get_ticks_usec();
+bool GDREMainLoop::_wait_until_next_frame(int64_t p_time_usec, bool called_from_process) {
+	p_time_usec = MAX(1, p_time_usec);
 	if (!Thread::is_main_thread()) {
 		OS::get_singleton()->delay_usec(p_time_usec);
 		return TaskManager::get_singleton()->is_current_task_canceled();
@@ -65,17 +95,22 @@ bool GDREMainLoop::_wait_until_next_frame(int64_t input_time_usec, bool called_f
 	if (processing) {
 		return false;
 	}
+	uint64_t curr_time = OS::get_singleton()->get_ticks_usec();
 	processing = true;
 	TaskManager::get_singleton()->process_main_thread_dispatch_queue_for(p_time_usec);
 	bool did_redraw = false;
 	bool has_tasks = false;
+	bool canceled = false;
 	if (TaskManager::get_singleton()->update_progress_bg(!called_from_process, called_from_process, &did_redraw, &has_tasks)) {
+		canceled = true;
 		TaskManager::get_singleton()->cancel_main_thread_dispatch_queue();
-		processing = false;
-		return true;
 	}
 	if (!called_from_process && !did_redraw) {
 		iteration(true);
+	}
+	if (canceled) {
+		processing = false;
+		return true;
 	}
 	int64_t elapsed_time = OS::get_singleton()->get_ticks_usec() - curr_time;
 	constexpr int64_t SYNC_WAIT_TIME_US = 1000;
@@ -134,6 +169,20 @@ bool GDREMainLoop::iteration(bool p_no_delay) {
 		OS::get_singleton()->set_low_processor_usage_mode_sleep_usec(os_low_processor_usage_mode_sleep_usec);
 	}
 	return result;
+}
+
+bool GDREMainLoop::call_on_next_process(const Callable &p_callable) {
+	ERR_FAIL_COND_V_MSG(!singleton, true, "GDREMainLoop singleton not initialized");
+	{
+		MutexLock lock(singleton->next_process_calls_mutex);
+		singleton->next_process_calls.push_back(p_callable);
+	}
+	return false;
+}
+
+void GDREMainLoop::_bind_methods() {
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("wait_until_next_frame", "p_time_usec"), &GDREMainLoop::wait_until_next_frame);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("call_on_next_process", "p_callable"), &GDREMainLoop::call_on_next_process);
 }
 
 // *** Scene Tree ***

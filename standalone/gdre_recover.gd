@@ -244,7 +244,7 @@ func _on_export_resources_confirmed(output_dir: String):
 	var export_preview_visible = %GdreResourcePreview.is_main_view_visible()
 	if export_preview_visible:
 		%GdreResourcePreview.set_main_view_visible(false)
-	self.call_on_next_process(self.call_on_next_process.bind(self._do_export.bind(output_dir, export_preview_visible)))
+	GDREMainLoop.call_on_next_process(GDREMainLoop.call_on_next_process.bind(self._do_export.bind(output_dir, export_preview_visible)))
 
 
 func _show_error_or_success(errs: PackedStringArray, success_message: String, output_dir: String):
@@ -269,13 +269,13 @@ func _do_export(output_dir: String, export_preview_visible: bool):
 	if export_preview_visible:
 		%GdreResourcePreview.set_main_view_visible(true)
 
-	self.call_on_next_process(self.call_on_next_process.bind(self._show_error_or_success.bind(errs, "Successfully exported resources", output_dir)))
+	GDREMainLoop.call_on_next_process(GDREMainLoop.call_on_next_process.bind(self._show_error_or_success.bind(errs, "Successfully exported resources", output_dir)))
 
 
 
 
 func _on_extract_resources_dir_selected(path: String):
-	self.call_on_next_process(self.call_on_next_process.bind(self._do_extract.bind(path)))
+	GDREMainLoop.call_on_next_process(GDREMainLoop.call_on_next_process.bind(self._do_extract.bind(path)))
 
 func _do_extract(path: String):
 	var options = %ExtractResDirDialog.get_selected_options()
@@ -295,7 +295,7 @@ func _do_extract(path: String):
 		var err = extract_file(file, path, dir_structure, rel_base)
 		if not err.is_empty():
 			errs.append(err)
-	self.call_on_next_process(self.call_on_next_process.bind(self._show_error_or_success.bind(errs, "Successfully extracted resources", path)))
+	GDREMainLoop.call_on_next_process(GDREMainLoop.call_on_next_process.bind(self._show_error_or_success.bind(errs, "Successfully extracted resources", path)))
 
 func _determine_rel_base_dir(selected_items: Array) -> String:
 	var base_dirs: Dictionary = {}
@@ -642,7 +642,7 @@ func _on_gdre_config_dialog_config_changed(changed_settings: Dictionary[String, 
 
 
 func _on_add_pcks_dialog_files_selected(paths: PackedStringArray) -> void:
-	self.call_on_next_process(self.call_on_next_process.bind(self._reload_with.bind(paths)))
+	GDREMainLoop.call_on_next_process(GDREMainLoop.call_on_next_process.bind(self._reload_with.bind(paths)))
 
 func _reload_with(paths: PackedStringArray):
 	var curr_pcks = GDRESettings.get_pack_info_list()
@@ -672,3 +672,6 @@ func _on_add_pcks_button_pressed() -> void:
 
 func _on_extract_success_dialog_confirmed() -> void:
 	pass # Replace with function body.
+
+func _init():
+	set_process(true)

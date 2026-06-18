@@ -385,6 +385,10 @@ ScriptLanguage *FakeScriptInstance::get_language() {
 	return nullptr;
 }
 
+void FakeScriptInstance::force_set_property(const StringName &p_name, const Variant &p_value) {
+	properties[p_name] = p_value;
+}
+
 FakeScriptInstance::~FakeScriptInstance() {
 	// Cleanup if needed
 }

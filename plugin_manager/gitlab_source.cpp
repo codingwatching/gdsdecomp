@@ -2,7 +2,7 @@
 #include "core/error/error_list.h"
 #include "core/io/json.h"
 #include "core/os/os.h"
-#include "utility/common.h"
+#include "utility/http_requester.h"
 
 const String GitLabSource::gitlab_release_api_url = _gitlab_release_api_url;
 namespace {
@@ -73,7 +73,7 @@ Error GitLabSource::recache_release_list(const String &plugin_name) {
 	String request_url = gitlab_release_api_url.replace("{0}", org).replace("{1}", repo);
 
 	Vector<uint8_t> response;
-	Error err = gdre::wget_sync(request_url, response, 20);
+	Error err = HTTPRequester::wget_sync(request_url, response, 15, 2);
 	if (err) {
 		return err;
 	}

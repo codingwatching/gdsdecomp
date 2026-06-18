@@ -61,9 +61,8 @@ def get_cmd_env(build_env):
     return cmd_env
 
 
-def add_libs_to_env(env, env_gdsdecomp, module_obj, libs, sources):
+def add_libs_to_env(env, libs):
     for lib in libs:
-        env_gdsdecomp.Depends(lib, sources)
         if env.msvc:
             if not lib.endswith(".lib"):
                 lib = lib.rsplit(".", 1)[0] + ".lib"
@@ -71,9 +70,7 @@ def add_libs_to_env(env, env_gdsdecomp, module_obj, libs, sources):
             continue
 
         lib_name = os.path.basename(lib).split(".")[0]
-        print("LIB NAME", lib_name)
         env.Append(LIBS=[lib_name])
-    env.Depends(module_obj, libs)
 
 
 # TODO: This helper is currently unused in SCsub.
@@ -107,4 +104,3 @@ def append_cpppaths(build_env, paths):
 def add_source_groups(build_env, module_obj, source_globs):
     for source_glob in source_globs:
         build_env.add_source_files(module_obj, source_glob)
-

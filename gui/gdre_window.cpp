@@ -61,26 +61,6 @@ GDREWindow::~GDREWindow() {
 	}
 }
 
-void GDREWindow::_notification(int p_what) {
-	if (p_what == NOTIFICATION_PROCESS) {
-		if (!next_process_calls.is_empty()) {
-			auto calls = next_process_calls;
-			next_process_calls.clear();
-			for (const auto &callable : calls) {
-				callable.call();
-			}
-		}
-	}
-}
-
-void GDREWindow::call_on_next_process(const Callable &p_callable) {
-	next_process_calls.push_back(p_callable);
-	if (!is_processing()) {
-		WARN_PRINT("GDREWindow: Setting process to true");
-		set_process(true);
-	}
-}
-
 void GDREWindow::popup_confirm_box(const String &p_message, const String &p_title, const Callable &p_confirm_callback, const Callable &p_cancel_callback, const String &p_ok_button_text, const String &p_cancel_button_text) {
 	popup_box(this, confirmation_dialog, p_message, p_title, p_confirm_callback, p_cancel_callback, p_ok_button_text, p_cancel_button_text);
 }
@@ -105,26 +85,6 @@ GDREAcceptDialogBase::~GDREAcceptDialogBase() {
 	}
 }
 
-void GDREAcceptDialogBase::_notification(int p_what) {
-	if (p_what == NOTIFICATION_PROCESS) {
-		if (!next_process_calls.is_empty()) {
-			auto calls = next_process_calls;
-			next_process_calls.clear();
-			for (const auto &callable : calls) {
-				callable.call();
-			}
-		}
-	}
-}
-
-void GDREAcceptDialogBase::call_on_next_process(const Callable &p_callable) {
-	next_process_calls.push_back(p_callable);
-	if (!is_processing()) {
-		WARN_PRINT("GDREAcceptDialogBase: Setting process to true");
-		set_process(true);
-	}
-}
-
 void GDREAcceptDialogBase::popup_confirm_box(const String &p_message, const String &p_title, const Callable &p_confirm_callback, const Callable &p_cancel_callback, const String &p_ok_button_text, const String &p_cancel_button_text) {
 	GDREWindow::popup_box(this, confirmation_dialog, p_message, p_title, p_confirm_callback, p_cancel_callback, p_ok_button_text, p_cancel_button_text);
 }
@@ -134,14 +94,12 @@ void GDREAcceptDialogBase::popup_error_box(const String &p_message, const String
 }
 
 void GDREWindow::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("call_on_next_process", "p_callable"), &GDREWindow::call_on_next_process);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("popup_box", "p_parent", "p_box", "p_message", "p_title", "p_confirm_callback", "p_cancel_callback", "p_ok_button_text", "p_cancel_button_text"), &GDREWindow::popup_box, DEFVAL(Callable()), DEFVAL(Callable()), DEFVAL("OK"), DEFVAL("Cancel"));
 	ClassDB::bind_method(D_METHOD("popup_confirm_box", "p_message", "p_title", "p_confirm_callback", "p_cancel_callback", "p_ok_button_text", "p_cancel_button_text"), &GDREWindow::popup_confirm_box, DEFVAL(Callable()), DEFVAL(Callable()), DEFVAL("OK"), DEFVAL("Cancel"));
 	ClassDB::bind_method(D_METHOD("popup_error_box", "p_message", "p_title", "p_callback"), &GDREWindow::popup_error_box, DEFVAL("Error"), DEFVAL(Callable()));
 }
 
 void GDREAcceptDialogBase::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("call_on_next_process", "p_callable"), &GDREAcceptDialogBase::call_on_next_process);
 	ClassDB::bind_method(D_METHOD("popup_confirm_box", "p_message", "p_title", "p_confirm_callback", "p_cancel_callback", "p_ok_button_text", "p_cancel_button_text"), &GDREAcceptDialogBase::popup_confirm_box, DEFVAL(Callable()), DEFVAL(Callable()), DEFVAL("OK"), DEFVAL("Cancel"));
 	ClassDB::bind_method(D_METHOD("popup_error_box", "p_message", "p_title", "p_callback"), &GDREAcceptDialogBase::popup_error_box, DEFVAL("Error"), DEFVAL(Callable()));
 }

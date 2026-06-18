@@ -400,7 +400,7 @@ func _on_save_pck_dialog_file_selected(path: String) -> void:
 	if (not _validate()):
 		popup_error_box("Validation failed", "Error")
 		return
-	self.call_on_next_process(func(): _do_save(path))
+	GDREMainLoop.call_on_next_process(func(): _do_save(path))
 
 func _do_save(path: String):
 	var file_map: Dictionary[String, String] = {}

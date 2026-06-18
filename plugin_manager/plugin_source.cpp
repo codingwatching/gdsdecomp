@@ -6,6 +6,7 @@
 #include "core/object/class_db.h"
 #include "plugin_info.h"
 #include "unsigned_hash/unsigned_hash.hpp"
+#include "utility/app_version_getter.h"
 #include "utility/common.h"
 namespace {
 unsigned_hash::HashResult hash_directory(const String &path) {
@@ -76,6 +77,15 @@ String _get_unsigned_sha256(const String &path, bool *r_is_not_binary, bool *r_e
 }
 } //namespace
 
+String PluginSource::_get_plugin_bin_version(const String &path) {
+	if (DirAccess::exists(path)) {
+		return AppVersionGetter::get_version_from_app_or_framework(path);
+	} else if (path.has_extension("exe") || path.has_extension("dll")) {
+		return AppVersionGetter::get_version_from_windows_exe_versioninfo(path);
+	}
+	return "";
+}
+
 PluginBin PluginSource::get_plugin_bin(const String &path, const SharedObject &obj) {
 	PluginBin bin;
 	bin.name = obj.path;
@@ -95,6 +105,7 @@ PluginBin PluginSource::get_plugin_bin(const String &path, const SharedObject &o
 		} else {
 			bin.verbatim_sha256 = gdre::get_sha256(path);
 		}
+		bin.bin_ver = _get_plugin_bin_version(path);
 	}
 	return bin;
 }
@@ -166,6 +177,9 @@ Dictionary PluginSource::_get_release_info(const String &plugin_name, int64_t pr
 Vector<ReleaseInfo> PluginSource::find_release_infos_by_tag(const String &plugin_name, const String &tag, Error &r_error) {
 	r_error = ERR_UNAVAILABLE;
 	ERR_FAIL_V_MSG({}, "Not implemented");
+}
+
+void PluginSource::clear_cache() {
 }
 
 void PluginSource::_bind_methods() {

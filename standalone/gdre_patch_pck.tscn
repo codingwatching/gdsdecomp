@@ -1,11 +1,11 @@
-[gd_scene load_steps=5 format=3 uid="uid://xdfd5b6mnjgr"]
+[gd_scene format=3 uid="uid://xdfd5b6mnjgr"]
 
 [ext_resource type="Script" uid="uid://x4uyq0hooymw" path="res://gdre_patch_pck.gd" id="1_p07vp"]
 [ext_resource type="Theme" uid="uid://crq1fwn0ajw7b" path="res://gdre_theme.tres" id="1_up5g3"]
 [ext_resource type="Script" uid="uid://cww2hw50p8q3i" path="res://gdre_file_tree.gd" id="3_aruht"]
 [ext_resource type="Texture2D" uid="uid://byablbp3l8foe" path="res://gdre_icons/gdre_Search.svg" id="4_gm62x"]
 
-[node name="GdrePatchPck" type="GDREAcceptDialogBase"]
+[node name="GdrePatchPck" type="GDREAcceptDialogBase" unique_id=1365498953]
 oversampling_override = 1.0
 title = "Patch PCK"
 position = Vector2i(0, 24)
@@ -17,10 +17,10 @@ dialog_hide_on_ok = false
 script = ExtResource("1_p07vp")
 metadata/_custom_type_script = "uid://cbggqwojxui00"
 
-[node name="ErrorDialog" type="AcceptDialog" parent="."]
+[node name="ErrorDialog" type="AcceptDialog" parent="." unique_id=1566817302]
 unique_name_in_owner = true
 
-[node name="SelectPckDialog" type="FileDialog" parent="."]
+[node name="SelectPckDialog" type="FileDialog" parent="." unique_id=1540086483]
 unique_name_in_owner = true
 title = "Open a File"
 ok_button_text = "Open"
@@ -30,7 +30,7 @@ access = 2
 filters = PackedStringArray("*.pck")
 use_native_dialog = true
 
-[node name="SelectPatchFilesDialog" type="FileDialog" parent="."]
+[node name="SelectPatchFilesDialog" type="FileDialog" parent="." unique_id=1878613928]
 unique_name_in_owner = true
 title = "Open File(s)"
 ok_button_text = "Open"
@@ -39,15 +39,15 @@ file_mode = 1
 access = 2
 use_native_dialog = true
 
-[node name="SelectPatchMappingDialog" type="FileDialog" parent="."]
+[node name="SelectPatchMappingDialog" type="FileDialog" parent="." unique_id=93441926]
 unique_name_in_owner = true
 root_subfolder = "res://"
 
-[node name="SavePckDialog" type="FileDialog" parent="."]
+[node name="SavePckDialog" type="FileDialog" parent="." unique_id=572021896]
 unique_name_in_owner = true
 access = 2
 
-[node name="Control" type="Control" parent="."]
+[node name="Control" type="Control" parent="." unique_id=308366136]
 custom_minimum_size = Vector2(1100, 350)
 layout_mode = 3
 anchor_right = 0.804
@@ -57,7 +57,7 @@ offset_top = 8.0
 offset_right = 286.0
 offset_bottom = 87.07999
 
-[node name="InfoTextHBox" type="HBoxContainer" parent="Control"]
+[node name="InfoTextHBox" type="HBoxContainer" parent="Control" unique_id=1900042847]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.002
@@ -70,27 +70,27 @@ offset_right = 259.032
 offset_bottom = 39.315918
 grow_vertical = 0
 
-[node name="VersionLabel" type="Label" parent="Control/InfoTextHBox"]
+[node name="VersionLabel" type="Label" parent="Control/InfoTextHBox" unique_id=1477135709]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Version:"
 
-[node name="VersionText" type="Label" parent="Control/InfoTextHBox"]
+[node name="VersionText" type="Label" parent="Control/InfoTextHBox" unique_id=281231439]
 unique_name_in_owner = true
 layout_mode = 2
 text = "0.0.0"
 
-[node name="FilesLabel" type="Label" parent="Control/InfoTextHBox"]
+[node name="FilesLabel" type="Label" parent="Control/InfoTextHBox" unique_id=476196718]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Files:"
 
-[node name="FilesText" type="Label" parent="Control/InfoTextHBox"]
+[node name="FilesText" type="Label" parent="Control/InfoTextHBox" unique_id=695551887]
 unique_name_in_owner = true
 layout_mode = 2
 text = "0"
 
-[node name="MainVBox" type="VBoxContainer" parent="Control"]
+[node name="MainVBox" type="VBoxContainer" parent="Control" unique_id=394041700]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -99,61 +99,61 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 10
 
-[node name="SelectPackHBox" type="HBoxContainer" parent="Control/MainVBox"]
+[node name="SelectPackHBox" type="HBoxContainer" parent="Control/MainVBox" unique_id=975010685]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="SelectedPck" type="LineEdit" parent="Control/MainVBox/SelectPackHBox"]
+[node name="SelectedPck" type="LineEdit" parent="Control/MainVBox/SelectPackHBox" unique_id=894340794]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 
-[node name="SelectPckButton" type="Button" parent="Control/MainVBox/SelectPackHBox"]
+[node name="SelectPckButton" type="Button" parent="Control/MainVBox/SelectPackHBox" unique_id=2064694037]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 4
 text = "Select"
 
-[node name="EmbedCheckBox" type="CheckBox" parent="Control/MainVBox/SelectPackHBox"]
+[node name="EmbedCheckBox" type="CheckBox" parent="Control/MainVBox/SelectPackHBox" unique_id=2052844820]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Embed into EXE"
 
-[node name="HSeparator" type="HSeparator" parent="Control/MainVBox"]
+[node name="HSeparator" type="HSeparator" parent="Control/MainVBox" unique_id=1855885183]
 layout_mode = 2
 
-[node name="MainHBox" type="HBoxContainer" parent="Control/MainVBox"]
+[node name="MainHBox" type="HBoxContainer" parent="Control/MainVBox" unique_id=1620471488]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 16
 
-[node name="PackVBox" type="VBoxContainer" parent="Control/MainVBox/MainHBox"]
+[node name="PackVBox" type="VBoxContainer" parent="Control/MainVBox/MainHBox" unique_id=1611905917]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
 
-[node name="FilterHBox" type="HBoxContainer" parent="Control/MainVBox/MainHBox/PackVBox"]
+[node name="FilterHBox" type="HBoxContainer" parent="Control/MainVBox/MainHBox/PackVBox" unique_id=1750668195]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Label" type="Label" parent="Control/MainVBox/MainHBox/PackVBox/FilterHBox"]
+[node name="Label" type="Label" parent="Control/MainVBox/MainHBox/PackVBox/FilterHBox" unique_id=1799557118]
 layout_mode = 2
 text = "PCK Files...              "
 
-[node name="Check" type="Button" parent="Control/MainVBox/MainHBox/PackVBox/FilterHBox"]
+[node name="Check" type="Button" parent="Control/MainVBox/MainHBox/PackVBox/FilterHBox" unique_id=1485854342]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Checks all shown files"
 text = "Check"
 
-[node name="Uncheck" type="Button" parent="Control/MainVBox/MainHBox/PackVBox/FilterHBox"]
+[node name="Uncheck" type="Button" parent="Control/MainVBox/MainHBox/PackVBox/FilterHBox" unique_id=1839316915]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Unchecks all shown files"
 text = "Uncheck"
 
-[node name="Filter" type="LineEdit" parent="Control/MainVBox/MainHBox/PackVBox/FilterHBox"]
+[node name="Filter" type="LineEdit" parent="Control/MainVBox/MainHBox/PackVBox/FilterHBox" unique_id=1723499771]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -161,7 +161,7 @@ placeholder_text = "Filter Files"
 clear_button_enabled = true
 right_icon = ExtResource("4_gm62x")
 
-[node name="FileTree" type="Tree" parent="Control/MainVBox/MainHBox/PackVBox"]
+[node name="FileTree" type="Tree" parent="Control/MainVBox/MainHBox/PackVBox" unique_id=587630279]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
@@ -173,45 +173,45 @@ columnMap = Dictionary[int, int]({
 })
 metadata/_custom_type_script = "uid://cww2hw50p8q3i"
 
-[node name="PatchVBox" type="VBoxContainer" parent="Control/MainVBox/MainHBox"]
+[node name="PatchVBox" type="VBoxContainer" parent="Control/MainVBox/MainHBox" unique_id=1902026071]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
 
-[node name="FilesToPatchHBox" type="HBoxContainer" parent="Control/MainVBox/MainHBox/PatchVBox"]
+[node name="FilesToPatchHBox" type="HBoxContainer" parent="Control/MainVBox/MainHBox/PatchVBox" unique_id=316857365]
 layout_mode = 2
 
-[node name="FilesToPatchLabel" type="Label" parent="Control/MainVBox/MainHBox/PatchVBox/FilesToPatchHBox"]
+[node name="FilesToPatchLabel" type="Label" parent="Control/MainVBox/MainHBox/PatchVBox/FilesToPatchHBox" unique_id=1464042563]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Files to patch..."
 
-[node name="PatchButtonHBox" type="HBoxContainer" parent="Control/MainVBox/MainHBox/PatchVBox/FilesToPatchHBox"]
+[node name="PatchButtonHBox" type="HBoxContainer" parent="Control/MainVBox/MainHBox/PatchVBox/FilesToPatchHBox" unique_id=1436636909]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 8
 
-[node name="MapButton" type="Button" parent="Control/MainVBox/MainHBox/PatchVBox/FilesToPatchHBox/PatchButtonHBox"]
+[node name="MapButton" type="Button" parent="Control/MainVBox/MainHBox/PatchVBox/FilesToPatchHBox/PatchButtonHBox" unique_id=416634022]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Map selected to Folder..."
 
-[node name="seperator" type="Container" parent="Control/MainVBox/MainHBox/PatchVBox/FilesToPatchHBox/PatchButtonHBox"]
+[node name="seperator" type="Container" parent="Control/MainVBox/MainHBox/PatchVBox/FilesToPatchHBox/PatchButtonHBox" unique_id=1452679765]
 custom_minimum_size = Vector2(20, 0)
 layout_mode = 2
 
-[node name="SelectPatchFiles" type="Button" parent="Control/MainVBox/MainHBox/PatchVBox/FilesToPatchHBox/PatchButtonHBox"]
+[node name="SelectPatchFiles" type="Button" parent="Control/MainVBox/MainHBox/PatchVBox/FilesToPatchHBox/PatchButtonHBox" unique_id=2057642593]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Select Files..."
 
-[node name="PatchClearButton" type="Button" parent="Control/MainVBox/MainHBox/PatchVBox/FilesToPatchHBox/PatchButtonHBox"]
+[node name="PatchClearButton" type="Button" parent="Control/MainVBox/MainHBox/PatchVBox/FilesToPatchHBox/PatchButtonHBox" unique_id=686356714]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Clear"
 
-[node name="PatchFileTree" type="Tree" parent="Control/MainVBox/MainHBox/PatchVBox"]
+[node name="PatchFileTree" type="Tree" parent="Control/MainVBox/MainHBox/PatchVBox" unique_id=772232343]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
@@ -234,7 +234,7 @@ nameColumnName = "File"
 infoColumnName = "Mapping"
 metadata/_custom_type_script = "uid://cww2hw50p8q3i"
 
-[node name="DropFoldersConfirmation" type="Window" parent="."]
+[node name="DropFoldersConfirmation" type="Window" parent="." unique_id=2034123196]
 unique_name_in_owner = true
 oversampling_override = 1.0
 title = "Select Mapping"
@@ -244,7 +244,7 @@ visible = false
 min_size = Vector2i(700, 600)
 theme = ExtResource("1_up5g3")
 
-[node name="Panel" type="Panel" parent="DropFoldersConfirmation"]
+[node name="Panel" type="Panel" parent="DropFoldersConfirmation" unique_id=362894365]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -252,7 +252,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_type_variation = &"LightPanel"
 
-[node name="Control" type="MarginContainer" parent="DropFoldersConfirmation"]
+[node name="Control" type="MarginContainer" parent="DropFoldersConfirmation" unique_id=1091179781]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -264,25 +264,25 @@ theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
-[node name="VBoxContainer" type="VBoxContainer" parent="DropFoldersConfirmation/Control"]
+[node name="VBoxContainer" type="VBoxContainer" parent="DropFoldersConfirmation/Control" unique_id=1489348219]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="MainHbox" type="HBoxContainer" parent="DropFoldersConfirmation/Control/VBoxContainer"]
+[node name="MainHbox" type="HBoxContainer" parent="DropFoldersConfirmation/Control/VBoxContainer" unique_id=132295705]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 16
 
-[node name="LeftVBox" type="VBoxContainer" parent="DropFoldersConfirmation/Control/VBoxContainer/MainHbox"]
+[node name="LeftVBox" type="VBoxContainer" parent="DropFoldersConfirmation/Control/VBoxContainer/MainHbox" unique_id=1549390040]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="LabelA" type="Label" parent="DropFoldersConfirmation/Control/VBoxContainer/MainHbox/LeftVBox"]
+[node name="LabelA" type="Label" parent="DropFoldersConfirmation/Control/VBoxContainer/MainHbox/LeftVBox" unique_id=927623607]
 unique_name_in_owner = true
 layout_mode = 2
 text = "\"Relative to...\" mapping"
 
-[node name="ItemListA" type="Tree" parent="DropFoldersConfirmation/Control/VBoxContainer/MainHbox/LeftVBox"]
+[node name="ItemListA" type="Tree" parent="DropFoldersConfirmation/Control/VBoxContainer/MainHbox/LeftVBox" unique_id=1426833814]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
@@ -290,16 +290,16 @@ columns = 2
 column_titles_visible = true
 hide_root = true
 
-[node name="RightVBox" type="VBoxContainer" parent="DropFoldersConfirmation/Control/VBoxContainer/MainHbox"]
+[node name="RightVBox" type="VBoxContainer" parent="DropFoldersConfirmation/Control/VBoxContainer/MainHbox" unique_id=1026981351]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="LabelB" type="Label" parent="DropFoldersConfirmation/Control/VBoxContainer/MainHbox/RightVBox"]
+[node name="LabelB" type="Label" parent="DropFoldersConfirmation/Control/VBoxContainer/MainHbox/RightVBox" unique_id=277492150]
 unique_name_in_owner = true
 layout_mode = 2
 text = "\"Relative from...\" mapping"
 
-[node name="ItemListB" type="Tree" parent="DropFoldersConfirmation/Control/VBoxContainer/MainHbox/RightVBox"]
+[node name="ItemListB" type="Tree" parent="DropFoldersConfirmation/Control/VBoxContainer/MainHbox/RightVBox" unique_id=1418077689]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
@@ -307,12 +307,12 @@ columns = 2
 column_titles_visible = true
 hide_root = true
 
-[node name="ButtonHBox" type="Control" parent="DropFoldersConfirmation/Control/VBoxContainer"]
+[node name="ButtonHBox" type="Control" parent="DropFoldersConfirmation/Control/VBoxContainer" unique_id=957429560]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 size_flags_vertical = 4
 
-[node name="SelectA" type="Button" parent="DropFoldersConfirmation/Control/VBoxContainer/ButtonHBox"]
+[node name="SelectA" type="Button" parent="DropFoldersConfirmation/Control/VBoxContainer/ButtonHBox" unique_id=1194459229]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = -1
@@ -323,7 +323,7 @@ offset_right = 122.83998
 offset_bottom = 31.0
 text = "Select \"Relative To...\" Mapping"
 
-[node name="CancelButton" type="Button" parent="DropFoldersConfirmation/Control/VBoxContainer/ButtonHBox"]
+[node name="CancelButton" type="Button" parent="DropFoldersConfirmation/Control/VBoxContainer/ButtonHBox" unique_id=1156113647]
 layout_mode = 1
 anchors_preset = 5
 anchor_left = 0.5
@@ -334,7 +334,7 @@ offset_bottom = 31.0
 grow_horizontal = 2
 text = "Cancel"
 
-[node name="SelectB" type="Button" parent="DropFoldersConfirmation/Control/VBoxContainer/ButtonHBox"]
+[node name="SelectB" type="Button" parent="DropFoldersConfirmation/Control/VBoxContainer/ButtonHBox" unique_id=1003401643]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = -1
@@ -346,7 +346,7 @@ offset_bottom = 31.0
 text = "Select \"Relative From...\" Mapping
 "
 
-[node name="SelectPatchFolderMappingDialog" type="FileDialog" parent="."]
+[node name="SelectPatchFolderMappingDialog" type="FileDialog" parent="." unique_id=491060185]
 unique_name_in_owner = true
 auto_translate_mode = 1
 title = "Open a Directory"

@@ -1,10 +1,12 @@
-#pragma once
 #include "test_common.h"
 
 #include "core/io/image.h"
 #include "tests/test_macros.h"
 #include "utility/common.h"
+#include "utility/gdre_settings.h"
 #include "utility/image_saver.h"
+
+TEST_FORCE_LINK(test_imagesaver)
 namespace TestImageSaver {
 
 static inline String get_color_string(const Color &color) {

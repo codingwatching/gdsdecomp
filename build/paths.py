@@ -8,6 +8,10 @@ MMP3_THIRDPARTY_DIR = "#thirdparty/minimp3/"
 LIBOGG_THIRDPARTY_DIR = "#thirdparty/libogg/"
 LIBTHEORA_THIRDPARTY_DIR = "#thirdparty/libtheora/"
 LIBVORBIS_THIRDPARTY_DIR = "#thirdparty/libvorbis/"
+SPIRV_INTEROP_DIR = "#modules/gdsdecomp/spirv-interop/"
+SPIRV_CROSS_THIRDPARTY_DIR = "#thirdparty/spirv-cross/"
+SPIRV_CROSS_THIRDPARTY_INCLUDE_DIR = "#thirdparty/spirv-cross/include/"
+SPIRV_HEADERS_THIRDPARTY_DIR = "#thirdparty/spirv-headers/include/spirv/unified1/"
 WEBP_THIRDPARTY_DIR = "#thirdparty/libwebp/"
 THORSVG_THIRDPARTY_DIR = "#thirdparty/thorsvg/"
 UNSIGNED_HASH_DIR = "#modules/gdsdecomp/external/unsigned-hash-cpp"
@@ -16,6 +20,7 @@ UNSIGNED_HASH_SRC_DIR = f'{UNSIGNED_HASH_DIR}/src'
 MODULE_INCLUDE_DIR = "#modules/gdsdecomp/"
 VTRACER_INCLUDE_DIR = "#modules/gdsdecomp/external/vtracer/include"
 GODOT_MONO_DECOMP_INCLUDE_DIR = "#modules/gdsdecomp/godot-mono-decomp/GodotMonoDecompNativeAOT/include"
+AXML_DEC_INCLUDE_DIR = "#modules/gdsdecomp/external/axmldec/include"
 
 VTRACER_PREFIX = "external/vtracer"
 VTRACER_LIBS = ["vtracer"]
@@ -33,18 +38,17 @@ def get_build_dir(env):
     return env.Dir("#bin").abspath
 
 
-def get_external_dir(module_dir):
-    return os.path.join(module_dir, EXTERNAL_STEM)
+def get_external_dir(env):
+    return os.path.join(get_module_dir(env), EXTERNAL_STEM)
 
 
-def get_vtracer_dir(module_dir):
-    return os.path.join(module_dir, VTRACER_PREFIX)
+def get_vtracer_dir(env):
+    return os.path.join(get_module_dir(env), VTRACER_PREFIX)
 
 
-def get_vtracer_build_dir(module_dir):
-    return os.path.join(get_vtracer_dir(module_dir), "target")
+def get_vtracer_build_dir(env):
+    return os.path.join(get_vtracer_dir(env), "target")
 
 
-def get_godot_mono_decomp_dir(module_dir):
-    return os.path.join(module_dir, GODOT_MONO_DECOMP_PREFIX)
-
+def get_godot_mono_decomp_dir(env):
+    return os.path.join(get_module_dir(env), GODOT_MONO_DECOMP_PREFIX)

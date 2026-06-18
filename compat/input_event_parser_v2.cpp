@@ -776,86 +776,112 @@ Error InputEventParserV2::parse_input_event_construct_v2(VariantParser::Stream *
 #undef EXPECT_PAREN_CLOSE
 #undef ERR_PARSE_V2INPUTEVENT_FAIL
 
+// clang-format off
+// InputEventWithModifiers properties
+#define INPUT_EVENT_WITH_MODIFIERS_PROPERTIES \
+	{ "alt", "alt_pressed" },                 \
+	{ "shift", "shift_pressed" },     \
+	{ "control", "ctrl_pressed" },    \
+	{ "meta", "meta_pressed" },       \
+	{ "command", "command_or_control_autoremap" }
+
+// InputEventKey properties
+#define INPUT_EVENT_KEY_PROPERTIES                       \
+	{ "pressed", "pressed" },                            \
+	{ "scancode", "keycode" },                   \
+	{ "physical_scancode", "physical_keycode" }, \
+	{ "unicode", "unicode" },                    \
+	{ "echo", "echo" }
+
+// InputEventMouse properties
+#define INPUT_EVENT_MOUSE_PROPERTIES    \
+	{ "button_mask", "button_mask" },   \
+	{ "position", "position" }, \
+	{ "global_position", "global_position" }
+
+// InputEventMouseButton properties
+#define INPUT_EVENT_MOUSE_BUTTON_PROPERTIES     \
+	{ "factor", "factor" },                     \
+	{ "button_index", "button_index" }, \
+	{ "canceled", "canceled" },         \
+	{ "pressed", "pressed" },           \
+	{ "doubleclick", "double_click" }
+
+// InputEventMouseMotion properties
+#define INPUT_EVENT_MOUSE_MOTION_PROPERTIES     \
+	{ "tilt", "tilt" },                         \
+	{ "pressure", "pressure" },         \
+	{ "pen_inverted", "pen_inverted" }, \
+	{ "relative", "relative" },         \
+	{ "speed", "velocity" }
+
+// InputEventJoypadMotion properties
+#define INPUT_EVENT_JOYSTICK_MOTION_PROPERTIES \
+	{ "axis", "axis" },                        \
+	{ "axis_value", "axis_value" }
+
+// InputEventJoypadButton properties
+#define INPUT_EVENT_JOYSTICK_BUTTON_PROPERTIES \
+	{ "button_index", "button_index" },        \
+	{ "pressure", "pressure" },\
+	{ "pressed", "pressed" }
+
+// InputEventScreenTouch properties
+#define INPUT_EVENT_SCREEN_TOUCH_PROPERTIES \
+	{ "index", "index" },                   \
+	{ "position", "position" },     \
+	{ "pressed", "pressed" },       \
+	{ "canceled", "canceled" },     \
+	{ "double_tap", "double_tap" }
+
+// InputEventScreenDrag properties
+#define INPUT_EVENT_SCREEN_DRAG_PROPERTIES \
+	{ "index", "index" },                  \
+	{ "position", "position" },    \
+	{ "relative", "relative" },    \
+	{ "speed", "velocity" }
+
+// InputEventAction properties
+#define INPUT_EVENT_ACTION_PROPERTIES \
+	{ "action", "action" },           \
+	{ "pressed", "pressed" }, \
+	{ "strength", "strength" }
+
+#define INPUT_EVENT_GESTURE_PROPERTIES \
+	{ "position", "position" }
+
+// InputEventGesture properties
+#define INPUT_EVENT_MAGNIFY_GESTURE_PROPERTIES \
+	{ "factor", "factor" }
+
+// InputEventPanGesture properties
+#define INPUT_EVENT_PAN_GESTURE_PROPERTIES \
+	{ "delta", "delta" }
+
+// clang-format on
+
 const HashMap<String, String> InputEventConverterCompat::old_prop_to_new_prop = {
+	{ "device", "device" },
 	// InputEventWithModifiers properties
-	{ "alt", "alt_pressed" },
-	{ "shift", "shift_pressed" },
-	{ "control", "ctrl_pressed" },
-	{ "meta", "meta_pressed" },
-	{ "command", "command_or_control_autoremap" },
-
-	// InputEventKey properties
-	{ "scancode", "keycode" },
-	{ "physical_scancode", "physical_keycode" },
-	{ "unicode", "unicode" },
-	{ "echo", "echo" },
-
-	// InputEventMouse properties
-	{ "button_mask", "button_mask" },
-	{ "position", "position" },
-	{ "global_position", "global_position" },
-
-	// InputEventMouseButton properties
-	{ "factor", "factor" },
-	{ "button_index", "button_index" },
-	{ "pressed", "pressed" },
-	{ "canceled", "canceled" },
-	{ "doubleclick", "double_click" },
-
-	// InputEventMouseMotion properties
-	{ "tilt", "tilt" },
-	{ "pressure", "pressure" },
-	{ "pen_inverted", "pen_inverted" },
-	{ "relative", "relative" },
-	{ "speed", "velocity" },
-
-	// InputEventJoypadMotion properties
-	{ "axis", "axis" },
-	{ "axis_value", "axis_value" },
-
-	// InputEventJoypadButton properties
-	{ "button_index", "button_index" },
-	{ "pressed", "pressed" },
-	{ "pressure", "pressure" },
-
-	// InputEventScreenTouch properties
-	{ "index", "index" },
-	{ "position", "position" },
-	{ "pressed", "pressed" },
-	{ "canceled", "canceled" },
-	{ "double_tap", "double_tap" },
-
-	// InputEventScreenDrag properties
-	{ "index", "index" },
-	{ "position", "position" },
-	{ "relative", "relative" },
-	{ "speed", "velocity" },
-
-	// InputEventAction properties
-	{ "action", "action" },
-	{ "pressed", "pressed" },
-	{ "strength", "strength" },
-
-	// InputEventMagnifyGesture properties
-	{ "factor", "factor" },
-
-	// InputEventPanGesture properties
-	{ "delta", "delta" },
-
-	// // InputEventMIDI properties
-	// { "channel", "channel" },
-	// { "message", "message" },
-	// { "pitch", "pitch" },
-	// { "velocity", "velocity" },
-	// { "instrument", "instrument" },
-	// { "pressure", "pressure" },
-	// { "controller_number", "controller_number" },
-	// { "controller_value", "controller_value" },
+	INPUT_EVENT_WITH_MODIFIERS_PROPERTIES,
+	INPUT_EVENT_KEY_PROPERTIES,
+	INPUT_EVENT_MOUSE_PROPERTIES,
+	INPUT_EVENT_MOUSE_BUTTON_PROPERTIES,
+	INPUT_EVENT_MOUSE_MOTION_PROPERTIES,
+	INPUT_EVENT_JOYSTICK_MOTION_PROPERTIES,
+	INPUT_EVENT_JOYSTICK_BUTTON_PROPERTIES,
+	INPUT_EVENT_SCREEN_TOUCH_PROPERTIES,
+	INPUT_EVENT_SCREEN_DRAG_PROPERTIES,
+	INPUT_EVENT_ACTION_PROPERTIES,
+	INPUT_EVENT_GESTURE_PROPERTIES,
+	INPUT_EVENT_MAGNIFY_GESTURE_PROPERTIES,
+	INPUT_EVENT_PAN_GESTURE_PROPERTIES,
 };
 
 namespace {
 // because of "velocity"
 static const HashMap<String, String> midi_prop_map = {
+	{ "device", "device" },
 	{ "channel", "channel" },
 	{ "message", "message" },
 	{ "pitch", "pitch" },
@@ -865,6 +891,25 @@ static const HashMap<String, String> midi_prop_map = {
 	{ "controller_number", "controller_number" },
 	{ "controller_value", "controller_value" },
 };
+
+static const HashMap<String, HashMap<String, String>> input_event_maps = {
+	{ "InputEvent", { { "device", "device" } } },
+	{ "InputEventWithModifiers", { { "device", "device" }, INPUT_EVENT_WITH_MODIFIERS_PROPERTIES } },
+	{ "InputEventKey", { { "device", "device" }, INPUT_EVENT_WITH_MODIFIERS_PROPERTIES, INPUT_EVENT_KEY_PROPERTIES } },
+	{ "InputEventMouse", { { "device", "device" }, INPUT_EVENT_WITH_MODIFIERS_PROPERTIES, INPUT_EVENT_MOUSE_PROPERTIES } },
+	{ "InputEventMouseButton", { { "device", "device" }, INPUT_EVENT_WITH_MODIFIERS_PROPERTIES, INPUT_EVENT_MOUSE_PROPERTIES, INPUT_EVENT_MOUSE_BUTTON_PROPERTIES } },
+	{ "InputEventMouseMotion", { { "device", "device" }, INPUT_EVENT_WITH_MODIFIERS_PROPERTIES, INPUT_EVENT_MOUSE_PROPERTIES, INPUT_EVENT_MOUSE_MOTION_PROPERTIES } },
+	{ "InputEventJoypadMotion", { { "device", "device" }, INPUT_EVENT_JOYSTICK_MOTION_PROPERTIES } },
+	{ "InputEventJoypadButton", { { "device", "device" }, INPUT_EVENT_JOYSTICK_BUTTON_PROPERTIES } },
+	{ "InputEventScreenTouch", { { "device", "device" }, INPUT_EVENT_SCREEN_TOUCH_PROPERTIES } },
+	{ "InputEventScreenDrag", { { "device", "device" }, INPUT_EVENT_SCREEN_DRAG_PROPERTIES } },
+	{ "InputEventAction", { { "device", "device" }, INPUT_EVENT_ACTION_PROPERTIES } },
+	{ "InputEventGesture", { { "device", "device" }, INPUT_EVENT_WITH_MODIFIERS_PROPERTIES, INPUT_EVENT_GESTURE_PROPERTIES } },
+	{ "InputEventMagnifyGesture", { { "device", "device" }, INPUT_EVENT_WITH_MODIFIERS_PROPERTIES, INPUT_EVENT_GESTURE_PROPERTIES, INPUT_EVENT_MAGNIFY_GESTURE_PROPERTIES } },
+	{ "InputEventPanGesture", { { "device", "device" }, INPUT_EVENT_WITH_MODIFIERS_PROPERTIES, INPUT_EVENT_GESTURE_PROPERTIES, INPUT_EVENT_PAN_GESTURE_PROPERTIES } },
+	{ "InputEventMIDI", midi_prop_map },
+};
+
 } // namespace
 
 Ref<Resource> InputEventConverterCompat::convert(const Ref<MissingResource> &res, ResourceInfo::LoadType p_type, int ver_major, Error *r_error) {
@@ -878,29 +923,11 @@ Ref<Resource> InputEventConverterCompat::convert(const Ref<MissingResource> &res
 	return real;
 }
 
-const static HashSet<String> valid_types = {
-	"InputEvent",
-	"InputEventWithModifiers",
-	"InputEventKey",
-	"InputEventMouse",
-	"InputEventMouseButton",
-	"InputEventMouseMotion",
-	"InputEventJoypadMotion",
-	"InputEventJoypadButton",
-	"InputEventScreenTouch",
-	"InputEventScreenDrag",
-	"InputEventAction",
-	"InputEventGesture",
-	"InputEventMagnifyGesture",
-	"InputEventPanGesture",
-	"InputEventMIDI",
-};
-
 bool InputEventConverterCompat::handles_type_static(const String &p_type, int ver_major) {
 	if (ver_major != 3) {
 		return false;
 	}
-	return valid_types.has(p_type);
+	return input_event_maps.has(p_type);
 }
 
 bool InputEventConverterCompat::handles_type(const String &p_type, int ver_major) const {
@@ -908,12 +935,11 @@ bool InputEventConverterCompat::handles_type(const String &p_type, int ver_major
 }
 
 Ref<MissingResource> InputEventConverterCompat::convert_back(const Ref<Resource> &res, int ver_major, Error *r_error) {
-	if (res->get_class() == "InputEventMIDI") {
-		return get_missing_resource_from_real(res, ver_major, midi_prop_map);
-	}
+	String class_name = res->get_class();
+	ERR_FAIL_COND_V_MSG(!input_event_maps.has(class_name), Ref<MissingResource>(), "Invalid input event class name: " + class_name);
 	// otherwise instantiate the new properties
 	HashMap<String, String> required_prop_map;
-	for (auto &[old_prop, new_prop] : InputEventConverterCompat::old_prop_to_new_prop) {
+	for (auto &[old_prop, new_prop] : input_event_maps[class_name]) {
 		required_prop_map[new_prop] = old_prop;
 	}
 	auto mr = get_missing_resource_from_real(res, ver_major, required_prop_map);

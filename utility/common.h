@@ -32,10 +32,6 @@ String get_md5(const String &dir, bool ignore_code_signature = false);
 String get_md5_for_dir(const String &dir, bool ignore_code_signature = false);
 String get_sha256(const String &file_or_dir);
 Error unzip_file_to_dir(const String &zip_path, const String &output_dir);
-Error wget_sync(const String &p_url, Vector<uint8_t> &response, int retries = 5, const Vector<String> &extra_headers = {}, float *p_progress = nullptr, bool *p_cancelled = nullptr);
-
-Error download_file_sync(const String &url, const String &output_path, float *p_progress = nullptr, bool *p_cancelled = nullptr, int64_t *r_size = nullptr);
-Error wpost_sync(const String &p_url, const Vector<uint8_t> &p_data, const Vector<String> &extra_headers = {}, bool gzip = false, float *p_progress = nullptr, bool *p_cancelled = nullptr);
 Error rimraf(const String &dir);
 bool dir_is_empty(const String &dir);
 Error touch_file(const String &path);
@@ -383,6 +379,7 @@ bool detect_utf8(const PackedByteArray &p_utf8_buf);
 Error copy_dir(const String &src, const String &dst);
 
 Ref<FileAccess> open_encrypted_v3(const String &p_path, int p_mode, const Vector<uint8_t> &p_key);
+Ref<FileAccess> open_encrypted_v3_from_file(Ref<FileAccess> p_path, int p_mode, const Vector<uint8_t> &p_key);
 Vector<String> filter_error_backtraces(const Vector<String> &p_error_messages);
 Vector<String> get_files_for_paths(const Vector<String> &p_paths);
 String get_java_path();

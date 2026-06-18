@@ -70,6 +70,8 @@ func _make_all_views_invisible():
 	%TextureView.visible = false
 	%MeshPreviewer.visible = false
 	%ScenePreviewer3D.visible = false
+	%TextureLayeredPreviewer.visible = false
+	%LoadingWaitView.visible = false
 
 func _reset():
 	current_resource_path = ""
@@ -82,6 +84,7 @@ func _reset():
 	%ResourceInfo.text = ""
 	%MeshPreviewer.reset()
 	%ScenePreviewer3D.reset()
+	%TextureLayeredPreviewer.reset()
 
 
 var previous_res_info_size = Vector2(0, 0)
@@ -91,7 +94,7 @@ func load_texture(path):
 	if (ext == "image"):
 		%TextureRect.texture = ImageTexture.create_from_image(ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP))
 	elif (is_image(ext)):
-		%TextureRect.texture = ImageTexture.create_from_image(Image.load_from_file(path))
+		%TextureRect.texture = ImageTexture.create_from_image(GDRECommon.load_image_from_file(path))
 	else:
 		%TextureRect.texture = ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP) # TODO: handle other texture types
 	if (%TextureRect.texture == null):
@@ -108,6 +111,14 @@ func load_texture(path):
 
 	%TextureInfo.text = info_text
 	%TextureView.visible = true
+	return true
+
+func load_layered_texture(path):
+	var res = ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP)
+	if not res:
+		return false
+	%TextureLayeredPreviewer.edit(res)
+	%TextureLayeredPreviewer.visible = true
 	return true
 
 func pop_resource_info(path: String, info: Dictionary):
@@ -165,6 +176,9 @@ func load_mesh(path):
 	%MeshPreviewer.visible = true
 	return true
 
+const USE_THREADED_LOAD = true
+var pending_scenes: PackedStringArray = []
+
 func load_scene(path):
 	var res = null
 	var is_cached = false
@@ -175,7 +189,23 @@ func load_scene(path):
 			break
 	var start_time = Time.get_ticks_msec()
 	if not res:
-		res = ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_REUSE)
+		if not ResourceCompatLoader.is_globally_available():
+			res = ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_REUSE)
+		elif USE_THREADED_LOAD:
+			var err = ResourceLoader.load_threaded_request(path, "", false, ResourceLoader.CACHE_MODE_REUSE)
+			if err != OK:
+				return false
+			else:
+				_make_all_views_invisible()
+				%LoadingWaitView.visible = true
+				pending_scenes.append(path)
+				return true
+		else:
+			res = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REUSE)
+	return _load_scene_complete(res, is_cached)
+
+func _load_scene_complete(res: PackedScene, is_cached: bool = false):
+	_make_all_views_invisible()
 	%SwitchViewButton.text = SWITCH_TO_TEXT_TEXT
 	%SwitchViewButton.visible = true
 	if not res:
@@ -185,15 +215,44 @@ func load_scene(path):
 		return false
 	%ScenePreviewer3D.edit(res)
 	%ScenePreviewer3D.visible = true
-	var time_to_load = Time.get_ticks_msec() - start_time
-	if time_to_load > 200 and not is_cached:
-		# print("Caching scene: ", path)
-		cached_scenes.append(res)
-	else:
-		# print("Loaded scene in ", time_to_load, "ms")
-		pass
+	# var time_to_load = Time.get_ticks_msec() - start_time
+	# if time_to_load > 200 and not is_cached:
+	# 	# print("Caching scene: ", path)
+	# 	cached_scenes.append(res)
+	# else:
+	# 	# print("Loaded scene in ", time_to_load, "ms")
+	# 	pass
 	return true
 
+func handle_pending_scenes():
+	if pending_scenes.size() == 0:
+		return
+	var to_remove: PackedStringArray = []
+	var res: PackedScene = null
+	for path in pending_scenes:
+		var status = ResourceLoader.load_threaded_get_status(path)
+		match status:
+			ResourceLoader.THREAD_LOAD_LOADED:
+				to_remove.append(path)
+				res = ResourceLoader.load_threaded_get(path)
+			ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+				continue
+			ResourceLoader.THREAD_LOAD_FAILED:
+				to_remove.append(path)
+				printerr("Failed to load scene: ", path)
+			ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+				to_remove.append(path)
+				printerr("Invalid resource: ", path)
+		if path == current_resource_path:
+			if not res:
+				_make_all_views_invisible()
+				handle_error_opening(path)
+			else:
+				_load_scene_complete(res, false)
+		else:
+			pass
+	for path in to_remove:
+		pending_scenes.erase(path)
 
 func can_preview_scene():
 	return SceneExporter.get_minimum_godot_ver_supported() <= GDRESettings.get_ver_major()
@@ -246,6 +305,8 @@ func load_resource(path: String) -> void:
 		error_opening = not load_mesh(path)
 	elif (GDREConfig.get_setting("Preview/use_scene_view_by_default", false) and is_scene(ext, current_resource_type) and can_preview_scene()):
 		error_opening = not load_scene(path)
+	elif (is_layered_texture(ext)):
+		error_opening = not load_layered_texture(path)
 	else:
 		var type = %TextView.recognize(path)
 		if type == -1:
@@ -339,6 +400,11 @@ func is_image(ext, p_type = ""):
 		return true
 	return false
 
+func is_layered_texture(ext, p_type = ""):
+	if (ext == "ctexarray" || ext == "ccube" || ext == "ccubearray" || ext == "texarr" || ext == "ctex3d" || ext == "tex3d"):
+		return true
+	return false
+
 func get_currently_visible_view() -> Control:
 	if %TextView.visible:
 		return %TextView
@@ -350,6 +416,10 @@ func get_currently_visible_view() -> Control:
 		return %MeshPreviewer
 	elif %ScenePreviewer3D.visible:
 		return %ScenePreviewer3D
+	elif %TextureLayeredPreviewer.visible:
+		return %TextureLayeredPreviewer
+	elif %LoadingWaitView.visible:
+		return %LoadingWaitView
 	return null
 
 
@@ -430,3 +500,6 @@ func _on_switch_view_button_pressed() -> void:
 			pass
 	if error_opening:
 		handle_error_opening(path)
+
+func _process(delta: float) -> void:
+	handle_pending_scenes()

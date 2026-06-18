@@ -1,12 +1,16 @@
-[gd_scene load_steps=6 format=3 uid="uid://bjevsw5r631f1"]
+[gd_scene format=3 uid="uid://bjevsw5r631f1"]
 
 [ext_resource type="Theme" uid="uid://crq1fwn0ajw7b" path="res://gdre_theme.tres" id="1_crn14"]
 [ext_resource type="Script" uid="uid://dnjt5hkgucm3" path="res://gdre_resource_preview.gd" id="1_tgfma"]
 [ext_resource type="Texture2D" uid="uid://b3l2iqhf34x5c" path="res://gdre_icons/gdre_LogoBig.svg" id="3_gp5ss"]
 [ext_resource type="PackedScene" uid="uid://cuifra52kkek" path="res://gdre_media_player.tscn" id="4_crn14"]
 [ext_resource type="Script" uid="uid://d3gw3xp1peanv" path="res://gdre_text_editor.gd" id="5_1bufa"]
+[ext_resource type="Material" uid="uid://dql80mrl8tckq" path="res://gdre_loading_circle.tres" id="6_gp5ss"]
 
-[node name="GdreResourcePreview" type="Control"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_gp5ss"]
+bg_color = Color(1, 1, 1, 0)
+
+[node name="GdreResourcePreview" type="Control" unique_id=20264923]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -16,7 +20,7 @@ grow_vertical = 2
 theme = ExtResource("1_crn14")
 script = ExtResource("1_tgfma")
 
-[node name="VBoxContainer" type="VSplitContainer" parent="."]
+[node name="VBoxContainer" type="VSplitContainer" parent="." unique_id=1028205698]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -24,13 +28,14 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+split_offsets = PackedInt32Array(220)
 split_offset = 220
 
-[node name="RootView" type="Control" parent="VBoxContainer"]
+[node name="RootView" type="Control" parent="VBoxContainer" unique_id=1943061862]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="ResourceView" type="Control" parent="VBoxContainer/RootView"]
+[node name="ResourceView" type="Control" parent="VBoxContainer/RootView" unique_id=1217151174]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -40,7 +45,22 @@ grow_horizontal = 2
 grow_vertical = 2
 size_flags_vertical = 3
 
-[node name="TextureView" type="Control" parent="VBoxContainer/RootView/ResourceView"]
+[node name="LoadingWaitView" type="CenterContainer" parent="VBoxContainer/RootView/ResourceView" unique_id=99313455]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="LoadingCirclePanel" type="Panel" parent="VBoxContainer/RootView/ResourceView/LoadingWaitView" unique_id=1278454177]
+material = ExtResource("6_gp5ss")
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_gp5ss")
+
+[node name="TextureView" type="Control" parent="VBoxContainer/RootView/ResourceView" unique_id=494726531]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
@@ -50,7 +70,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="TextureRect" type="TextureRect" parent="VBoxContainer/RootView/ResourceView/TextureView"]
+[node name="TextureRect" type="TextureRect" parent="VBoxContainer/RootView/ResourceView/TextureView" unique_id=1503017689]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -62,9 +82,8 @@ texture = ExtResource("3_gp5ss")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="TextureInfo" type="Label" parent="VBoxContainer/RootView/ResourceView/TextureView"]
+[node name="TextureInfo" type="Label" parent="VBoxContainer/RootView/ResourceView/TextureView" unique_id=1618224773]
 unique_name_in_owner = true
-layout_direction = 2
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 1.0
@@ -75,6 +94,7 @@ offset_left = -117.0
 offset_top = -74.0
 grow_horizontal = 0
 grow_vertical = 0
+layout_direction = 2
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 8
@@ -83,13 +103,14 @@ text = "16x16 RGBA8
 No Mipmaps
 Memory: 1024 B"
 
-[node name="MediaPlayer" parent="VBoxContainer/RootView/ResourceView" instance=ExtResource("4_crn14")]
+[node name="MediaPlayer" parent="VBoxContainer/RootView/ResourceView" unique_id=326216806 instance=ExtResource("4_crn14")]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
 
-[node name="TextView" type="CodeEdit" parent="VBoxContainer/RootView/ResourceView"]
+[node name="TextView" type="CodeEdit" parent="VBoxContainer/RootView/ResourceView" unique_id=2141427000]
 unique_name_in_owner = true
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -126,7 +147,7 @@ highlight_current_line = true
 script = ExtResource("5_1bufa")
 metadata/_custom_type_script = "uid://d3gw3xp1peanv"
 
-[node name="MeshPreviewer" type="MeshPreviewer" parent="VBoxContainer/RootView/ResourceView"]
+[node name="MeshPreviewer" type="MeshPreviewer" parent="VBoxContainer/RootView/ResourceView" unique_id=1377593542]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
@@ -136,7 +157,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="ScenePreviewer3D" type="ScenePreviewer" parent="VBoxContainer/RootView/ResourceView"]
+[node name="ScenePreviewer3D" type="ScenePreviewer" parent="VBoxContainer/RootView/ResourceView" unique_id=2045920641]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
@@ -146,7 +167,17 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="SwitchViewButton" type="Button" parent="VBoxContainer/RootView/ResourceView"]
+[node name="TextureLayeredPreviewer" type="TextureLayeredPreviewer" parent="VBoxContainer/RootView/ResourceView" unique_id=262956170]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="SwitchViewButton" type="Button" parent="VBoxContainer/RootView/ResourceView" unique_id=1975647277]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = -1
@@ -162,12 +193,12 @@ grow_horizontal = 0
 grow_vertical = 0
 text = "Switch to Scene View"
 
-[node name="ResourceInfoContainer" type="Control" parent="VBoxContainer"]
+[node name="ResourceInfoContainer" type="Control" parent="VBoxContainer" unique_id=2051154777]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="ResourceInfo" type="RichTextLabel" parent="VBoxContainer/ResourceInfoContainer"]
+[node name="ResourceInfo" type="RichTextLabel" parent="VBoxContainer/ResourceInfoContainer" unique_id=355665313]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15

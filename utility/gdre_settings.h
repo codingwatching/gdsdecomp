@@ -12,6 +12,8 @@
 #include "core/object/object.h"
 #include "core/os/thread_safe.h"
 
+#include "pack_info.h"
+
 class GDRELogger;
 class GDREPackedData;
 class GodotMonoDecompWrapper;
@@ -21,98 +23,12 @@ class GDRESettings : public Object {
 	GDCLASS(GDRESettings, Object);
 	_THREAD_SAFE_CLASS_
 public:
-	class PackInfo : public RefCounted {
-		GDCLASS(PackInfo, RefCounted);
-
-		friend class GDRESettings;
-
-	public:
-		enum PackType {
-			PCK,
-			APK,
-			ZIP,
-			DIR,
-			EXE,
-			UNKNOWN
-		};
-
-	private:
-		String pack_file = "";
-		Ref<GodotVer> version;
-		uint32_t fmt_version = 0;
-		uint32_t pack_flags = 0;
-		uint64_t file_base = 0;
-		uint32_t file_count = 0;
-		PackType type = PCK;
-		Ref<ProjectConfigLoader> pcfg;
-		bool encrypted = false;
-		bool suspect_version = false;
-		String non_standard_header;
-
-	public:
-		void init(
-				String f, Ref<GodotVer> godot_ver, uint32_t fver, uint32_t flags, uint64_t base, uint32_t count, PackType tp, bool p_encrypted = false, bool p_suspect_version = false, String p_non_standard_header = {}) {
-			pack_file = f;
-			// copy the version, or set it to null if it's invalid
-			if (godot_ver.is_valid() && godot_ver->is_valid_semver()) {
-				version = GodotVer::create(godot_ver->get_major(), godot_ver->get_minor(), godot_ver->get_patch(), godot_ver->get_prerelease(), godot_ver->get_build_metadata());
-			}
-			fmt_version = fver;
-			pack_flags = flags;
-			file_base = base;
-			file_count = count;
-			type = tp;
-			pcfg.instantiate();
-			encrypted = p_encrypted;
-			suspect_version = p_suspect_version;
-			non_standard_header = p_non_standard_header;
-		}
-		bool has_unknown_version() {
-			return !version.is_valid() || !version->is_valid_semver();
-		}
-		void set_project_config() {
-		}
-		PackInfo() {
-			version.instantiate();
-			pcfg.instantiate();
-		}
-
-		String get_pack_file() const { return pack_file; }
-		Ref<GodotVer> get_version() const { return GodotVer::create(version->get_major(), version->get_minor(), version->get_patch(), version->get_prerelease(), version->get_build_metadata()); }
-		uint32_t get_fmt_version() const { return fmt_version; }
-		uint32_t get_pack_flags() const { return pack_flags; }
-		uint64_t get_file_base() const { return file_base; }
-		uint32_t get_file_count() const { return file_count; }
-		PackType get_type() const { return type; }
-		bool is_encrypted() const { return encrypted; }
-		bool has_suspect_version() const { return suspect_version; }
-		String get_non_standard_header() const { return non_standard_header; }
-
-	protected:
-		static void _bind_methods() {
-			ClassDB::bind_method(D_METHOD("get_pack_file"), &PackInfo::get_pack_file);
-			ClassDB::bind_method(D_METHOD("get_version"), &PackInfo::get_version);
-			ClassDB::bind_method(D_METHOD("get_fmt_version"), &PackInfo::get_fmt_version);
-			ClassDB::bind_method(D_METHOD("get_pack_flags"), &PackInfo::get_pack_flags);
-			ClassDB::bind_method(D_METHOD("get_file_base"), &PackInfo::get_file_base);
-			ClassDB::bind_method(D_METHOD("get_file_count"), &PackInfo::get_file_count);
-			ClassDB::bind_method(D_METHOD("get_type"), &PackInfo::get_type);
-			ClassDB::bind_method(D_METHOD("is_encrypted"), &PackInfo::is_encrypted);
-			ClassDB::bind_method(D_METHOD("has_suspect_version"), &PackInfo::has_suspect_version);
-			BIND_ENUM_CONSTANT(PCK);
-			BIND_ENUM_CONSTANT(APK);
-			BIND_ENUM_CONSTANT(ZIP);
-			BIND_ENUM_CONSTANT(DIR);
-			BIND_ENUM_CONSTANT(EXE);
-			BIND_ENUM_CONSTANT(UNKNOWN);
-		}
-	};
-
 	class ProjectInfo : public RefCounted {
 		GDCLASS(ProjectInfo, RefCounted);
 
 	public:
 		Ref<GodotVer> version;
+		String app_version;
 		Ref<ProjectConfigLoader> pcfg;
 		HashSet<String> resource_strings; // For translation key recovery
 		bool loaded_resource_strings = false;
@@ -135,7 +51,7 @@ public:
 private:
 	Vector<Ref<PackInfo>> packs;
 	Ref<ProjectInfo> current_project;
-	GDREPackedData *gdre_packeddata_singleton = nullptr;
+	Ref<GodotVer> version_override;
 	GDRELogger *logger;
 	Array import_files;
 	HashMap<String, Ref<ImportInfoRemap>> remap_iinfo;
@@ -241,11 +157,6 @@ private:
 
 	static ResourceUID::ID _get_uid_for_path(const String &p_path, bool _generate = false);
 
-	// Loads the encryption key from the global settings into `script_encryption_key`
-	// so that native classes (e.g. FileAccessPCK) can use it during project recovery
-	void load_encryption_key();
-	// Unloads the encryption key
-	void unload_encryption_key();
 	Error reload_dotnet_assembly(const String &p_path);
 	// Finds and loads the .NET assembly for the project
 	Error load_project_dotnet_assembly();
@@ -262,6 +173,8 @@ private:
 	bool _init_bytecode_from_ephemeral_settings();
 
 	void _detect_csharp();
+
+	void _get_app_version();
 
 protected:
 	static void _bind_methods();
@@ -303,6 +216,8 @@ public:
 	Vector<uint8_t> get_encryption_key();
 	// Returns the encryption key as a string
 	String get_encryption_key_string();
+	// Returns the required key size in bytes (default 32 bytes)
+	int get_required_key_size_in_bytes() const;
 	// PackedSource doesn't pass back useful error information when loading packs,
 	// this is a hack so that we can tell if it was an encryption error.
 	void _set_error_encryption(bool is_encryption_error);
@@ -323,6 +238,9 @@ public:
 	void reset_encryption_key();
 	// Adds a pack info to the list of packs (used by the pack sources in GDREPackedData)
 	void add_pack_info(Ref<PackInfo> packinfo);
+
+	Error add_custom_pack_source_script(const String &p_script_path);
+	void clear_custom_pack_source_script();
 
 	// Returns the class for the given script path from the script cache
 	StringName get_cached_script_class(const String &p_path);
@@ -487,8 +405,9 @@ public:
 
 	bool requires_double_precision() const;
 
+	// for testing
+	void _set_version_override(String ver_string);
+
 	GDRESettings();
 	~GDRESettings();
 };
-
-VARIANT_ENUM_CAST(GDRESettings::PackInfo::PackType);

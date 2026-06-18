@@ -7,6 +7,7 @@ Dictionary PluginBin::to_json() const {
 	d["sha256"] = sha256;
 	d["verbatim_sha256"] = verbatim_sha256;
 	d["exists"] = exists;
+	d["bin_ver"] = bin_ver;
 	d["tags"] = tags;
 	return d;
 }
@@ -17,6 +18,7 @@ PluginBin PluginBin::from_json(Dictionary d) {
 	bin.sha256 = d.get("sha256", "");
 	bin.verbatim_sha256 = d.get("verbatim_sha256", "");
 	bin.exists = d.get("exists", false);
+	bin.bin_ver = d.get("bin_ver", "");
 	bin.tags = d.get("tags", Vector<String>());
 	return bin;
 }
@@ -68,6 +70,7 @@ Dictionary ReleaseInfo::to_json() const {
 	d["release_date"] = release_date;
 	d["download_url"] = download_url;
 	d["repository_url"] = repository_url;
+	d["sha256_sum"] = sha256_sum;
 	return d;
 }
 
@@ -80,6 +83,7 @@ ReleaseInfo ReleaseInfo::from_json(Dictionary d) {
 	info.release_date = d.get("release_date", "");
 	info.download_url = d.get("download_url", "");
 	info.repository_url = d.get("repository_url", "");
+	info.sha256_sum = d.get("sha256_sum", "");
 	return info;
 }
 
@@ -90,7 +94,8 @@ bool ReleaseInfo::operator==(const ReleaseInfo &other) const {
 			version == other.version &&
 			release_date == other.release_date &&
 			download_url == other.download_url &&
-			repository_url == other.repository_url;
+			repository_url == other.repository_url &&
+			sha256_sum == other.sha256_sum;
 }
 
 bool ReleaseInfo::operator!=(const ReleaseInfo &other) const {
@@ -116,7 +121,19 @@ bool PluginVersion::is_valid() const {
 }
 
 bool PluginVersion::is_compatible(const Ref<GodotVer> &ver) const {
-	auto min_ver = GodotVer::parse(min_godot_version);
+	Ref<GodotVer> min_ver;
+	if (!min_godot_version.is_empty()) {
+		min_ver = GodotVer::parse(min_godot_version);
+	} else if (gdexts.size() > 0) {
+		if (gdexts[0].relative_path.has_extension("gdnlib")) {
+			min_ver = GodotVer::parse("3.0");
+		} else if (gdexts[0].relative_path.has_extension("gdextension")) {
+			min_ver = GodotVer::parse("4.0");
+		}
+	}
+	if (min_ver.is_null()) {
+		return true;
+	}
 	if (ver->get_major() != min_ver->get_major()) {
 		return false;
 	}

@@ -89,6 +89,9 @@ int GDScriptV2TokenizerBufferCompat::_token_to_binary(const Token &p_token, Vect
 }
 
 int get_token_line(const RBMap<int, int> &lines, int offset) {
+	if (lines.is_empty()) {
+		return -1;
+	}
 	auto pos_it = lines.find_closest(offset);
 
 	auto largest = lines.back();
@@ -97,7 +100,7 @@ int get_token_line(const RBMap<int, int> &lines, int offset) {
 		if (offset > largest->key()) {
 			l = largest->value();
 		} else {
-			return -1;
+			return lines.front()->value();
 		}
 	} else {
 		l = pos_it->value();
@@ -120,6 +123,9 @@ GDScriptV2TokenizerCompat::Token GDScriptV2TokenizerBufferCompat::_binary_to_tok
 	// token.start_line = decode_uint32(b);
 	token.start_line = get_token_line(token_lines, p_token_index);
 	token.end_line = decode_uint32(b);
+	if (token.start_line > token.end_line || token.start_line == -1) {
+		token.start_line = token.end_line;
+	}
 	token.start_column = get_token_line(token_columns, p_token_index);
 	token.end_column = token.start_column;
 

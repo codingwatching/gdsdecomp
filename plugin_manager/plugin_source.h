@@ -13,6 +13,7 @@ class PluginSource : public RefCounted {
 protected:
 	Dictionary _get_release_info(const String &plugin_name, int64_t primary_id, int64_t secondary_id);
 	Dictionary _get_plugin_version_numbers(const String &plugin_name);
+	static String _get_plugin_bin_version(const String &path);
 	static void _bind_methods();
 	Mutex cache_mutex;
 
@@ -28,6 +29,7 @@ public:
 	virtual void save_cache();
 	virtual bool handles_plugin(const String &plugin_name);
 	virtual bool is_default();
+	virtual void clear_cache();
 	virtual Vector<ReleaseInfo> find_release_infos_by_tag(const String &plugin_name, const String &tag, Error &r_connection_error);
 	// Helper method for cache expiration
 	static constexpr time_t EXPIRY_TIME = 3600; // 1 hour in seconds

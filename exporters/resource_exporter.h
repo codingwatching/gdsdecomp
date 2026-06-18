@@ -26,6 +26,7 @@ public:
 	virtual Error test_export(const Ref<ExportReport> &export_report, const String &original_project_dir) const;
 	virtual void prebatch_export();
 	virtual void postbatch_export();
+	virtual Error recreate_missing_variants(const String &output_dir, Ref<ImportInfo> import_infos) const;
 
 	static Ref<ExportReport> _check_for_existing_resources(const Ref<ImportInfo> &iinfo);
 };
@@ -54,4 +55,6 @@ public:
 	static String get_default_export_extension(const String &res_path);
 	static Vector<String> get_export_extensions(const String &res_path);
 	static Error test_export(const Ref<ExportReport> &export_report, const String &original_project_dir);
+
+	static Error recreate_missing_variants(const String &output_dir, Ref<ImportInfo> import_infos);
 };

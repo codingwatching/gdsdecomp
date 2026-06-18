@@ -78,6 +78,21 @@ The CustomDecryptor class is the base class for all custom decryptors. A custom 
   - `data`: `PackedByteArray`
     - The decrypted data
 
+#### _is_file_nonpck_encrypted(file: FileAccess) -> bool:
+`_is_file_nonpck_encrypted()` is a virtual method that may be implemented by the custom decryptor script that checks if the file is encrypted but not encrypted by Godot's PCK encryption functionality, and should be decrypted by the custom decryptor. This is useful if the project has hacked-in encryption for certain files. If not implemeted, the default behavior is to return `false`.
+
+*Parameters*:
+- `file`: `FileAccess`
+  - The `FileAccess` handle to the file to check.
+*Returns*:
+  - `true` if the file is non-pck encrypted, `false` otherwise
+  - If not implemented, the default behavior is to return `false`.
+
+#### _get_required_key_size_in_bytes() -> int:
+`_get_required_key_size_in_bytes()` is a virtual method that may be implemented by the custom decryptor script that returns the required key size in bytes. If unimplemented, the default `32` bytes will be used.
+*Returns*:
+  - The required key size in bytes
+  - If not implemented, the default behavior is to return `32`.
 
 # Encryption contexts:
 For conveniences sake, we have provided additional encryption contexts that can be used to decrypt data.

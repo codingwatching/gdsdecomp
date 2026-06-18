@@ -20,6 +20,7 @@ private:
 	virtual const HashMap<String, Vector<String>> &get_plugin_release_file_exclude_masks();
 	virtual const String &get_release_api_url();
 	virtual int get_release_page_limit();
+	virtual Error make_request(const String &url, const Vector<String> &extra_headers, Vector<uint8_t> &response);
 
 protected:
 	struct GHReleaseCache {
@@ -93,6 +94,6 @@ public:
 	void save_cache() override;
 	bool handles_plugin(const String &plugin_name) override;
 	bool is_default() override { return false; }
-	// void load_cache_data(const String &plugin_name, const Dictionary &data) override; // Deprecated
 	Vector<ReleaseInfo> find_release_infos_by_tag(const String &plugin_name, const String &tag, Error &r_error) override;
+	void clear_cache() override;
 };
