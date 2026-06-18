@@ -316,7 +316,7 @@ bool GDREPackedSource::try_open_pack(const String &p_path, bool p_replace_files,
 	if (ext == "apk" || ext == "zip") {
 		return false;
 	}
-	String pck_path = p_path.replace("_GDRE_a_really_dumb_hack", "");
+	String pck_path = p_path;
 	Ref<FileAccess> f = FileAccess::open(pck_path, FileAccess::READ);
 	ERR_FAIL_COND_V_MSG(f.is_null(), false, "Failed to open pack file: " + pck_path);
 
