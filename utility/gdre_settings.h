@@ -348,7 +348,7 @@ public:
 	bool pack_has_project_config() const;
 	// A copy of `EditorSettings::get_auto_display_scale()`, copied here for non-editor builds
 	// Gets the auto display scale for native GUI elements (gdre_progress, etc.)
-	float get_auto_display_scale() const;
+	static float get_auto_display_scale();
 	static String get_gdre_version();
 	String get_disclaimer_text() const;
 	static String get_disclaimer_body();

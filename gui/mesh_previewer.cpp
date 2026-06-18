@@ -169,7 +169,7 @@ MeshPreviewer::MeshPreviewer() {
 	mesh_instance = memnew(MeshInstance3D);
 	rotation->add_child(mesh_instance);
 
-	set_custom_minimum_size(Size2(1, 150) * GDRESettings::get_singleton()->get_auto_display_scale());
+	set_custom_minimum_size(Size2(1, 150) * GDRESettings::get_auto_display_scale());
 
 	HBoxContainer *hb = memnew(HBoxContainer);
 	add_child(hb);

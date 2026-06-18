@@ -1895,7 +1895,7 @@ bool GDRESettings::is_headless() const {
 	return headless;
 }
 
-float GDRESettings::get_auto_display_scale() const {
+float GDRESettings::get_auto_display_scale() {
 #ifdef LINUXBSD_ENABLED
 	if (DisplayServer::get_singleton()->get_name() == "Wayland") {
 		float main_window_scale = DisplayServer::get_singleton()->screen_get_scale(DisplayServerEnums::SCREEN_OF_MAIN_WINDOW);
@@ -3170,7 +3170,7 @@ void GDRESettings::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_disclaimer_text"), &GDRESettings::get_disclaimer_text);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_home_dir"), &GDRESettings::get_home_dir);
 	ClassDB::bind_method(D_METHOD("get_errors"), &GDRESettings::get_errors);
-	ClassDB::bind_method(D_METHOD("get_auto_display_scale"), &GDRESettings::get_auto_display_scale);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_auto_display_scale"), &GDRESettings::get_auto_display_scale);
 	ClassDB::bind_method(D_METHOD("set_dotnet_assembly_path", "p_path"), &GDRESettings::set_dotnet_assembly_path);
 	ClassDB::bind_method(D_METHOD("get_dotnet_assembly_path"), &GDRESettings::get_dotnet_assembly_path);
 	ClassDB::bind_method(D_METHOD("get_dotnet_decompiler"), &GDRESettings::get_dotnet_decompiler);

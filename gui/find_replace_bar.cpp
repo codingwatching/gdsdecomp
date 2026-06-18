@@ -1016,7 +1016,7 @@ GDREFindReplaceBar::GDREFindReplaceBar() {
 	search_text->set_placeholder(TTRC("Find"));
 	search_text->set_tooltip_text(TTRC("Find"));
 	search_text->set_accessibility_name(TTRC("Find"));
-	search_text->set_custom_minimum_size(Size2(100 * GDRESettings::get_singleton()->get_auto_display_scale(), 0));
+	search_text->set_custom_minimum_size(Size2(100 * GDRESettings::get_auto_display_scale(), 0));
 	search_text->connect(SceneStringName(text_changed), callable_mp(this, &GDREFindReplaceBar::_search_text_changed));
 	search_text->connect(SceneStringName(text_submitted), callable_mp(this, &GDREFindReplaceBar::_search_text_submitted));
 
@@ -1077,7 +1077,7 @@ GDREFindReplaceBar::GDREFindReplaceBar() {
 	replace_text->set_placeholder(TTRC("Replace"));
 	replace_text->set_tooltip_text(TTRC("Replace"));
 	replace_text->set_accessibility_name(TTRC("Replace"));
-	replace_text->set_custom_minimum_size(Size2(100 * GDRESettings::get_singleton()->get_auto_display_scale(), 0));
+	replace_text->set_custom_minimum_size(Size2(100 * GDRESettings::get_auto_display_scale(), 0));
 	replace_text->connect(SceneStringName(text_submitted), callable_mp(this, &GDREFindReplaceBar::_replace_text_submitted));
 
 	Control *replace_text_spacer = memnew(Control);

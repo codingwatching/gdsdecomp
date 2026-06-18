@@ -62,7 +62,7 @@ void GDREBackgroundProgress::_add_task(const String &p_task, const String &p_lab
 	ec->set_v_size_flags(SIZE_EXPAND_FILL);
 	t.progress->set_anchors_and_offsets_preset(Control::PRESET_FULL_RECT);
 	ec->add_child(t.progress);
-	ec->set_custom_minimum_size(Size2(80, 5) * GDRESettings::get_singleton()->get_auto_display_scale());
+	ec->set_custom_minimum_size(Size2(80, 5) * GDRESettings::get_auto_display_scale());
 	t.hb->add_child(ec);
 
 	add_child(t.hb);
@@ -305,7 +305,7 @@ void GDREProgressDialog::_reparent_and_show() {
 	}
 
 	Size2 ms = main->get_combined_minimum_size();
-	ms.width = MAX(500 * GDRESettings::get_singleton()->get_auto_display_scale(), ms.width);
+	ms.width = MAX(500 * GDRESettings::get_auto_display_scale(), ms.width);
 
 	Ref<StyleBox> style = main->get_theme_stylebox(SceneStringName(panel), SNAME("PopupMenu"));
 	ms += style->get_minimum_size();
