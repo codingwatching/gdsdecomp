@@ -14,6 +14,7 @@
 #include "gui/gdre_standalone.h"
 #include "gui/texture_layered_previewer.h"
 #include "modules/regex/regex.h"
+#include "modules/register_module_types.h"
 #include "utility/app_version_getter.h"
 #include "utility/file_access_gdre.h"
 #include "utility/file_access_patched_gdre.h"
@@ -456,6 +457,11 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
 	}
+	if (!Engine::get_singleton()->is_editor_hint()) {
+		float scale = GDRESettings::get_auto_display_scale();
+		ProjectSettings::get_singleton()->set_setting("display/window/stretch/scale", scale);
+	}
+
 #ifdef TOOLS_ENABLED
 	ClassDB::register_class<PackDialog>();
 	ClassDB::register_class<NewPackDialog>();
@@ -466,6 +472,8 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 
 	ClassDB::register_class<GDREWindow>();
 	ClassDB::register_class<GDREAcceptDialogBase>();
+	ClassDB::register_class<GDREConfirmationDialogBase>();
+	ClassDB::register_class<GDREFileDialog>();
 
 	ClassDB::register_class<SemVer>();
 	ClassDB::register_class<GodotVer>();

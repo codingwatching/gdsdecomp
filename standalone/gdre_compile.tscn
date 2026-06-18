@@ -100,7 +100,7 @@ icon = ExtResource("4_rcglc")
 icon_alignment = 1
 expand_icon = true
 
-[node name="AddFilesDialog" type="FileDialog" parent="." unique_id=1108855084]
+[node name="AddFilesDialog" type="GDREFileDialog" parent="." unique_id=1108855084]
 unique_name_in_owner = true
 title = "Open File(s)"
 ok_button_text = "Open"
@@ -110,7 +110,7 @@ filters = PackedStringArray("*.gd;GDScript text files")
 show_hidden_files = true
 use_native_dialog = true
 
-[node name="DestinationFolderDialog" type="FileDialog" parent="." unique_id=1338373745]
+[node name="DestinationFolderDialog" type="GDREFileDialog" parent="." unique_id=1338373745]
 unique_name_in_owner = true
 title = "Open a Directory"
 ok_button_text = "Select Current Folder"

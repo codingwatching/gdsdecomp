@@ -37,8 +37,6 @@ var DEFAULT_VER_MAJOR = ver_info["major"]
 var DEFAULT_VER_MINOR = ver_info["minor"]
 var DEFAULT_VER_PATCH = ver_info["patch"]
 
-# var isHiDPI = DisplayServer.screen_get_dpi() >= 240
-var isHiDPI = false
 var root: TreeItem = null
 var userroot: TreeItem = null
 var num_files:int = 0

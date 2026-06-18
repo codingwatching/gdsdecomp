@@ -1,6 +1,7 @@
 #include "gui_icons.h"
 #include "gui/gdre_icons.gen.h"
 #include "scene/gui/control.h"
+#include "scene/resources/dpi_texture.h"
 #include "scene/resources/image_texture.h"
 #include "scene/theme/theme_db.h"
 #ifdef MODULE_SVG_ENABLED
@@ -8,25 +9,15 @@
 
 #endif
 
-// HashMap<float, HashMap<StringName, Ref<ImageTexture>>> GDREGuiIcons::icons;
+// HashMap<float, HashMap<StringName, Ref<DPITexture>>> GDREGuiIcons::icons;
 // bool GDREGuiIcons::initialized = false;
 // BinaryMutex GDREGuiIcons::init_lock;
 
 GDREGuiIcons *GDREGuiIcons::singleton = nullptr;
 namespace {
-static inline Ref<ImageTexture> generate_icon(int p_index, float scale) {
+static inline Ref<DPITexture> generate_icon(int p_index, float scale) {
 	ERR_FAIL_INDEX_V(p_index, gdre_icons_count, nullptr);
-	Ref<Image> img = memnew(Image);
-
-#ifdef MODULE_SVG_ENABLED
-	// Upsample icon generation only if the scale isn't an integer multiplier.
-	// Generating upsampled icons is slower, and the benefit is hardly visible
-	// with integer scales.
-	ImageLoaderSVG img_loader;
-	img_loader.create_image_from_string(img, gdre_icons_sources[p_index], scale, false, false);
-#endif
-
-	return ImageTexture::create_from_image(img);
+	return DPITexture::create_from_string(gdre_icons_sources[p_index], scale);
 }
 } //namespace
 
@@ -39,11 +30,11 @@ int get_icon_index(const StringName &p_name) {
 	return -1;
 }
 
-Ref<ImageTexture> GDREGuiIcons::get_icon(const StringName &p_name, float scale) {
+Ref<DPITexture> GDREGuiIcons::get_icon(const StringName &p_name, float scale) {
 	return singleton->_get_gdre_icon(p_name, scale);
 }
 
-Ref<ImageTexture> GDREGuiIcons::_get_gdre_icon(const StringName &p_name, float scale) {
+Ref<DPITexture> GDREGuiIcons::_get_gdre_icon(const StringName &p_name, float scale) {
 	if (!initialized) {
 		init();
 	}

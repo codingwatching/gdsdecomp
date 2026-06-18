@@ -123,8 +123,6 @@ var LARGE_PCK = 5000
 var prev_filter_string: String = ""
 var timer: SceneTreeTimer = null
 
-# var isHiDPI = DisplayServer.screen_get_dpi() >= 240
-var isHiDPI = false
 var root: TreeItem = null
 var userroot: TreeItem = null
 var num_files:int = 0
@@ -133,8 +131,19 @@ var num_malformed:int = 0
 var right_click_menu: PopupMenu = null
 var right_clicked_item: TreeItem = null
 
-var custom_right_click_map: Dictionary[int, String] = {}
-var custom_right_click_items: Dictionary[String, Callable] = {}
+class CustomRightClickItem:
+	var id: int
+	var text: String
+	var callable: Callable
+	var is_applicable: Callable
+
+	func _init(id: int, text: String, callable: Callable, check_callable: Callable):
+		self.id = id
+		self.text = text
+		self.callable = callable
+		self.is_applicable = check_callable
+
+var custom_right_click_map: Dictionary[int, CustomRightClickItem] = {}
 
 
 enum {
@@ -149,8 +158,8 @@ enum {
 var last_open_id = POPUP_CUSTOM_SEPERATOR + 1
 var current_sort = SortType.SORT_NAME_ASCENDING
 
-func get_highlighted_items() -> Array:
-	var highlighted_items = []
+func get_highlighted_items() -> Array[TreeItem]:
+	var highlighted_items: Array[TreeItem] = []
 	if (select_mode == SELECT_MULTI):
 		var item = self.get_next_selected(get_root())
 		while (item):
@@ -181,15 +190,10 @@ func items_has_folder(items: Array) -> bool:
 			return true
 	return false
 
-
-# Right click stuff
-
-
-func add_custom_right_click_item(text: String, callable: Callable):
+func add_custom_right_click_item(text: String, callable: Callable, check_callable: Callable = func(_items: Array[TreeItem]) -> bool: return true):
 	var id = last_open_id
 	last_open_id += 1
-	custom_right_click_map[id] = text
-	custom_right_click_items[text] = callable
+	custom_right_click_map[id] = CustomRightClickItem.new(id, text, callable, check_callable)
 
 func _on_gui_input(input:InputEvent):
 	if input is InputEventKey:
@@ -258,7 +262,7 @@ func _on_item_right_clicked():
 	var has_folder = false
 
 	clear_right_click_state()
-	var selected_items = get_highlighted_items()
+	var selected_items: Array[TreeItem] = get_highlighted_items()
 	right_clicked_item = self.get_item_at_position(get_local_mouse_position())
 	if (not right_clicked_item_is_selected(selected_items)):
 		set_right_clicked_outline_color(false)
@@ -270,7 +274,7 @@ func _on_item_right_clicked():
 			has_folder = true
 		if (selected_items.size() > 1):
 			plural = true
-	pop_right_menu_items(check_name, plural, has_folder)
+	pop_right_menu_items(check_name, plural, has_folder, selected_items)
 	right_click_menu.position = DisplayServer.mouse_get_position()
 	right_click_menu.visible = true
 
@@ -323,16 +327,13 @@ func _on_right_click_id(id):
 				set_fold_all(item, false, true)
 		_:
 			if custom_right_click_map.has(id):
-				var text = custom_right_click_map.get(id)
-				if custom_right_click_items.has(text):
-					var callable = custom_right_click_items.get(text)
-					callable.call(selected_items)
+				custom_right_click_map.get(id).callable.call(selected_items)
 
 func _on_right_click_visibility_changed():
 	if not right_click_menu.visible:
 		set_right_clicked_outline_color(true)
 
-func pop_right_menu_items(check_name: String = "Item", plural: bool = false, has_folder: bool = false):
+func pop_right_menu_items(check_name: String = "Item", plural: bool = false, has_folder: bool = false, selected_items: Array[TreeItem] = []):
 	right_click_menu.clear(true)
 	right_click_menu.reset_size()
 	if self.show_copy_paths_in_right_click_menu:
@@ -355,9 +356,9 @@ func pop_right_menu_items(check_name: String = "Item", plural: bool = false, has
 	if custom_right_click_map.size() > 0:
 		if right_click_menu.get_item_count() != 0:
 			right_click_menu.add_separator("", POPUP_CUSTOM_SEPERATOR)
-		for id in custom_right_click_map.keys():
-			var text = custom_right_click_map.get(id)
-			right_click_menu.add_item(text, id)
+		for crc in custom_right_click_map.values():
+			if crc.is_applicable.call(selected_items):
+				right_click_menu.add_item(crc.text, crc.id)
 
 # ** CHECK PROPAGATION
 

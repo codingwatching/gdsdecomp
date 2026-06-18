@@ -12,8 +12,6 @@ var editor_message_default_text: String = ""
 var log_file_default_text: String = ""
 var recovery_folder: String = ""
 
-# var isHiDPI = DisplayServer.screen_get_dpi() >= 240
-var isHiDPI = false
 var root: TreeItem = null
 var userroot: TreeItem = null
 var num_files:int = 0
@@ -48,12 +46,6 @@ func _ready():
 	editor_message_default_text = EDITOR_MESSAGE_LABEL.text
 	log_file_default_text = LOG_FILE_LABEL.text
 
-	if isHiDPI:
-		# get_viewport().size *= 2.0
-		# get_viewport().content_scale_factor = 2.0
-		#ThemeDB.fallback_base_scale = 2.0
-		self.content_scale_factor = 2.0
-		self.size *= 2.0
 	# This is a hack to get around not being able to open multiple scenes
 	# unless they're attached to windows
 	# The children are not already in the window for ease of GUI creation

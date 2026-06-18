@@ -17,10 +17,10 @@ dialog_hide_on_ok = false
 script = ExtResource("1_p07vp")
 metadata/_custom_type_script = "uid://cbggqwojxui00"
 
-[node name="ErrorDialog" type="AcceptDialog" parent="." unique_id=1566817302]
+[node name="ErrorDialog" type="GDREAcceptDialogBase" parent="." unique_id=1566817302]
 unique_name_in_owner = true
 
-[node name="SelectPckDialog" type="FileDialog" parent="." unique_id=1540086483]
+[node name="SelectPckDialog" type="GDREFileDialog" parent="." unique_id=1540086483]
 unique_name_in_owner = true
 title = "Open a File"
 ok_button_text = "Open"
@@ -30,7 +30,7 @@ access = 2
 filters = PackedStringArray("*.pck")
 use_native_dialog = true
 
-[node name="SelectPatchFilesDialog" type="FileDialog" parent="." unique_id=1878613928]
+[node name="SelectPatchFilesDialog" type="GDREFileDialog" parent="." unique_id=1878613928]
 unique_name_in_owner = true
 title = "Open File(s)"
 ok_button_text = "Open"
@@ -39,11 +39,11 @@ file_mode = 1
 access = 2
 use_native_dialog = true
 
-[node name="SelectPatchMappingDialog" type="FileDialog" parent="." unique_id=93441926]
+[node name="SelectPatchMappingDialog" type="GDREFileDialog" parent="." unique_id=93441926]
 unique_name_in_owner = true
 root_subfolder = "res://"
 
-[node name="SavePckDialog" type="FileDialog" parent="." unique_id=572021896]
+[node name="SavePckDialog" type="GDREFileDialog" parent="." unique_id=572021896]
 unique_name_in_owner = true
 access = 2
 
@@ -234,7 +234,7 @@ nameColumnName = "File"
 infoColumnName = "Mapping"
 metadata/_custom_type_script = "uid://cww2hw50p8q3i"
 
-[node name="DropFoldersConfirmation" type="Window" parent="." unique_id=2034123196]
+[node name="DropFoldersConfirmation" type="GDREWindow" parent="." unique_id=2034123196]
 unique_name_in_owner = true
 oversampling_override = 1.0
 title = "Select Mapping"
@@ -346,7 +346,7 @@ offset_bottom = 31.0
 text = "Select \"Relative From...\" Mapping
 "
 
-[node name="SelectPatchFolderMappingDialog" type="FileDialog" parent="." unique_id=491060185]
+[node name="SelectPatchFolderMappingDialog" type="GDREFileDialog" parent="." unique_id=491060185]
 unique_name_in_owner = true
 auto_translate_mode = 1
 title = "Open a Directory"

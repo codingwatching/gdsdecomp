@@ -237,7 +237,7 @@ theme_override_font_sizes/font_size = 18
 text = "$$$"
 flat = true
 
-[node name="LegalNoticeWindow" type="Window" parent="." unique_id=1615274239]
+[node name="LegalNoticeWindow" type="GDREWindow" parent="." unique_id=1615274239]
 title = "Important: Legal Notice"
 position = Vector2i(0, 36)
 size = Vector2i(650, 431)
@@ -298,7 +298,7 @@ visible = false
 unique_name_in_owner = true
 visible = false
 
-[node name="TextToBinFileDialog" type="FileDialog" parent="." unique_id=22111780]
+[node name="TextToBinFileDialog" type="GDREFileDialog" parent="." unique_id=22111780]
 unique_name_in_owner = true
 auto_translate_mode = 1
 title = "Open File(s)"
@@ -309,7 +309,7 @@ filters = PackedStringArray("*.escn,*.tscn,*.tres,*.godot,engine.cfg;Text resour
 show_hidden_files = true
 use_native_dialog = true
 
-[node name="BinToTextFileDialog" type="FileDialog" parent="." unique_id=157356456]
+[node name="BinToTextFileDialog" type="GDREFileDialog" parent="." unique_id=157356456]
 unique_name_in_owner = true
 title = "Open File(s)"
 ok_button_text = "Open"
@@ -318,7 +318,7 @@ access = 2
 show_hidden_files = true
 use_native_dialog = true
 
-[node name="TextureToPNGFileDialog" type="FileDialog" parent="." unique_id=392200930]
+[node name="TextureToPNGFileDialog" type="GDREFileDialog" parent="." unique_id=392200930]
 unique_name_in_owner = true
 title = "Open File(s)"
 ok_button_text = "Open"
@@ -328,7 +328,7 @@ filters = PackedStringArray("*.ctex,*.stex,*.tex;Stream texture files")
 show_hidden_files = true
 use_native_dialog = true
 
-[node name="OggStreamToOGGFileDialog" type="FileDialog" parent="." unique_id=219429950]
+[node name="OggStreamToOGGFileDialog" type="GDREFileDialog" parent="." unique_id=219429950]
 unique_name_in_owner = true
 title = "Open File(s)"
 ok_button_text = "Open"
@@ -338,7 +338,7 @@ filters = PackedStringArray("*.oggstr,*.oggvorbisstr;OGG Sample files")
 show_hidden_files = true
 use_native_dialog = true
 
-[node name="MP3StreamToMP3FileDialog" type="FileDialog" parent="." unique_id=984739678]
+[node name="MP3StreamToMP3FileDialog" type="GDREFileDialog" parent="." unique_id=984739678]
 unique_name_in_owner = true
 auto_translate_mode = 1
 title = "Open File(s)"
@@ -353,7 +353,7 @@ use_native_dialog = true
 unique_name_in_owner = true
 visible = false
 
-[node name="SampleToWAVFileDialog" type="FileDialog" parent="." unique_id=1244434354]
+[node name="SampleToWAVFileDialog" type="GDREFileDialog" parent="." unique_id=1244434354]
 unique_name_in_owner = true
 title = "Open File(s)"
 ok_button_text = "Open"
@@ -363,7 +363,7 @@ filters = PackedStringArray("*.sample;WAV Sample files")
 show_hidden_files = true
 use_native_dialog = true
 
-[node name="EncryptionScriptFileDialog" type="FileDialog" parent="." unique_id=1281606175]
+[node name="EncryptionScriptFileDialog" type="GDREFileDialog" parent="." unique_id=1281606175]
 unique_name_in_owner = true
 title = "Open a File"
 dialog_hide_on_ok = true

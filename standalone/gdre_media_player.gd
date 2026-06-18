@@ -1,18 +1,19 @@
 class_name GDREMediaPlayer
 extends Control
-var AUDIO_PLAYER: Control = null
-var TIME_LABEL: Label = null
-var AUDIO_PLAYER_STREAM: AudioStreamPlayer = null
-var VIDEO_PLAYER_STREAM: VideoStreamPlayer = null
-var VIDEO_VIEW_BOX: Control = null
-var VIDEO_ASPECT_RATIO_CONTAINER: AspectRatioContainer = null
-var AUDIO_PREVIEW_BOX = null
-var AUDIO_VIEW_BOX: Control = null
-var AUDIO_STREAM_INFO: Label = null
-var PROGRESS_BAR: Slider = null
-var PLAY_BUTTON: Button = null
-var PAUSE_BUTTON: Button = null
-var STOP_BUTTON: Button = null
+
+@onready var TIME_LABEL: Label = %TimeLabel
+@onready var PROGRESS_BAR: Slider = %ProgressBar
+@onready var PLAY_BUTTON: Button = %Play
+@onready var PAUSE_BUTTON: Button = %Pause
+@onready var STOP_BUTTON: Button = %Stop
+@onready var AUDIO_PLAYER_STREAM: AudioStreamPlayer = %AudioStreamPlayer
+@onready var AUDIO_PREVIEW_BOX: Control = %AudioPreviewBox
+@onready var AUDIO_VIEW_BOX: Control = %AudioViewBox
+@onready var AUDIO_STREAM_INFO: Label = %AudioStreamInfo
+@onready var VIDEO_PLAYER_STREAM: VideoStreamPlayer = %VideoStreamPlayer
+@onready var VIDEO_VIEW_BOX: Control = %VideoViewBox
+@onready var VIDEO_ASPECT_RATIO_CONTAINER: AspectRatioContainer = %AspectRatioContainer
+
 var controller: PlayerController = null
 var dragging_slider: bool = false
 var last_updated_time: float = 0
@@ -249,9 +250,13 @@ func load_video(path):
 	if not is_supported_video_format(path):
 		return false
 	var video_stream: VideoStream = ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP)
+	return load_video_stream(video_stream)
+
+
+func load_video_stream(video_stream: VideoStream):
+	reset()
 	if (video_stream == null):
 		return false
-	reset()
 	VIDEO_VIEW_BOX.visible = true
 	VIDEO_PLAYER_STREAM.stream = video_stream
 	VIDEO_PLAYER_STREAM.expand = false
@@ -277,9 +282,13 @@ func load_sample(path):
 			audio_stream = AudioStreamOggVorbis.load_from_file(path)
 		elif ext == "mp3":
 			audio_stream = AudioStreamMP3.load_from_file(path)
+
+	return load_audio_stream(audio_stream)
+
+func load_audio_stream(audio_stream: AudioStream):
+	reset()
 	if (audio_stream == null):
 		return false
-	reset()
 	AUDIO_VIEW_BOX.visible = true
 	AUDIO_PLAYER_STREAM.stream = audio_stream
 	controller = AudioPlayerController.new(AUDIO_PLAYER_STREAM)
@@ -419,18 +428,6 @@ func _on_audio_preview_box_pos_changed(value: float) -> void:
 	update_text_label()
 
 func _ready():
-	TIME_LABEL = get_node("BarHBox/TimeLabel")
-	PROGRESS_BAR = get_node("BarHBox/ProgressBar")
-	PLAY_BUTTON = get_node("MediaControlsHBox/Play")
-	PAUSE_BUTTON = get_node("MediaControlsHBox/Pause")
-	STOP_BUTTON = get_node("MediaControlsHBox/Stop")
-	AUDIO_PLAYER_STREAM = get_node("AudioStreamPlayer")
-	AUDIO_PREVIEW_BOX = get_node("AudioViewBox/AudioPreviewBox")
-	AUDIO_VIEW_BOX = get_node("AudioViewBox")
-	AUDIO_STREAM_INFO = get_node("AudioViewBox/AudioStreamInfo")
-	VIDEO_PLAYER_STREAM = get_node("VideoViewBox/AspectRatioContainer/VideoStreamPlayer")
-	VIDEO_VIEW_BOX = get_node("VideoViewBox")
-	VIDEO_ASPECT_RATIO_CONTAINER = get_node("VideoViewBox/AspectRatioContainer")
 	# connect signals
 	PROGRESS_BAR.connect("drag_started", self._on_slider_drag_started)
 	PROGRESS_BAR.connect("drag_ended", self._on_slider_drag_ended)
@@ -446,7 +443,7 @@ func _ready():
 	STOP_BUTTON.icon = stop_icon
 
 	reset()
-	#load_media("/Users/nikita/Desktop/_test_individual_export/Door_OGV.ogv")
+	# load_media("/Users/nikita/Workspace/godot-ws/test-decomps/_test_files/Door_OGV.ogv")
 	#load_media("/Users/nikita/Desktop/_test_individual_export/gearhead.ogv")
 	#load_media("/Users/nikita/Downloads/4K_resolution_sample.ogv")
 	# load_media('/Users/nikita/Desktop/_test_individual_export/A moment of silent.ogg')

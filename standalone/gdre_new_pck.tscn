@@ -21,19 +21,19 @@ ok_button_text = "Save"
 dialog_hide_on_ok = false
 script = ExtResource("1_lfpko")
 
-[node name="DirectoryDialog" type="FileDialog" parent="." unique_id=1289157323]
+[node name="DirectoryDialog" type="GDREFileDialog" parent="." unique_id=1289157323]
 title = "Open a Directory"
 ok_button_text = "Select Current Folder"
 file_mode = 2
 access = 2
 use_native_dialog = true
 
-[node name="SaveDialog" type="FileDialog" parent="." unique_id=1737674945]
+[node name="SaveDialog" type="GDREFileDialog" parent="." unique_id=1737674945]
 title = "Save PCK..."
 access = 2
 use_native_dialog = true
 
-[node name="EmbedSourceDialog" type="FileDialog" parent="." unique_id=234329564]
+[node name="EmbedSourceDialog" type="GDREFileDialog" parent="." unique_id=234329564]
 auto_translate_mode = 1
 title = "Open a File"
 ok_button_text = "Open"

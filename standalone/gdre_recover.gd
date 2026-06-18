@@ -13,7 +13,6 @@ var RESOURCE_PREVIEW: Control = null
 var HSPLIT_CONTAINER: HSplitContainer = null
 var SHOW_PREVIEW_BUTTON: Button = null
 
-var isHiDPI = false #DisplayServer.screen_get_dpi() >= 240
 var root: TreeItem = null
 var userroot: TreeItem = null
 var num_files:int = 0
@@ -414,12 +413,6 @@ func _ready():
 	RESOURCE_PREVIEW = %GdreResourcePreview
 	HSPLIT_CONTAINER = %HSplitContainer
 	SHOW_PREVIEW_BUTTON = %ShowResourcePreview
-	if isHiDPI:
-		# get_viewport().size *= 2.0
-		# get_viewport().content_scale_factor = 2.0
-		#ThemeDB.fallback_base_scale = 2.0
-		RECOVER_WINDOW.content_scale_factor = 2.0
-		RECOVER_WINDOW.size *= 2.0
 
 	clear()
 	SHOW_PREVIEW_BUTTON.set_pressed_no_signal(true)
@@ -561,7 +554,7 @@ func _on_show_resource_preview_toggled(toggled_on: bool) -> void:
 		RESOURCE_PREVIEW.visible = true
 		# get the current size of the window
 		# set the split offset to 50% of the window size
-		HSPLIT_CONTAINER.set_split_offset(self.size.x / 2)
+		HSPLIT_CONTAINER.set_split_offset((self.size.x / self.content_scale_factor) / 2)
 		SHOW_PREVIEW_BUTTON.text = "Hide Resource Preview"
 		_on_file_tree_item_selected()
 	else:

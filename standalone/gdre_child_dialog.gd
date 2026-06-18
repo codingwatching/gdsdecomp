@@ -3,7 +3,6 @@ extends GDREAcceptDialogBase
 
 var POPUP_PARENT_WINDOW: Window = null
 
-var isHiDPI = false
 static var void_func: Callable = func(): return
 
 # MUST CALL set_root_window() first!!!

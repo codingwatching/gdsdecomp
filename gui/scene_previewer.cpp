@@ -213,7 +213,7 @@ void ScenePreviewer3D::setup_3d() {
 	rotation = memnew(Node3D);
 	viewport->add_child(rotation);
 
-	set_custom_minimum_size(Size2(1, 150) * GDRESettings::get_singleton()->get_auto_display_scale());
+	set_custom_minimum_size(Size2(1, 150) * GDRESettings::get_auto_display_scale());
 
 	HBoxContainer *hb = memnew(HBoxContainer);
 	add_child(hb);

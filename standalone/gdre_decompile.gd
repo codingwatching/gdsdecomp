@@ -230,7 +230,7 @@ func _on_show_resource_preview_toggled(toggled_on: bool) -> void:
 	if toggled_on:
 		%BytecodeSelector.fit_to_longest_item = false
 		%GDRETextEditor.visible = true
-		%MainSplit.set_split_offset(-(self.size.x / 2.0))
+		%MainSplit.set_split_offset(-(self.size.x / self.content_scale_factor / 2.0))
 		%PreviewButton.text = "Hide Preview"
 	else:
 		%BytecodeSelector.fit_to_longest_item = true
