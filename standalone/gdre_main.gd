@@ -5,9 +5,6 @@ var config: ConfigFile = null
 var last_error = ""
 var CONFIG_PATH = "user://gdre_settings.cfg"
 
-# var isHiDPI = DisplayServer.screen_get_dpi() >= 240
-var isHiDPI = false
-
 @onready var RECOVERY_DIALOG: GDRERecoverDialog = %GdreRecover
 @onready var NEW_PCK_DIALOG: GDRENewPck = %GdreNewPck
 @onready var PATCH_PCK_DIALOG: GDREPatchPCK = %GdrePatchPck
@@ -245,8 +242,6 @@ func setup_file_dialog():
 	_file_dialog.set_use_native_dialog(true)
 	# This is currently broken in Godot, so we use the native dialogs
 	#var prev_size = _file_dialog.size
-	if isHiDPI:
-		_file_dialog.size *= 2.0
 	#_file_dialog.min_size = _file_dialog.size
 	#d_viewport.content_scale_factor = 2.0
 	_file_dialog.set_access(FileDialog.ACCESS_FILESYSTEM)
@@ -547,38 +542,6 @@ func handle_quit(save_cfg = true):
 		GDRESettings.unload_project()
 
 
-	#readd_items($MenuContainer/REToolsMenu
-func _resize_menu_times(menu_container:HBoxContainer):
-	for menu_btn: MenuButton in menu_container.get_children():
-
-		var popup : PopupMenu = menu_btn.get_popup()
-		# broken
-		#popup.visible = true
-		#var size = popup.size * 2
-		#popup.size = size
-		#popup.min_size = size
-		#popup.max_size = size * 2
-		#popup.get_viewport().content_scale_factor = 2.0
-		#popup.visible = false
-		# readd_items(menu_btn)
-		if isHiDPI:
-			var old_theme = popup.theme
-			#menu_btn.connect("theme_changed", self._on_menu_btn_theme_changed)
-			var new_theme = old_theme
-			if !new_theme:
-				new_theme = Theme.new()
-			var font_size = new_theme.get_font_size("", "")
-			#new_theme.set_font_size("", "", font_size * 2)
-			new_theme.set_default_font_size(font_size * 2)
-			popup.theme = new_theme
-		var item_count = menu_btn.get_popup().get_item_count()
-		for i in range(item_count):
-			var icon: Texture2D = popup.get_item_icon(i)
-			if icon:
-				var icon_size = icon.get_size()
-				popup.set_item_icon_max_width(i, icon_size.x * (2.0 if isHiDPI else 0.5))
-
-
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_EXIT_TREE:
 		handle_quit()
@@ -633,16 +596,6 @@ func _ready():
 	$LegalNoticeWindow/OkButton.connect("pressed", $LegalNoticeWindow.hide)
 	$LegalNoticeWindow.connect("close_requested", $LegalNoticeWindow.hide)
 	%GdreRecover.connect("recovery_confirmed", self._on_recovery_confirmed)
-	# check if the current screen is hidpi
-	if isHiDPI:
-		# set the content scaling factor to 2x
-		ThemeDB.fallback_base_scale = 2.0
-		get_viewport().content_scale_factor = 2.0
-		get_viewport().size *= 2
-		$SetEncryptionKeyWindow.content_scale_factor = 2.0
-		$SetEncryptionKeyWindow.size *= 2
-		$LegalNoticeWindow.content_scale_factor = 2.0
-		$LegalNoticeWindow.size *=2
 
 	if show_disclaimer:
 		open_about_window()

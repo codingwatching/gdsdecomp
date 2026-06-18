@@ -30,7 +30,6 @@ var DROP_FOLDERS_LIST_B: Tree = null
 var DROP_FOLDERS_LABEL_A: Label = null
 var DROP_FOLDERS_LABEL_B: Label = null
 var button_clicked_item: TreeItem = null
-# var isHiDPI = DisplayServer.screen_get_dpi() >= 240
 var root: TreeItem = null
 var userroot: TreeItem = null
 var num_files:int = 0
@@ -149,12 +148,6 @@ func _ready():
 	DROP_FOLDERS_LIST_B.set_column_title(0, "File")
 	DROP_FOLDERS_LIST_B.set_column_title(1, "Mapping")
 
-	if isHiDPI:
-		# get_viewport().size *= 2.0
-		# get_viewport().content_scale_factor = 2.0
-		#ThemeDB.fallback_base_scale = 2.0
-		self.content_scale_factor = 2.0
-		self.size *= 2.0
 	# This is a hack to get around not being able to open multiple scenes
 	# unless they're attached to windows
 	# The children are not already in the window for ease of GUI creation

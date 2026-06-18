@@ -13,7 +13,6 @@ var RESOURCE_PREVIEW: Control = null
 var HSPLIT_CONTAINER: HSplitContainer = null
 var SHOW_PREVIEW_BUTTON: Button = null
 
-var isHiDPI = false #DisplayServer.screen_get_dpi() >= 240
 var root: TreeItem = null
 var userroot: TreeItem = null
 var num_files:int = 0
@@ -414,12 +413,6 @@ func _ready():
 	RESOURCE_PREVIEW = %GdreResourcePreview
 	HSPLIT_CONTAINER = %HSplitContainer
 	SHOW_PREVIEW_BUTTON = %ShowResourcePreview
-	if isHiDPI:
-		# get_viewport().size *= 2.0
-		# get_viewport().content_scale_factor = 2.0
-		#ThemeDB.fallback_base_scale = 2.0
-		RECOVER_WINDOW.content_scale_factor = 2.0
-		RECOVER_WINDOW.size *= 2.0
 
 	clear()
 	SHOW_PREVIEW_BUTTON.set_pressed_no_signal(true)

@@ -123,8 +123,6 @@ var LARGE_PCK = 5000
 var prev_filter_string: String = ""
 var timer: SceneTreeTimer = null
 
-# var isHiDPI = DisplayServer.screen_get_dpi() >= 240
-var isHiDPI = false
 var root: TreeItem = null
 var userroot: TreeItem = null
 var num_files:int = 0
