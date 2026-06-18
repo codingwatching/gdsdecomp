@@ -1,6 +1,10 @@
 #include "gdre_window.h"
 #include "gui/gdre_progress.h"
+#include "scene/main/node.h"
+#include "scene/main/window.h"
+#include "utility/gdre_settings.h"
 
+#include "core/config/engine.h"
 #include "core/object/class_db.h"
 
 void GDREWindow::popup_box(Node *p_parent, Window *p_box, const String &p_message, const String &p_title, const Callable &p_confirm_callback, const Callable &p_cancel_callback, const String &p_ok_button_text, const String &p_cancel_button_text) {
@@ -43,6 +47,38 @@ void GDREWindow::popup_box(Node *p_parent, Window *p_box, const String &p_messag
 	}
 	// p_parent->add_child(p_box);
 	p_box->popup_centered();
+}
+
+void GDREWindow::set_window_autoscaling(Window *p_window, Size2i p_min_size) {
+	ERR_FAIL_NULL(p_window);
+	if (Engine::get_singleton()->is_editor_hint()) {
+		return;
+	}
+	float current_scale = p_window->get_content_scale_factor();
+	float auto_display_scale = GDRESettings::get_auto_display_scale();
+	if (auto_display_scale != 1.0 && auto_display_scale != current_scale) {
+		p_window->set_content_scale_factor(auto_display_scale);
+	}
+	bool no_min = p_min_size == Size2i();
+	float size_scale = auto_display_scale / current_scale;
+	Size2i new_min_size = Size2i(float(p_min_size.x) * size_scale, float(p_min_size.y) * size_scale);
+
+	if (!no_min && p_window->get_min_size() != new_min_size) {
+		p_window->set_min_size(new_min_size);
+	}
+
+	Size2i current_size = p_window->get_size();
+	Size2i new_size = no_min ? Size2i(float(current_size.x) * size_scale, float(current_size.y) * size_scale) : new_min_size;
+	if (no_min || current_size < new_size) {
+		p_window->set_size(new_size);
+	}
+	p_window->set_oversampling_override(auto_display_scale);
+}
+
+void GDREWindow::_notification(int p_what) {
+	if (p_what == NOTIFICATION_ENTER_TREE) {
+		GDREWindow::set_window_autoscaling(this, get_min_size());
+	}
 }
 
 GDREWindow::GDREWindow() {
@@ -91,6 +127,12 @@ void GDREAcceptDialogBase::popup_confirm_box(const String &p_message, const Stri
 
 void GDREAcceptDialogBase::popup_error_box(const String &p_message, const String &p_title, const Callable &p_callback) {
 	GDREWindow::popup_box(this, error_dialog, p_message, p_title, p_callback, p_callback);
+}
+
+void GDREAcceptDialogBase::_notification(int p_what) {
+	if (p_what == NOTIFICATION_ENTER_TREE) {
+		GDREWindow::set_window_autoscaling(this, get_min_size());
+	}
 }
 
 void GDREWindow::_bind_methods() {

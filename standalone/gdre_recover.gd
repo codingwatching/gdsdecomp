@@ -561,7 +561,7 @@ func _on_show_resource_preview_toggled(toggled_on: bool) -> void:
 		RESOURCE_PREVIEW.visible = true
 		# get the current size of the window
 		# set the split offset to 50% of the window size
-		HSPLIT_CONTAINER.set_split_offset(self.size.x / 2)
+		HSPLIT_CONTAINER.set_split_offset((self.size.x / self.content_scale_factor) / 2)
 		SHOW_PREVIEW_BUTTON.text = "Hide Resource Preview"
 		_on_file_tree_item_selected()
 	else:

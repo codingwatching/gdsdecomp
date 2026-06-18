@@ -8,7 +8,9 @@
 #include "scene/gui/dialogs.h"
 #include "scene/gui/rich_text_label.h"
 #include "scene/main/node.h"
+#include "scene/main/scene_tree.h"
 #include "utility/gdre_logger.h"
+#include "utility/gdre_settings.h"
 #include "utility/gdre_version.gen.h"
 
 GodotREEditorStandalone *GodotREEditorStandalone::singleton = nullptr;
@@ -155,6 +157,13 @@ void GodotREEditorStandalone::_notification(int p_notification) {
 		if (get_parent_window()) {
 			get_parent_window()->call_deferred("add_child", error_dialog);
 			get_parent_window()->call_deferred("add_child", confirmation_dialog);
+			if (!Engine::get_singleton()->is_editor_hint()) {
+				Window *main_window = get_parent_window();
+				Size2i min_size = Size2i(GLOBAL_GET("display/window/size/viewport_width"), GLOBAL_GET("display/window/size/viewport_height"));
+				GDREWindow::set_window_autoscaling(main_window, min_size);
+				main_window->set_size(min_size * GDRESettings::get_auto_display_scale());
+				main_window->move_to_center();
+			}
 		}
 	}
 	if (p_notification == NOTIFICATION_PROCESS) {

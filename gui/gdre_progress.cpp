@@ -30,6 +30,8 @@
 
 #include "gui/gdre_progress.h"
 
+#include "gui/gdre_window.h"
+
 #include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
 #include "core/os/os.h"
@@ -146,6 +148,8 @@ void GDREProgressDialog::_update_ui() {
 void GDREProgressDialog::_notification(int p_what) {
 	if (p_what == NOTIFICATION_PROCESS) {
 		main_thread_update();
+	} else if (p_what == NOTIFICATION_READY) {
+		GDREWindow::set_window_autoscaling(this, get_min_size());
 	}
 }
 
