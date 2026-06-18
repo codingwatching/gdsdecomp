@@ -343,6 +343,7 @@ def build_godot_mono_decomp(
             for lib in libs:
                 copied_lib = os.path.join(build_dir, os.path.basename(lib))
                 if env.msvc:
+                    lib = lib.replace(".lib", ".dll")
                     copied_lib = copied_lib.replace(".lib", ".dll")
                 copy_commands.append(env_gdsdecomp.CommandNoCache(copied_lib, lib, Copy("$TARGET", "$SOURCE")))
 
