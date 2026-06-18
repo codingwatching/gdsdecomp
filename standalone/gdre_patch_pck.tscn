@@ -17,9 +17,6 @@ dialog_hide_on_ok = false
 script = ExtResource("1_p07vp")
 metadata/_custom_type_script = "uid://cbggqwojxui00"
 
-[node name="ErrorDialog" type="GDREAcceptDialogBase" parent="." unique_id=1566817302]
-unique_name_in_owner = true
-
 [node name="SelectPckDialog" type="GDREFileDialog" parent="." unique_id=1540086483]
 unique_name_in_owner = true
 title = "Open a File"

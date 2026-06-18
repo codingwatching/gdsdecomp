@@ -96,12 +96,6 @@ func make_button_label(text: String) -> Label:
 func set_setting_value(setting: GDREConfigSetting, value: Variant):
 	setting_value_map[setting] = value
 
-func popup_error(message: String):
-	%ErrorDialog.dialog_text = message
-	%ErrorDialog.popup_centered()
-
-
-
 func setting_callback(setting: GDREConfigSetting, value: Variant, control: Control):
 	print('setting "' + setting.get_brief_description() + '" set to ', value)
 	var reset = false
@@ -123,7 +117,7 @@ func setting_callback(setting: GDREConfigSetting, value: Variant, control: Contr
 					force_change = true
 					setting_value_map[s] = s.get_value()
 		else:
-			popup_error(error_message)
+			popup_error_box(error_message)
 			setting.clear_error_message()
 
 	else:
@@ -387,7 +381,6 @@ func _close_requested():
 		# so we have to re-show ourselves when a close is requested
 		self.show()
 		unclose = true
-		print("has unsaved changes")
 		%ConfirmClose.popup_centered()
 		return
 	#print("closing")
