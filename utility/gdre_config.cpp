@@ -9,6 +9,7 @@
 #include "core/os/os.h"
 #include "gdre_logger.h"
 #include "gdre_settings.h"
+#include "gdre_version.gen.h"
 #include "godot_mono_decomp_wrapper.h"
 
 GDREConfig *GDREConfig::singleton = nullptr;
@@ -208,6 +209,13 @@ public:
 
 HashMap<String, Ref<GDREConfigSetting>> GDREConfig::_init_default_settings() {
 	Vector<Ref<GDREConfigSetting>> settings = {
+		memnew(GDREConfigSetting(
+				"last_gdre_version_used",
+				"Last GDRE version used",
+				"",
+				"",
+				true,
+				false)),
 		memnew(GDREConfigSetting(
 				"download_plugins",
 				"Download plugins",
@@ -468,6 +476,7 @@ void GDREConfig::save_config() {
 			config->set_value(get_section_from_key(key), name, value);
 		}
 	}
+	config->set_value("General", "last_gdre_version_used", GDRE_VERSION);
 	gdre::ensure_dir(cfg_path.get_base_dir());
 	Error err = config->save(cfg_path);
 	if (err != OK) {
