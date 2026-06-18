@@ -8,9 +8,6 @@ var CONFIG_PATH = "user://gdre_settings.cfg"
 # var isHiDPI = DisplayServer.screen_get_dpi() >= 240
 var isHiDPI = false
 
-var gdre_recover = preload("res://gdre_recover.tscn")
-var gdre_new_pck = preload("res://gdre_new_pck.tscn")
-var gdre_patch_pck = preload("res://gdre_patch_pck.tscn")
 @onready var RECOVERY_DIALOG: GDRERecoverDialog = %GdreRecover
 @onready var NEW_PCK_DIALOG: GDRENewPck = %GdreNewPck
 @onready var PATCH_PCK_DIALOG: GDREPatchPCK = %GdrePatchPck

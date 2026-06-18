@@ -4,7 +4,6 @@ extends GDREChildDialog
 const file_icon: Texture2D = preload("res://gdre_icons/gdre_File.svg")
 const file_ok: Texture2D = preload("res://gdre_icons/gdre_FileOk.svg")
 const file_broken: Texture2D = preload("res://gdre_icons/gdre_FileBroken.svg")
-const gdre_export_report = preload("res://gdre_export_report.tscn")
 const gdre_file_tree = preload("res://gdre_file_tree.gd")
 var arrow_right: Texture2D = get_theme_icon("arrow_collapsed", "Tree")
 var select_button: Texture2D = get_theme_icon("select_option", "Tree")
