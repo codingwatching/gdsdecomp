@@ -2,18 +2,16 @@
 #include "bytecode/bytecode_base.h"
 #include "compat/file_access_encrypted_v3.h"
 #include "compat/variant_decoder_compat.h"
-#include "utility/file_access_buffer.h"
 #include "utility/glob.h"
 
 #include "core/error/error_list.h"
 #include "core/error/error_macros.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
-#include "core/io/http_client.h"
+#include "core/io/image_loader.h"
 #include "core/object/class_db.h"
 #include "modules/regex/regex.h"
 #include "modules/zip/zip_reader.h"
-#include "utility/gdre_logger.h"
 #include "utility/task_manager.h"
 
 namespace {
@@ -1155,13 +1153,13 @@ String gdre::get_safe_dir_name(const String &p_dir_name, bool p_allow_paths) {
 }
 
 Ref<Image> gdre::load_image_from_file(const String &p_path) {
-#ifdef DEBUG_ENABLED
-	GDRELogger::set_thread_local_silent_errors(true);
-#endif
-	Ref<Image> image = Image::load_from_file(p_path);
-#ifdef DEBUG_ENABLED
-	GDRELogger::set_thread_local_silent_errors(false);
-#endif
+	Ref<Image> image;
+	image.instantiate();
+	Error err = ImageLoader::load_image(p_path, image);
+	ERR_FAIL_COND_V_MSG(err == ERR_FILE_UNRECOGNIZED, Ref<Image>(), vformat("Image has unsupported format: %s", p_path));
+	if (err != OK) {
+		return Ref<Image>();
+	}
 	return image;
 }
 

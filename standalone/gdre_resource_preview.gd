@@ -79,8 +79,7 @@ func _reset():
 	_make_all_views_invisible()
 	%MediaPlayer.reset()
 	%TextView.reset()
-	%TextureInfo.text = ""
-	%TextureRect.texture = null
+	%TextureView.reset()
 	%ResourceInfo.text = ""
 	%MeshPreviewer.reset()
 	%ScenePreviewer3D.reset()
@@ -91,25 +90,16 @@ var previous_res_info_size = Vector2(0, 0)
 
 func load_texture(path):
 	var ext = path.get_extension().to_lower()
+	var texture = null
 	if (ext == "image"):
-		%TextureRect.texture = ImageTexture.create_from_image(ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP))
+		texture = ImageTexture.create_from_image(ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP))
 	elif (is_image(ext)):
-		%TextureRect.texture = ImageTexture.create_from_image(GDRECommon.load_image_from_file(path))
+		texture = ImageTexture.create_from_image(GDRECommon.load_image_from_file(path))
 	else:
-		%TextureRect.texture = ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP) # TODO: handle other texture types
-	if (%TextureRect.texture == null):
+		texture = ResourceCompatLoader.real_load(path, "", ResourceCompatLoader.CACHE_MODE_IGNORE_DEEP) # TODO: handle other texture types
+	if (texture == null):
 		return false
-	%TextureRect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	%TextureRect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	var image = %TextureRect.texture.get_image()
-	var info_text = str(%TextureRect.texture.get_width()) + "x" + str(%TextureRect.texture.get_height()) + " " + IMAGE_FORMAT_NAME[image.get_format()]
-	if image.has_mipmaps():
-
-		info_text += "\n" + str(image.get_mipmap_count()) + " Mipmaps" + "\n" + "Memory: " + String.humanize_size(image.get_data_size())
-	else:
-		info_text += "\n" + "No Mipmaps" + "\n" + "Memory: " + String.humanize_size(image.get_data_size())
-
-	%TextureInfo.text = info_text
+	%TextureView.edit(texture)
 	%TextureView.visible = true
 	return true
 

@@ -60,7 +60,7 @@ custom_minimum_size = Vector2(64, 64)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_gp5ss")
 
-[node name="TextureView" type="Control" parent="VBoxContainer/RootView/ResourceView" unique_id=494726531]
+[node name="TextureView" type="TexturePreviewer" parent="VBoxContainer/RootView/ResourceView" unique_id=494726531]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
@@ -69,39 +69,6 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-
-[node name="TextureRect" type="TextureRect" parent="VBoxContainer/RootView/ResourceView/TextureView" unique_id=1503017689]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-texture = ExtResource("3_gp5ss")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="TextureInfo" type="Label" parent="VBoxContainer/RootView/ResourceView/TextureView" unique_id=1618224773]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 1.0
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -117.0
-offset_top = -74.0
-grow_horizontal = 0
-grow_vertical = 0
-layout_direction = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 8
-theme_override_font_sizes/font_size = 14
-text = "16x16 RGBA8
-No Mipmaps
-Memory: 1024 B"
 
 [node name="MediaPlayer" parent="VBoxContainer/RootView/ResourceView" unique_id=326216806 instance=ExtResource("4_crn14")]
 unique_name_in_owner = true

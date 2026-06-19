@@ -496,12 +496,16 @@ GDScriptV2TokenizerCompat::Token GDScriptV2TokenizerBufferCompat::scan() {
 		}
 		Token eof;
 		eof.type = Token::Type::G_TK_EOF;
+		eof.start_line = current_line;
+		eof.end_line = current_line;
 		return eof;
 	};
 
 	if (!last_token_was_newline && token_lines.has(current)) {
 		current_line = token_lines[current];
-		uint32_t current_column = token_columns[current];
+		auto it = token_columns.find(current);
+		uint32_t current_column = it->value();
+		uint32_t current_indent = current_column - 1;
 
 		// Check if there's a need to indent/dedent.
 		if (!multiline_mode) {
@@ -509,11 +513,30 @@ GDScriptV2TokenizerCompat::Token GDScriptV2TokenizerBufferCompat::scan() {
 			if (!indent_stack.is_empty()) {
 				previous_indent = indent_stack.back()->get();
 			}
-			if (current_column - 1 > previous_indent) {
+			if (current_indent > previous_indent) {
+				// find the next column that is less than the current column
+				Vector<uint32_t> detents;
+				for (it = it->next(); it != nullptr; it = it->next()) {
+					uint32_t next = it->value() - 1;
+					if (next <= previous_indent) {
+						break;
+					}
+					if (next < current_indent && next > previous_indent) {
+						// the next dedent is bigger than the previous indent, we need to indent once more
+						if (!detents.has(next)) {
+							detents.push_back(next);
+						}
+					}
+				}
+				detents.sort();
+				for (uint32_t dedent : detents) {
+					pending_indents++;
+					indent_stack.push_back(dedent);
+				}
 				pending_indents++;
-				indent_stack.push_back(current_column - 1);
+				indent_stack.push_back(current_indent);
 			} else {
-				while (current_column - 1 < previous_indent) {
+				while (current_indent < previous_indent) {
 					pending_indents--;
 					indent_stack.pop_back();
 					if (indent_stack.is_empty()) {

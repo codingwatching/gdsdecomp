@@ -315,7 +315,7 @@ bool APKArchive::handle_xapk(const String &pack_path, ManifestInfo &r_manifest_i
 bool APKArchive::try_open_pack(const String &p_path, bool p_replace_files, uint64_t p_offset, const Vector<uint8_t> &p_decryption_key) {
 	// load with offset feature only supported for PCK files
 	ERR_FAIL_COND_V_MSG(p_offset != 0, false, "Invalid PCK data. Note that loading files with a non-zero offset isn't supported with ZIP archives.");
-	String pack_path = p_path.replace("_GDRE_a_really_dumb_hack", "");
+	String pack_path = p_path;
 	String ext = pack_path.get_extension().to_lower();
 	// This handles zip files, too
 	bool is_xapk = ext == "xapk";

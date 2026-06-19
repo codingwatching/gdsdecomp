@@ -1,0 +1,430 @@
+/**************************************************************************/
+/*  texture_editor_plugin.cpp                                             */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
+#include "texture_previewer.h"
+
+#include "core/object/callable_mp.h"
+#include "scene/gui/aspect_ratio_container.h"
+#include "scene/gui/color_rect.h"
+#include "scene/gui/label.h"
+#include "scene/gui/spin_box.h"
+#include "scene/gui/texture_rect.h"
+#include "scene/resources/atlas_texture.h"
+#include "scene/resources/material.h"
+#include "scene/resources/texture_rd.h"
+#include "servers/rendering/rendering_device.h"
+
+#include "utility/gdre_settings.h"
+
+#include "gui/gdre_color_channel_selector.h"
+#include "gui/gui_icons.h"
+constexpr const char *texture_2d_shader_code = R"(
+shader_type canvas_item;
+render_mode blend_mix;
+
+instance uniform vec4 u_channel_factors = vec4(1.0);
+instance uniform float lod = 0.0;
+
+vec4 filter_preview_colors(vec4 input_color, vec4 factors) {
+	// Filter RGB.
+	vec4 output_color = input_color * vec4(factors.rgb, input_color.a);
+
+	// Remove transparency when alpha is not enabled.
+	output_color.a = mix(1.0, output_color.a, factors.a);
+
+	// Switch to opaque grayscale when visualizing only one channel.
+	float csum = factors.r + factors.g + factors.b + factors.a;
+	float single = clamp(2.0 - csum, 0.0, 1.0);
+	for (int i = 0; i < 4; i++) {
+		float c = input_color[i];
+		output_color = mix(output_color, vec4(c, c, c, 1.0), factors[i] * single);
+	}
+
+	return output_color;
+}
+
+void fragment() {
+	COLOR = filter_preview_colors(textureLod(TEXTURE, UV, lod), u_channel_factors);
+}
+)";
+
+void TexturePreviewer::init_shaders() {
+	texture_material.instantiate();
+
+	Ref<Shader> texture_shader;
+	texture_shader.instantiate();
+	texture_shader->set_code(texture_2d_shader_code);
+
+	texture_material->set_shader(texture_shader);
+}
+
+void TexturePreviewer::finish_shaders() {
+	texture_material.unref();
+}
+
+TextureRect *TexturePreviewer::get_texture_display() {
+	return texture_display;
+}
+
+void TexturePreviewer::_notification(int p_what) {
+	switch (p_what) {
+		case NOTIFICATION_THEME_CHANGED: {
+			if (!is_inside_tree()) {
+				// TODO: This is a workaround because `NOTIFICATION_THEME_CHANGED`
+				// is getting called for some reason when the `TexturePreviewer` is
+				// getting destroyed, which causes `get_theme_font()` to return `nullptr`.
+				// See https://github.com/godotengine/godot/issues/50743.
+				break;
+			}
+
+			if (metadata_label) {
+				Ref<Font> metadata_label_font = get_theme_font(SNAME("expression"), SNAME("Editor"));
+				metadata_label->add_theme_font_override(SceneStringName(font), metadata_label_font);
+			}
+
+			bg_rect->set_color(get_theme_color(SNAME("dark_color_2"), SNAME("Editor")));
+			checkerboard->set_texture(GDREGuiIcons::get_icon(SNAME("Checkerboard")));
+			theme_cache.outline_color = get_theme_color(SNAME("extra_border_color_1"), SNAME("Editor"));
+		} break;
+	}
+}
+
+void TexturePreviewer::_draw_outline() {
+	const float outline_width = Math::round(GDRESettings::get_auto_display_scale());
+	const Rect2 outline_rect = Rect2(Vector2(), outline_overlay->get_size()).grow(outline_width * 0.5);
+	outline_overlay->draw_rect(outline_rect, theme_cache.outline_color, false, outline_width);
+}
+
+void TexturePreviewer::_update_texture_display_ratio() {
+	if (texture_display->get_texture().is_valid()) {
+		centering_container->set_ratio(texture_display->get_texture()->get_size().aspect());
+	}
+}
+
+static Image::Format get_texture_2d_format(const Ref<Texture2D> &p_texture) {
+	const Ref<Texture2DRD> rd_texture = p_texture;
+	if (rd_texture.is_valid() && RD::get_singleton() && RD::get_singleton()->texture_is_valid(rd_texture->get_texture_rd_rid())) {
+		return rd_texture->get_image()->get_format();
+	}
+
+	return p_texture->get_format();
+}
+
+static int get_texture_mipmaps_count(const Ref<Texture2D> &p_texture) {
+	ERR_FAIL_COND_V(p_texture.is_null(), -1);
+
+	// We are having to download the image only to get its mipmaps count. It would be nice if we didn't have to.
+	Ref<Image> image;
+	Ref<AtlasTexture> at = p_texture;
+	Ref<Texture2DRD> rd_texture = p_texture;
+
+	if (at.is_valid()) {
+		// The AtlasTexture tries to obtain the region from the atlas as an image,
+		// which will fail if it is a compressed format.
+		Ref<Texture2D> atlas = at->get_atlas();
+		if (atlas.is_valid()) {
+			image = atlas->get_image();
+		}
+	} else if (rd_texture.is_valid()) {
+		if (RD::get_singleton() && RD::get_singleton()->texture_is_valid(rd_texture->get_texture_rd_rid())) {
+			return -1;
+		}
+		image = p_texture->get_image();
+	} else {
+		image = p_texture->get_image();
+	}
+
+	if (image.is_valid()) {
+		return image->get_mipmap_count();
+	}
+	return -1;
+}
+
+void TexturePreviewer::gui_input(const Ref<InputEvent> &p_event) {
+	// TODO: This isn't currently working, figure out a way to properly do zooming and panning
+	// ERR_FAIL_COND(p_event.is_null());
+
+	// Ref<InputEventMouseMotion> mm = p_event;
+	// if (mm.is_valid()) {
+	// 	if ((mm->get_button_mask().has_flag(MouseButtonMask::LEFT))) {
+	// 		position_x -= mm->get_relative().x;
+	// 		position_y -= mm->get_relative().y;
+
+	// 		_update_position_and_scale();
+	// 	}
+	// }
+
+	// Ref<InputEventMagnifyGesture> mg = p_event;
+	// if (mg.is_valid()) {
+	// 	scale *= mg->get_factor();
+	// 	_update_position_and_scale();
+	// }
+
+	// Ref<InputEventMouseButton> mb = p_event;
+	// if (mb.is_valid() && mb->is_pressed() && mb->get_button_index() == MouseButton::WHEEL_UP) {
+	// 	scale *= 1.1;
+	// 	_update_position_and_scale();
+	// }
+	// if (mb.is_valid() && mb->is_pressed() && mb->get_button_index() == MouseButton::WHEEL_DOWN) {
+	// 	scale *= 0.9;
+	// 	_update_position_and_scale();
+	// }
+	// Ref<InputEventKey> key = p_event;
+	// if (key.is_valid() && key->is_pressed() && (key->get_keycode() == Key::EQUAL || key->get_keycode() == Key::PLUS)) {
+	// 	scale *= 1.1;
+	// 	_update_position_and_scale();
+	// } else if (key.is_valid() && key->is_pressed() && key->get_keycode() == Key::MINUS) {
+	// 	scale *= 0.9;
+	// 	_update_position_and_scale();
+	// }
+}
+
+void TexturePreviewer::_update_position_and_scale() {
+	// texture_display->set_position(Vector2(position_x, position_y));
+	// texture_display->set_scale(Vector2(scale, scale));
+}
+
+void TexturePreviewer::_update_metadata_label_text() {
+	const Ref<Texture2D> texture = texture_display->get_texture();
+	ERR_FAIL_COND(texture.is_null());
+
+	Image::Format format;
+	int mipmaps;
+
+	Ref<Image> image = texture->get_image();
+	if (image.is_valid()) {
+		format = image->get_format();
+		mipmaps = image->get_mipmap_count();
+	} else {
+		format = get_texture_2d_format(texture.ptr());
+		mipmaps = get_texture_mipmaps_count(texture);
+	}
+
+	const String format_name = format != Image::FORMAT_MAX ? Image::get_format_name(format) : texture->get_class();
+
+	const Vector2i resolution = texture->get_size();
+
+	if (format != Image::FORMAT_MAX) {
+		// Avoid signed integer overflow that could occur with huge texture sizes by casting everything to uint64_t.
+		uint64_t memory = uint64_t(resolution.x) * uint64_t(resolution.y) * uint64_t(Image::get_format_pixel_size(format));
+		// Handle VRAM-compressed formats that are stored with 4 bpp.
+		memory >>= Image::get_format_pixel_rshift(format);
+
+		float mipmaps_multiplier = 1.0;
+		float mipmap_increase = 0.25;
+		for (int i = 0; i < mipmaps; i++) {
+			// Each mip adds 25% memory usage of the previous one.
+			// With a complete mipmap chain, memory usage increases by ~33%.
+			mipmaps_multiplier += mipmap_increase;
+			mipmap_increase *= 0.25;
+		}
+		memory *= mipmaps_multiplier;
+
+		if (mipmaps >= 1) {
+			metadata_label->set_text(
+					vformat(String::utf8("%d×%d %s\n") + RTR("%s Mipmaps") + "\n" + RTR("Memory: %s"),
+							texture->get_width(),
+							texture->get_height(),
+							format_name,
+							mipmaps,
+							String::humanize_size(memory)));
+		} else {
+			// "No Mipmaps" is easier to distinguish than "0 Mipmaps",
+			// especially since 0, 6, and 8 look quite close with the default code font.
+			metadata_label->set_text(
+					vformat(String::utf8("%d×%d %s\n") + RTR("No Mipmaps") + "\n" + RTR("Memory: %s"),
+							texture->get_width(),
+							texture->get_height(),
+							format_name,
+							String::humanize_size(memory)));
+		}
+	} else {
+		metadata_label->set_text(
+				vformat(String::utf8("%d×%d %s"),
+						texture->get_width(),
+						texture->get_height(),
+						format_name));
+	}
+}
+
+void TexturePreviewer::on_selected_channels_changed() {
+	texture_display->set_instance_shader_parameter("u_channel_factors", channel_selector->get_selected_channel_factors());
+}
+
+void TexturePreviewer::on_selected_mipmap_changed(double p_value) {
+	texture_display->set_instance_shader_parameter("lod", mipmap_spinbox->get_value());
+}
+
+void TexturePreviewer::edit(Ref<Texture2D> p_texture, bool p_show_metadata) {
+	texture_display->set_texture(p_texture);
+	if (p_texture.is_valid()) {
+		_update_texture_display_ratio();
+		p_texture->connect_changed(callable_mp(this, &TexturePreviewer::_update_texture_display_ratio));
+	}
+
+	// Null can be passed by `Camera3DPreview` (which immediately after sets a texture anyways).
+	const Image::Format format = p_texture.is_valid() ? get_texture_2d_format(p_texture.ptr()) : Image::FORMAT_MAX;
+	const uint32_t components_mask = format != Image::FORMAT_MAX ? Image::get_format_component_mask(format) : 0xf;
+
+	// Setup Mipmap selector.
+	const int mipmaps = get_texture_mipmaps_count(p_texture);
+	if (mipmaps > 0) {
+		mipmap_spinbox->set_max(mipmaps);
+		mipmap_spinbox->set_value(0);
+		mipmap_spinbox->set_visible(true);
+	} else {
+		mipmap_spinbox->set_visible(false);
+	}
+
+	// Add color channel selector at the bottom left if more than 1 channel is available.
+	if (p_show_metadata && !Math::is_power_of_2(components_mask)) {
+		channel_selector->set_available_channels_mask(components_mask);
+		channel_selector->set_visible(true);
+	} else {
+		channel_selector->set_visible(false);
+	}
+
+	if (p_show_metadata) {
+		if (p_texture.is_valid()) {
+			_update_metadata_label_text();
+			p_texture->connect_changed(callable_mp(this, &TexturePreviewer::_update_metadata_label_text));
+			metadata_label->set_visible(true);
+		}
+	} else {
+		metadata_label->set_visible(false);
+	}
+	_update_position_and_scale();
+}
+
+String TexturePreviewer::get_edited_resource_path() const {
+	auto texture = texture_display->get_texture();
+	if (texture.is_valid()) {
+		return texture->get_path();
+	}
+	return "";
+}
+
+void TexturePreviewer::reset() {
+	auto texture = texture_display->get_texture();
+	if (texture.is_valid()) {
+		texture->disconnect_changed(callable_mp(this, &TexturePreviewer::_update_texture_display_ratio));
+		if (texture->is_connected(CoreStringName(changed), callable_mp(this, &TexturePreviewer::_update_metadata_label_text))) {
+			texture->disconnect_changed(callable_mp(this, &TexturePreviewer::_update_metadata_label_text));
+		}
+	}
+	texture_display->set_texture(nullptr);
+	mipmap_spinbox->set_value(0);
+	channel_selector->set_available_channels_mask(0xf);
+	channel_selector->set_visible(false);
+	metadata_label->set_text("");
+	metadata_label->set_visible(false);
+	mipmap_spinbox->set_visible(false);
+	position_x = 0.0;
+	position_y = 0.0;
+	scale = 1.0;
+}
+
+TexturePreviewer::TexturePreviewer() {
+	set_custom_minimum_size(Size2(0.0, 256.0) * GDRESettings::get_auto_display_scale());
+	bg_rect = memnew(ColorRect);
+
+	add_child(bg_rect);
+
+	margin_container = memnew(MarginContainer);
+	const float outline_width = Math::round(GDRESettings::get_auto_display_scale());
+	margin_container->add_theme_constant_override("margin_right", outline_width);
+	margin_container->add_theme_constant_override("margin_top", outline_width);
+	margin_container->add_theme_constant_override("margin_left", outline_width);
+	margin_container->add_theme_constant_override("margin_bottom", outline_width);
+	add_child(margin_container);
+
+	centering_container = memnew(AspectRatioContainer);
+	centering_container->set_clip_children_mode(ClipChildrenMode::CLIP_CHILDREN_AND_DRAW);
+	margin_container->add_child(centering_container);
+
+	checkerboard = memnew(TextureRect);
+	checkerboard->set_expand_mode(TextureRect::EXPAND_IGNORE_SIZE);
+	checkerboard->set_stretch_mode(TextureRect::STRETCH_TILE);
+	checkerboard->set_texture_repeat(CanvasItem::TEXTURE_REPEAT_ENABLED);
+	centering_container->add_child(checkerboard);
+
+	texture_display = memnew(TextureRect);
+	texture_display->set_texture_filter(TEXTURE_FILTER_NEAREST_WITH_MIPMAPS);
+	// texture_display->set_texture(p_texture);
+	texture_display->set_expand_mode(TextureRect::EXPAND_IGNORE_SIZE);
+	texture_display->set_material(texture_material);
+	texture_display->set_instance_shader_parameter("u_channel_factors", Vector4(1, 1, 1, 1));
+	centering_container->add_child(texture_display);
+
+	// Creating a separate control so it is not affected by the filtering shader.
+	outline_overlay = memnew(Control);
+	centering_container->add_child(outline_overlay);
+
+	outline_overlay->connect(SceneStringName(draw), callable_mp(this, &TexturePreviewer::_draw_outline));
+
+	// Setup Mipmap selector.
+	mipmap_spinbox = memnew(SpinBox);
+	mipmap_spinbox->set_tooltip_text(TTRC("Mipmap level index selector."));
+	mipmap_spinbox->set_max(0);
+	mipmap_spinbox->set_modulate(Color(1, 1, 1, 0.8));
+	mipmap_spinbox->set_h_grow_direction(GROW_DIRECTION_BEGIN);
+	mipmap_spinbox->set_h_size_flags(Control::SIZE_SHRINK_END);
+	mipmap_spinbox->set_v_size_flags(Control::SIZE_SHRINK_BEGIN);
+	mipmap_spinbox->set_anchors_preset(Control::PRESET_TOP_RIGHT);
+	mipmap_spinbox->connect(SceneStringName(value_changed), callable_mp(this, &TexturePreviewer::on_selected_mipmap_changed));
+	add_child(mipmap_spinbox);
+
+	channel_selector = memnew(GDREColorChannelSelector);
+	channel_selector->connect("selected_channels_changed", callable_mp(this, &TexturePreviewer::on_selected_channels_changed));
+	channel_selector->set_h_size_flags(Control::SIZE_SHRINK_BEGIN);
+	channel_selector->set_v_size_flags(Control::SIZE_SHRINK_BEGIN);
+	add_child(channel_selector);
+
+	metadata_label = memnew(Label);
+	metadata_label->set_focus_mode(FOCUS_ACCESSIBILITY);
+
+	// It's okay that these colors are static since the grid color is static too.
+	metadata_label->add_theme_color_override(SceneStringName(font_color), Color(1, 1, 1));
+	metadata_label->add_theme_color_override("font_shadow_color", Color(0, 0, 0));
+
+	metadata_label->add_theme_font_size_override(SceneStringName(font_size), 14 * GDRESettings::get_auto_display_scale());
+	metadata_label->add_theme_color_override("font_outline_color", Color(0, 0, 0));
+	metadata_label->add_theme_constant_override("outline_size", 8 * GDRESettings::get_auto_display_scale());
+
+	metadata_label->set_h_size_flags(Control::SIZE_SHRINK_END);
+	metadata_label->set_v_size_flags(Control::SIZE_SHRINK_END);
+	add_child(metadata_label);
+}
+
+void TexturePreviewer::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("edit", "texture", "show_metadata"), &TexturePreviewer::edit, DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("reset"), &TexturePreviewer::reset);
+	ClassDB::bind_method(D_METHOD("get_edited_resource_path"), &TexturePreviewer::get_edited_resource_path);
+}
