@@ -3,7 +3,7 @@ extends GDREWindow
 
 @export var show_ephemeral_settings: bool = false
 
-signal config_changed(changed_settings: Dictionary[String, Variant])
+signal config_changed(changed_settings: Dictionary[String, Array])
 
 func create_section_settings() -> LabelSettings:
 	var label_settings: LabelSettings = LabelSettings.new()
@@ -238,7 +238,9 @@ func create_setting_button(setting: GDREConfigSetting) -> Control:
 	elif setting.get_type() == TYPE_INT:
 		button = SpinBox.new()
 		button.value = value
-		button.step = 1
+		button.min_value = setting.get_min_value()
+		button.max_value = setting.get_max_value()
+		button.step = setting.get_step_value()
 		var label: Label = make_button_label(setting.get_brief_description())
 		label.tooltip_text = setting.get_description()
 		control = make_button_hbox(setting, button, label)
@@ -246,7 +248,9 @@ func create_setting_button(setting: GDREConfigSetting) -> Control:
 	elif setting.get_type() == TYPE_FLOAT:
 		button = SpinBox.new()
 		button.value = value
-		button.step = 0.1
+		button.min_value = setting.get_min_value()
+		button.max_value = setting.get_max_value()
+		button.step = setting.get_step_value()
 		var label: Label = make_button_label(setting.get_brief_description())
 		label.tooltip_text = setting.get_description()
 		control = make_button_hbox(setting, button, label)
@@ -325,10 +329,10 @@ func _render_settings():
 
 
 func save_settings():
-	var changed_settings: Dictionary[String, Variant] = {}
+	var changed_settings: Dictionary[String, Array] = {}
 	for setting: GDREConfigSetting in setting_value_map.keys():
 		if setting.get_value() != setting_value_map[setting]:
-			changed_settings[setting.get_full_name()] = setting_value_map[setting]
+			changed_settings[setting.get_full_name()] = [setting.get_value(), setting_value_map[setting]]
 			setting.set_value(setting_value_map[setting])
 	GDREConfig.save_config()
 	if changed_settings.size() != 0 or force_change:

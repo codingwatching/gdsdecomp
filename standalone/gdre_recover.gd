@@ -630,7 +630,7 @@ func _on_export_settings_button_pressed() -> void:
 	%GDREConfigDialog.show()
 
 
-func _on_gdre_config_dialog_config_changed(changed_settings: Dictionary[String, Variant]) -> void:
+func _on_gdre_config_dialog_config_changed(changed_settings: Dictionary[String, Array]) -> void:
 	GDRESettings.update_from_ephemeral_settings()
 
 
