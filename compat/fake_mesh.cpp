@@ -29,11 +29,10 @@
 /**************************************************************************/
 
 #include "fake_mesh.h"
-
-#include "core/math/convex_hull.h"
 #include "core/object/class_db.h"
-#include "core/templates/pair.h"
+#include "scene/resources/3d/importer_mesh.h"
 #include "scene/resources/surface_tool.h"
+#include "servers/rendering/rendering_server.h"
 
 #ifndef PHYSICS_3D_DISABLED
 #include "scene/resources/3d/concave_polygon_shape_3d.h"
@@ -196,19 +195,20 @@ void _fix_array_compatibility(const Vector<uint8_t> &p_src, uint64_t p_old_forma
 					if ((p_old_format & OLD_ARRAY_COMPRESS_NORMAL) && (p_old_format & OLD_ARRAY_FORMAT_TANGENT) && (p_old_format & OLD_ARRAY_COMPRESS_TANGENT)) {
 						for (uint32_t i = 0; i < p_elements; i++) {
 							const int8_t *src = (const int8_t *)&src_vertex_ptr[i * src_vertex_stride + src_offset];
-							int16_t *dst = (int16_t *)&dst_vertex_ptr[i * dst_normal_tangent_stride + dst_offsets[Mesh::ARRAY_NORMAL]];
+							uint16_t *dst = (uint16_t *)&dst_vertex_ptr[i * dst_normal_tangent_stride + dst_offsets[Mesh::ARRAY_NORMAL]];
 
-							dst[0] = (int16_t)CLAMP(src[0] / 127.0f * 32767, -32768, 32767);
-							dst[1] = (int16_t)CLAMP(src[1] / 127.0f * 32767, -32768, 32767);
+							// 4.x requires biasing the octahedron components to a 0.0 <-> 1.0 range, whereas in 3.x they were stored in the -1.0 <-> 1.0 range
+							dst[0] = (uint16_t)CLAMP((src[0] / 127.0f * .5f + .5f) * 65535, 0, 65535);
+							dst[1] = (uint16_t)CLAMP((src[1] / 127.0f * .5f + .5f) * 65535, 0, 65535);
 						}
 						src_offset += sizeof(int8_t) * 2;
 					} else {
 						for (uint32_t i = 0; i < p_elements; i++) {
 							const int16_t *src = (const int16_t *)&src_vertex_ptr[i * src_vertex_stride + src_offset];
-							int16_t *dst = (int16_t *)&dst_vertex_ptr[i * dst_normal_tangent_stride + dst_offsets[Mesh::ARRAY_NORMAL]];
+							uint16_t *dst = (uint16_t *)&dst_vertex_ptr[i * dst_normal_tangent_stride + dst_offsets[Mesh::ARRAY_NORMAL]];
 
-							dst[0] = src[0];
-							dst[1] = src[1];
+							dst[0] = (uint16_t)CLAMP((src[0] / 32767.0f * .5f + .5f) * 65535, 0, 65535);
+							dst[1] = (uint16_t)CLAMP((src[1] / 32767.0f * .5f + .5f) * 65535, 0, 65535);
 						}
 						src_offset += sizeof(int16_t) * 2;
 					}
@@ -216,7 +216,7 @@ void _fix_array_compatibility(const Vector<uint8_t> &p_src, uint64_t p_old_forma
 					if (p_old_format & OLD_ARRAY_COMPRESS_NORMAL) {
 						for (uint32_t i = 0; i < p_elements; i++) {
 							const int8_t *src = (const int8_t *)&src_vertex_ptr[i * src_vertex_stride + src_offset];
-							const Vector3 original_normal(src[0], src[1], src[2]);
+							const Vector3 original_normal(src[0] / 127.0f, src[1] / 127.0f, src[2] / 127.0f);
 							Vector2 res = original_normal.octahedron_encode();
 
 							uint16_t *dst = (uint16_t *)&dst_vertex_ptr[i * dst_normal_tangent_stride + dst_offsets[Mesh::ARRAY_NORMAL]];
@@ -264,10 +264,10 @@ void _fix_array_compatibility(const Vector<uint8_t> &p_src, uint64_t p_old_forma
 					if (p_old_format & OLD_ARRAY_COMPRESS_TANGENT) {
 						for (uint32_t i = 0; i < p_elements; i++) {
 							const int8_t *src = (const int8_t *)&src_vertex_ptr[i * src_vertex_stride + src_offset];
-							const Vector3 original_tangent(src[0], src[1], src[2]);
-							Vector2 res = original_tangent.octahedron_tangent_encode(src[3]);
+							const Vector3 original_tangent(src[0] / 127.0f, src[1] / 127.0f, src[2] / 127.0f);
+							Vector2 res = original_tangent.octahedron_tangent_encode(src[3] / 127.0f);
 
-							uint16_t *dst = (uint16_t *)&dst_vertex_ptr[i * dst_normal_tangent_stride + dst_offsets[Mesh::ARRAY_NORMAL]];
+							uint16_t *dst = (uint16_t *)&dst_vertex_ptr[i * dst_normal_tangent_stride + dst_offsets[Mesh::ARRAY_TANGENT]];
 							dst[0] = (uint16_t)CLAMP(res.x * 65535, 0, 65535);
 							dst[1] = (uint16_t)CLAMP(res.y * 65535, 0, 65535);
 							if (dst[0] == 0 && dst[1] == 65535) {
@@ -283,7 +283,7 @@ void _fix_array_compatibility(const Vector<uint8_t> &p_src, uint64_t p_old_forma
 							const Vector3 original_tangent(src[0], src[1], src[2]);
 							Vector2 res = original_tangent.octahedron_tangent_encode(src[3]);
 
-							uint16_t *dst = (uint16_t *)&dst_vertex_ptr[i * dst_normal_tangent_stride + dst_offsets[Mesh::ARRAY_NORMAL]];
+							uint16_t *dst = (uint16_t *)&dst_vertex_ptr[i * dst_normal_tangent_stride + dst_offsets[Mesh::ARRAY_TANGENT]];
 							dst[0] = (uint16_t)CLAMP(res.x * 65535, 0, 65535);
 							dst[1] = (uint16_t)CLAMP(res.y * 65535, 0, 65535);
 							if (dst[0] == 0 && dst[1] == 65535) {
@@ -520,7 +520,7 @@ bool FakeMesh::_set(const StringName &p_name, const Variant &p_value) {
 				new_format |= ARRAY_FORMAT_INDEX;
 			}
 			if (old_format & OLD_ARRAY_FLAG_USE_2D_VERTICES) {
-				new_format |= OLD_ARRAY_FLAG_USE_2D_VERTICES;
+				new_format |= ARRAY_FLAG_USE_2D_VERTICES;
 			}
 
 			Vector<uint8_t> vertex_array;
@@ -1458,17 +1458,7 @@ void FakeMesh::set_shadow_mesh(const Ref<Resource> &p_mesh) {
 	ERR_FAIL_COND_MSG(p_mesh == this, "Cannot set a mesh as its own shadow mesh.");
 	Ref<MissingResource> mr = p_mesh;
 	if (mr.is_valid()) {
-		Ref<MissingResource> m_res = mr;
-		if (ResourceCompatConverter::is_external_resource(mr)) {
-			Error err;
-			m_res = ResourceCompatLoader::fake_load(mr->get_path(), "", &err);
-			ERR_FAIL_COND_MSG(err != OK || !m_res.is_valid(), "Failed to load material: " + mr->get_path());
-		}
-		Ref<FakeMesh> fake_mesh;
-		fake_mesh.instantiate();
-		fake_mesh->load_type = load_type;
-
-		shadow_mesh = ResourceCompatConverter::set_real_from_missing_resource(m_res, fake_mesh, load_type);
+		shadow_mesh = create_from_missing_resource(mr, load_type);
 	} else {
 		shadow_mesh = p_mesh;
 	}
@@ -1481,6 +1471,67 @@ void FakeMesh::set_shadow_mesh(const Ref<Resource> &p_mesh) {
 
 Ref<Resource> FakeMesh::get_shadow_mesh() const {
 	return shadow_mesh;
+}
+
+Ref<ArrayMesh> FakeMesh::mesh_to_array_mesh(const Ref<Mesh> &p_mesh) {
+	if (p_mesh.is_null()) {
+		return Ref<ArrayMesh>();
+	}
+	Ref<ArrayMesh> ret_mesh = p_mesh;
+	if (ret_mesh.is_valid()) {
+		return ret_mesh;
+	}
+	Ref<ImporterMesh> importer_mesh = ImporterMesh::from_mesh(p_mesh);
+
+	Ref<FakeMesh> fake_mesh = p_mesh;
+	if (fake_mesh.is_valid()) {
+		// Convert blend shape mode and names if any.
+		if (fake_mesh->get_blend_shape_count() > 0) {
+			importer_mesh->set_blend_shape_mode(fake_mesh->get_blend_shape_mode());
+		}
+		for (int32_t surface_i = 0; surface_i < p_mesh->get_surface_count(); surface_i++) {
+			String surface_name = fake_mesh->surface_get_name(surface_i);
+			if (!surface_name.is_empty()) {
+				importer_mesh->set_surface_name(surface_i, surface_name);
+			}
+		}
+	}
+	ret_mesh = importer_mesh->get_mesh();
+
+	// Merge metadata.
+	ret_mesh->merge_meta_from(*p_mesh);
+	ret_mesh->set_name(p_mesh->get_name());
+	ret_mesh->set_local_to_scene(p_mesh->is_local_to_scene());
+	ret_mesh->set_scene_unique_id(p_mesh->get_scene_unique_id());
+	ret_mesh->set_path_cache(p_mesh->get_path());
+
+	return ret_mesh;
+}
+
+Ref<FakeMesh> FakeMesh::load_from_array_mesh(const String &p_path) {
+	Error err;
+	Ref<MissingResource> mr = ResourceCompatLoader::fake_load(p_path, "", &err);
+	return create_from_missing_resource(mr, ResourceCompatLoader::get_default_load_type());
+}
+
+Ref<FakeMesh> FakeMesh::create_from_missing_resource(const Ref<MissingResource> &p_mr, ResourceInfo::LoadType p_load_type) {
+	ERR_FAIL_COND_V_MSG(!p_mr.is_valid(), Ref<FakeMesh>(), "Missing resource is not valid");
+	ERR_FAIL_COND_V_MSG(p_mr->get_original_class() != "ArrayMesh", Ref<FakeMesh>(), "Missing resource is not an array mesh");
+	Ref<FakeMesh> mesh;
+	mesh.instantiate();
+	mesh->load_type = p_load_type;
+	// Not using ResourceCompatConverter::set_real_from_missing_resource because we have to convert any embedded ArrayMeshes to FakeMeshes
+	List<PropertyInfo> property_info;
+	p_mr->get_property_list(&property_info);
+	for (auto &property : property_info) {
+		if (property.usage & PROPERTY_USAGE_STORAGE) {
+			mesh->set(property.name, p_mr->get(property.name));
+		}
+	}
+	mesh->set_path_cache(p_mr->get_path());
+	mesh->set_local_to_scene(p_mr->is_local_to_scene());
+	mesh->set_scene_unique_id(p_mr->get_scene_unique_id());
+	return mesh;
 }
 
 void FakeMesh::_bind_methods() {

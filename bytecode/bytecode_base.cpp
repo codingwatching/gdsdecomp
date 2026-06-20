@@ -12,6 +12,7 @@
 #include "compat/variant_decoder_compat.h"
 #include "compat/variant_writer_compat.h"
 #include "utility/common.h"
+#include "utility/gdre_config.h"
 #include "utility/gdre_settings.h"
 #include "utility/godotver.h"
 
@@ -623,24 +624,6 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 	Error err = get_script_state(p_buffer, s);
 	ERR_FAIL_COND_V(err != OK, err);
 
-	int tab_size = 4;
-
-	if (s.columns.size() > 0) {
-		Vector<int> diffs;
-		int prev_column = 1;
-		for (auto &[key, value] : s.columns) {
-			int curr_column = value;
-			if (curr_column > prev_column) {
-				diffs.push_back(curr_column - prev_column);
-			}
-			prev_column = curr_column;
-		}
-		tab_size = gdre::get_most_popular_value(diffs);
-		if (tab_size <= 1) {
-			tab_size = 4;
-		}
-	}
-
 	Ref<GDScriptTokenizerCompat> tokenizer = GDScriptTokenizerCompat::create_buffer_tokenizer(this, p_buffer);
 	if (tokenizer.is_null()) {
 		return ERR_INVALID_DATA;
@@ -655,7 +638,8 @@ Error GDScriptDecomp::decompile_buffer(Vector<uint8_t> p_buffer) {
 		current = tokenizer->scan();
 	}
 
-	bool use_spaces = false;
+	bool use_spaces = (IndentType)GDREConfig::get_singleton()->get_setting("Script/Indent/type", 0) == INDENT_TYPE_SPACES;
+	int tab_size = GDREConfig::get_singleton()->get_setting("Script/Indent/size", 4).operator int();
 	bool first_line = true;
 	int version = s.bytecode_version;
 	int bytecode_version = get_bytecode_version();

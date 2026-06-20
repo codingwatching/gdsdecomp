@@ -277,6 +277,22 @@ HashMap<String, Ref<GDREConfigSetting>> GDREConfig::_init_default_settings() {
 				"Add imports to git repo",
 				"Add .godot/imported/ (or .import/ for Godot 3) to the git repo.",
 				false)),
+		memnew(GDREConfigSettingEnum(
+				"Script/Indent/type",
+				"Indent type",
+				"The type of indentation to use when decompiling and displaying scripts.",
+				0,
+				"Tabs,Spaces",
+				false,
+				false)),
+		memnew(GDREConfigSettingRange(
+				"Script/Indent/size",
+				"Tab size",
+				"The number of spaces to use when decompiling and displaying scripts.",
+				4,
+				"1,64,1",
+				false,
+				false)),
 		memnew(GDREConfigSetting_BytecodeForceBytecodeRevision()),
 		memnew(GDREConfigSetting_LoadCustomBytecode()),
 #if !GODOT_MONO_DECOMP_DISABLED
@@ -594,12 +610,113 @@ void GDREConfigSetting::set_value(const Variant &p_value, bool p_force_ephemeral
 	GDREConfig::get_singleton()->set_setting(full_name, p_value, p_force_ephemeral || ephemeral);
 }
 
+Variant GDREConfigSetting::get_min_value() const {
+	switch (get_type()) {
+		case Variant::Type::INT:
+			return 0;
+		case Variant::Type::FLOAT:
+			return 0.0f;
+		case Variant::Type::BOOL:
+			return false;
+		default:
+			return Variant();
+	}
+}
+
+Variant GDREConfigSetting::get_max_value() const {
+	switch (get_type()) {
+		case Variant::Type::INT:
+			return INT_MAX;
+		case Variant::Type::FLOAT:
+			return 179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.0;
+		case Variant::Type::BOOL:
+			return true;
+		default:
+			return Variant();
+	}
+}
+
+Variant GDREConfigSetting::get_step_value() const {
+	switch (get_type()) {
+		case Variant::Type::INT:
+			return 1;
+		case Variant::Type::FLOAT:
+			return 0.01f;
+		case Variant::Type::BOOL:
+			return 1;
+		default:
+			return Variant();
+	}
+}
+
 bool GDREConfigSetting::is_hidden() const {
 	return hidden;
 }
 
 bool GDREConfigSetting::is_ephemeral() const {
 	return ephemeral;
+}
+
+GDREConfigSettingEnum::GDREConfigSettingEnum(
+		const String &p_full_name,
+		const String &p_brief,
+		const String &p_description,
+		const Variant &p_default_value,
+		const String &p_enum_values,
+		bool p_hidden,
+		bool p_ephemeral) :
+		GDREConfigSetting(p_full_name, p_brief, p_description, p_default_value, p_hidden, p_ephemeral) {
+	enum_values = p_enum_values.split(",");
+}
+
+bool GDREConfigSettingEnum::has_special_value() const {
+	return true;
+}
+
+Dictionary GDREConfigSettingEnum::get_list_of_possible_values() const {
+	Dictionary ret;
+	for (int i = 0; i < enum_values.size(); i++) {
+		ret[i] = enum_values[i];
+	}
+	return ret;
+}
+
+GDREConfigSettingRange::GDREConfigSettingRange(
+		const String &p_full_name,
+		const String &p_brief,
+		const String &p_description,
+		const Variant &p_default_value,
+		const String &p_range_string, bool p_hidden, bool p_ephemeral) :
+		GDREConfigSetting(p_full_name, p_brief, p_description, p_default_value, p_hidden, p_ephemeral) {
+	auto parts = p_range_string.split(",");
+	ERR_FAIL_COND_MSG(parts.size() != 3, "Invalid range string: " + p_range_string);
+	if (p_default_value.get_type() == Variant::Type::INT) {
+		min_value = parts[0].to_int();
+		max_value = parts[1].to_int();
+		step_value = parts[2].to_int();
+	} else if (p_default_value.get_type() == Variant::Type::FLOAT) {
+		min_value = parts[0].to_float();
+		max_value = parts[1].to_float();
+		step_value = parts[2].to_float();
+	} else {
+		ERR_FAIL_MSG("Invalid range string: " + p_range_string);
+	}
+}
+
+Variant GDREConfigSettingRange::get_min_value() const {
+	return min_value;
+}
+
+Variant GDREConfigSettingRange::get_max_value() const {
+	return max_value;
+}
+
+Variant GDREConfigSettingRange::get_step_value() const {
+	return step_value;
+}
+
+bool GDREConfigSettingRange::is_range_setting() const {
+	return true;
 }
 
 void GDREConfigSetting::_bind_methods() {
@@ -617,6 +734,10 @@ void GDREConfigSetting::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_filepicker"), &GDREConfigSetting::is_filepicker);
 	ClassDB::bind_method(D_METHOD("is_dirpicker"), &GDREConfigSetting::is_dirpicker);
 	ClassDB::bind_method(D_METHOD("is_virtual_setting"), &GDREConfigSetting::is_virtual_setting);
+	ClassDB::bind_method(D_METHOD("is_range_setting"), &GDREConfigSetting::is_range_setting);
+	ClassDB::bind_method(D_METHOD("get_min_value"), &GDREConfigSetting::get_min_value);
+	ClassDB::bind_method(D_METHOD("get_max_value"), &GDREConfigSetting::get_max_value);
+	ClassDB::bind_method(D_METHOD("get_step_value"), &GDREConfigSetting::get_step_value);
 	ClassDB::bind_method(D_METHOD("get_error_message"), &GDREConfigSetting::get_error_message);
 	ClassDB::bind_method(D_METHOD("clear_error_message"), &GDREConfigSetting::clear_error_message);
 	ClassDB::bind_method(D_METHOD("has_special_value"), &GDREConfigSetting::has_special_value);

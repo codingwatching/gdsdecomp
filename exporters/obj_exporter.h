@@ -8,6 +8,7 @@ class ObjExporter : public ResourceExporter {
 
 private:
 	static Error write_materials_to_mtl(const HashMap<String, Ref<Material>> &p_materials, const String &p_path, const String &p_output_dir, bool force_single_precision);
+	static Vector<Ref<Mesh>> load_meshes_as_fake_meshes(const HashSet<String> &p_paths);
 
 protected:
 	static void _bind_methods();
@@ -27,6 +28,8 @@ public:
 		String path;
 	};
 
+	static Vector<Ref<Mesh>> load_meshes(const HashSet<String> &p_paths, int ver_major, bool p_for_scene_export);
+	static Error export_file_with_options(const String &p_out_path, const String &p_source_path, const Dictionary &p_options);
 	static constexpr const char *const EXPORTER_NAME = "Wavefront OBJ";
 	virtual String get_name() const override;
 	static Error _write_meshes_to_obj(const Vector<Ref<Mesh>> &p_meshes, const String &p_path, const String &p_output_dir, MeshInfo &r_mesh_info);

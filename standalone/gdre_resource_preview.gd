@@ -313,6 +313,12 @@ func load_resource(path: String) -> void:
 	if (%ResourceInfo.text == ""):
 		pop_resource_info(path, info)
 
+func refresh():
+	var current_view = get_currently_visible_view()
+	if current_view == %TextView and current_resource_path != "":
+		%TextView.reload_from_disk()
+	# TODO: handle other views? Not currently necessary, config settings only affect the text view currently
+
 
 func try_text_preview(path, type, res_type):
 	if type == -1:

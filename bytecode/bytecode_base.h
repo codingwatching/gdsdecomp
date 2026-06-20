@@ -167,6 +167,12 @@ public:
 		TOKEN_LINE_MASK = (1 << TOKEN_LINE_BITS) - 1,
 	};
 
+	enum IndentType {
+		INDENT_TYPE_TABS,
+		INDENT_TYPE_SPACES,
+		INDENT_TYPE_MAX,
+	};
+
 	// bytecode_version, ids,  constants, tokens, lines, columns
 	struct ScriptState {
 		int bytecode_version = -1;

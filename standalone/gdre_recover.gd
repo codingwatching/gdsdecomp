@@ -627,11 +627,12 @@ func _on_assembly_focus_exited() -> void:
 
 func _on_export_settings_button_pressed() -> void:
 	%GDREConfigDialog.clear()
-	%GDREConfigDialog.show()
+	%GDREConfigDialog.popup_centered()
 
 
-func _on_gdre_config_dialog_config_changed(changed_settings: Dictionary[String, Variant]) -> void:
+func _on_gdre_config_dialog_config_changed(changed_settings: Dictionary[String, Array]) -> void:
 	GDRESettings.update_from_ephemeral_settings()
+	RESOURCE_PREVIEW.refresh()
 
 
 func _on_add_pcks_dialog_files_selected(paths: PackedStringArray) -> void:

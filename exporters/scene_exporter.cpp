@@ -3534,7 +3534,13 @@ Ref<ExportReport> SceneExporter::export_file_with_options(const String &out_path
 		}
 		return token->report;
 	}
-	Error err = TaskManager::get_singleton()->run_task(token, nullptr, "Exporting scene " + res_path, -1, true, true, true);
+	Error err;
+	if (Thread::is_main_thread()) {
+		err = TaskManager::get_singleton()->run_task(token, nullptr, "Exporting scene " + res_path, -1, true, true, true);
+	} else { // we're on a task thread, run it here
+		token->batch_export_instanced_scene();
+		err = token->err;
+	}
 	token->post_export(err);
 	if (remove_physics_bodies) {
 		register_physics_extension();
