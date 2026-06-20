@@ -830,10 +830,7 @@ Ref<Resource> ResourceCompatConverter::set_real_from_missing_resource(Ref<Missin
 	mr->get_property_list(&property_info);
 	for (auto &property : property_info) {
 		bool is_storage = property.usage & PROPERTY_USAGE_STORAGE;
-		// if (property.usage & PROPERTY_USAGE_STORAGE) {
-		if (property.name == "resource_path") {
-			res->set_path_cache(mr->get(property.name));
-		} else if (is_storage) {
+		if (is_storage) {
 			Ref<MissingResource> m_res = mr->get(property.name);
 			const String &set_prop = prop_map.has(property.name) ? prop_map[property.name] : property.name;
 			if (m_res.is_valid()) {
@@ -841,12 +838,11 @@ Ref<Resource> ResourceCompatConverter::set_real_from_missing_resource(Ref<Missin
 			} else {
 				res->set(set_prop, mr->get(property.name));
 			}
-		} else {
-			// WARN_PRINT("Property " + property.name + " is not storage");
 		}
-		// }
 	}
 	res->set_path_cache(mr->get_path());
+	res->set_local_to_scene(mr->is_local_to_scene());
+	res->set_scene_unique_id(mr->get_scene_unique_id());
 	return res;
 }
 
