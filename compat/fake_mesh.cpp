@@ -1458,17 +1458,7 @@ void FakeMesh::set_shadow_mesh(const Ref<Resource> &p_mesh) {
 	ERR_FAIL_COND_MSG(p_mesh == this, "Cannot set a mesh as its own shadow mesh.");
 	Ref<MissingResource> mr = p_mesh;
 	if (mr.is_valid()) {
-		Ref<MissingResource> m_res = mr;
-		if (ResourceCompatConverter::is_external_resource(mr)) {
-			Error err;
-			m_res = ResourceCompatLoader::fake_load(mr->get_path(), "", &err);
-			ERR_FAIL_COND_MSG(err != OK || !m_res.is_valid(), "Failed to load material: " + mr->get_path());
-		}
-		Ref<FakeMesh> fake_mesh;
-		fake_mesh.instantiate();
-		fake_mesh->load_type = load_type;
-
-		shadow_mesh = ResourceCompatConverter::set_real_from_missing_resource(m_res, fake_mesh, load_type);
+		shadow_mesh = create_from_missing_resource(mr, load_type);
 	} else {
 		shadow_mesh = p_mesh;
 	}
@@ -1521,13 +1511,26 @@ Ref<ArrayMesh> FakeMesh::mesh_to_array_mesh(const Ref<Mesh> &p_mesh) {
 Ref<FakeMesh> FakeMesh::load_from_array_mesh(const String &p_path) {
 	Error err;
 	Ref<MissingResource> mr = ResourceCompatLoader::fake_load(p_path, "", &err);
-	ERR_FAIL_COND_V_MSG(err != OK || !mr.is_valid(), Ref<FakeMesh>(), "Failed to load mesh: " + p_path);
-	ERR_FAIL_COND_V_MSG(mr->get_original_class() != "ArrayMesh", Ref<FakeMesh>(), "Mesh is not an array mesh: " + p_path);
+	return create_from_missing_resource(mr, ResourceCompatLoader::get_default_load_type());
+}
 
+Ref<FakeMesh> FakeMesh::create_from_missing_resource(const Ref<MissingResource> &p_mr, ResourceInfo::LoadType p_load_type) {
+	ERR_FAIL_COND_V_MSG(!p_mr.is_valid(), Ref<FakeMesh>(), "Missing resource is not valid");
+	ERR_FAIL_COND_V_MSG(p_mr->get_original_class() != "ArrayMesh", Ref<FakeMesh>(), "Missing resource is not an array mesh");
 	Ref<FakeMesh> mesh;
 	mesh.instantiate();
-	mesh->load_type = ResourceCompatLoader::get_default_load_type();
-	ResourceCompatConverter::set_real_from_missing_resource(mr, mesh, mesh->load_type);
+	mesh->load_type = p_load_type;
+	// Not using ResourceCompatConverter::set_real_from_missing_resource because we have to convert any embedded ArrayMeshes to FakeMeshes
+	List<PropertyInfo> property_info;
+	p_mr->get_property_list(&property_info);
+	for (auto &property : property_info) {
+		if (property.usage & PROPERTY_USAGE_STORAGE) {
+			mesh->set(property.name, p_mr->get(property.name));
+		}
+	}
+	mesh->set_path_cache(p_mr->get_path());
+	mesh->set_local_to_scene(p_mr->is_local_to_scene());
+	mesh->set_scene_unique_id(p_mr->get_scene_unique_id());
 	return mesh;
 }
 
