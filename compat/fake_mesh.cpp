@@ -29,11 +29,10 @@
 /**************************************************************************/
 
 #include "fake_mesh.h"
-
-#include "core/math/convex_hull.h"
 #include "core/object/class_db.h"
-#include "core/templates/pair.h"
+#include "scene/resources/3d/importer_mesh.h"
 #include "scene/resources/surface_tool.h"
+#include "servers/rendering/rendering_server.h"
 
 #ifndef PHYSICS_3D_DISABLED
 #include "scene/resources/3d/concave_polygon_shape_3d.h"
@@ -1482,6 +1481,54 @@ void FakeMesh::set_shadow_mesh(const Ref<Resource> &p_mesh) {
 
 Ref<Resource> FakeMesh::get_shadow_mesh() const {
 	return shadow_mesh;
+}
+
+Ref<ArrayMesh> FakeMesh::mesh_to_array_mesh(const Ref<Mesh> &p_mesh) {
+	if (p_mesh.is_null()) {
+		return Ref<ArrayMesh>();
+	}
+	Ref<ArrayMesh> ret_mesh = p_mesh;
+	if (ret_mesh.is_valid()) {
+		return ret_mesh;
+	}
+	Ref<ImporterMesh> importer_mesh = ImporterMesh::from_mesh(p_mesh);
+
+	Ref<FakeMesh> fake_mesh = p_mesh;
+	if (fake_mesh.is_valid()) {
+		// Convert blend shape mode and names if any.
+		if (fake_mesh->get_blend_shape_count() > 0) {
+			importer_mesh->set_blend_shape_mode(fake_mesh->get_blend_shape_mode());
+		}
+		for (int32_t surface_i = 0; surface_i < p_mesh->get_surface_count(); surface_i++) {
+			String surface_name = fake_mesh->surface_get_name(surface_i);
+			if (!surface_name.is_empty()) {
+				importer_mesh->set_surface_name(surface_i, surface_name);
+			}
+		}
+	}
+	ret_mesh = importer_mesh->get_mesh();
+
+	// Merge metadata.
+	ret_mesh->merge_meta_from(*p_mesh);
+	ret_mesh->set_name(p_mesh->get_name());
+	ret_mesh->set_local_to_scene(p_mesh->is_local_to_scene());
+	ret_mesh->set_scene_unique_id(p_mesh->get_scene_unique_id());
+	ret_mesh->set_path_cache(p_mesh->get_path());
+
+	return ret_mesh;
+}
+
+Ref<FakeMesh> FakeMesh::load_from_array_mesh(const String &p_path) {
+	Error err;
+	Ref<MissingResource> mr = ResourceCompatLoader::fake_load(p_path, "", &err);
+	ERR_FAIL_COND_V_MSG(err != OK || !mr.is_valid(), Ref<FakeMesh>(), "Failed to load mesh: " + p_path);
+	ERR_FAIL_COND_V_MSG(mr->get_original_class() != "ArrayMesh", Ref<FakeMesh>(), "Mesh is not an array mesh: " + p_path);
+
+	Ref<FakeMesh> mesh;
+	mesh.instantiate();
+	mesh->load_type = ResourceCompatLoader::get_default_load_type();
+	ResourceCompatConverter::set_real_from_missing_resource(mr, mesh, mesh->load_type);
+	return mesh;
 }
 
 void FakeMesh::_bind_methods() {

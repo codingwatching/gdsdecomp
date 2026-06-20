@@ -30,10 +30,7 @@
 
 #pragma once
 #include "core/io/resource.h"
-#include "core/math/face3.h"
-#include "core/math/triangle_mesh.h"
 #include "scene/resources/material.h"
-#include "servers/rendering/rendering_server.h"
 
 #include "utility/resource_info.h"
 
@@ -45,6 +42,7 @@ class ConvexPolygonShape3D;
 class Shape3D;
 #endif // PHYSICS_3D_DISABLED
 class MeshConvexDecompositionSettings;
+class ImporterMesh;
 
 #include "scene/resources/mesh.h"
 
@@ -155,6 +153,8 @@ public:
 
 	void set_shadow_mesh(const Ref<Resource> &p_mesh);
 	Ref<Resource> get_shadow_mesh() const;
+	static Ref<ArrayMesh> mesh_to_array_mesh(const Ref<Mesh> &p_mesh);
+	static Ref<FakeMesh> load_from_array_mesh(const String &p_path);
 
 	FakeMesh();
 
