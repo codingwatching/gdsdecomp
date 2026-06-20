@@ -4,6 +4,7 @@
 #include "core/error/error_list.h"
 #include "core/io/file_access.h"
 #include "core/templates/hashfuncs.h"
+#include "exporters/export_report.h"
 #include "scene/resources/material.h"
 #include "scene/resources/mesh.h"
 #include "utility/common.h"
@@ -450,12 +451,65 @@ Error ObjExporter::write_meshes_to_obj(const Vector<Ref<Mesh>> &p_meshes, const 
 	return _write_meshes_to_obj(p_meshes, p_path, "", mesh_info);
 }
 
-Error ObjExporter::export_file(const String &p_out_path, const String &p_source_path) {
-	Error err;
-	Ref<ArrayMesh> mesh = ResourceCompatLoader::custom_load(p_source_path, "ArrayMesh", ResourceInfo::LoadType::GLTF_LOAD, &err, false, ResourceFormatLoader::CACHE_MODE_IGNORE_DEEP);
-	ERR_FAIL_COND_V_MSG(mesh.is_null(), ERR_FILE_UNRECOGNIZED, "Not a valid mesh resource: " + p_source_path);
+Ref<Resource> real_load(const String &p_path, Error *r_error) {
+	if (!ResourceCompatLoader::is_globally_available() || ResourceCompatLoader::get_default_load_type() != ResourceInfo::LoadType::GLTF_LOAD) {
+		return ResourceCompatLoader::custom_load(p_path, "", ResourceInfo::LoadType::GLTF_LOAD, r_error, false, ResourceFormatLoader::CACHE_MODE_IGNORE_DEEP);
+	} else {
+		return ResourceCompatLoader::load_with_real_resource_loader(p_path, "", r_error, false, ResourceFormatLoader::CACHE_MODE_IGNORE_DEEP);
+	}
+}
 
-	return write_meshes_to_obj({ mesh }, p_out_path);
+Vector<Ref<Mesh>> ObjExporter::load_meshes_as_fake_meshes(const HashSet<String> &p_paths) {
+	Vector<Ref<Mesh>> meshes;
+	for (auto &path : p_paths) {
+		Error err = OK;
+		Ref<Mesh> res;
+		if (ResourceCompatLoader::get_resource_type(path) == "ArrayMesh") {
+			res = FakeMesh::load_from_array_mesh(path);
+		} else {
+			res = real_load(path, &err);
+		}
+		ERR_FAIL_COND_V_MSG(err != OK || res.is_null(), Vector<Ref<Mesh>>(), "Failed to load mesh: " + path);
+		meshes.push_back(res);
+	}
+	return meshes;
+}
+
+Vector<Ref<Mesh>> ObjExporter::load_meshes(const HashSet<String> &p_paths, int ver_major, bool p_for_scene_export) {
+	Vector<Ref<Mesh>> meshes;
+	bool use_fake_meshes = !p_for_scene_export || ver_major <= 3;
+	if (use_fake_meshes) {
+		meshes = load_meshes_as_fake_meshes(p_paths);
+	} else {
+		Error err = OK;
+		for (auto &path : p_paths) {
+			Ref<Mesh> mesh = real_load(path, &err);
+			if (mesh.is_null()) {
+				ERR_FAIL_V_MSG(Vector<Ref<Mesh>>(), "Not a valid mesh resource: " + path);
+			}
+			meshes.push_back(mesh);
+		}
+	}
+	if (use_fake_meshes && p_for_scene_export) {
+		for (int i = 0; i < meshes.size(); i++) {
+			meshes.write[i] = FakeMesh::mesh_to_array_mesh(meshes[i]);
+			if (meshes[i].is_null()) {
+				ERR_FAIL_V_MSG(Vector<Ref<Mesh>>(), "Failed to convert mesh to array mesh: " + *p_paths.begin());
+			}
+		}
+	}
+	return meshes;
+}
+
+Error ObjExporter::export_file(const String &p_out_path, const String &p_source_path) {
+	return ObjExporter::export_file_with_options(p_out_path, p_source_path, {});
+}
+
+Error ObjExporter::export_file_with_options(const String &p_out_path, const String &p_source_path, const Dictionary &p_options) {
+	ERR_FAIL_COND_V_MSG(!p_out_path.has_extension("obj"), ERR_INVALID_PARAMETER, "Output path must have .obj extension");
+	Vector<Ref<Mesh>> meshes = load_meshes({ p_source_path }, 0, false);
+	ERR_FAIL_COND_V_MSG(meshes.is_empty(), ERR_FILE_UNRECOGNIZED, "Error loading mesh: " + p_source_path);
+	return write_meshes_to_obj(meshes, p_out_path);
 }
 
 void ObjExporter::get_handled_types(List<String> *r_types) const {
@@ -469,7 +523,7 @@ void ObjExporter::get_handled_importers(List<String> *r_importers) const {
 }
 
 void ObjExporter::_bind_methods() {
-	// No methods to bind in this implementation
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("export_file_with_options", "out_path", "source_path", "options"), &ObjExporter::export_file_with_options);
 }
 
 void ObjExporter::rewrite_import_params(Ref<ImportInfo> p_import_info, const MeshInfo &p_mesh_info) {
@@ -505,42 +559,6 @@ void ObjExporter::rewrite_import_params(Ref<ImportInfo> p_import_info, const Mes
 	// 2.x doesn't require this
 }
 
-Vector<Ref<Mesh>> load_meshes_as_fake_meshes(const HashSet<String> &p_paths, Ref<ExportReport> report) {
-	Vector<Ref<Mesh>> meshes;
-	for (auto &path : p_paths) {
-		Error err;
-		Ref<MissingResource> mr = ResourceCompatLoader::fake_load(path, "", &err);
-		if (err != OK) {
-			report->set_error(err);
-			report->set_message("Failed to load mesh: " + path);
-			return Vector<Ref<Mesh>>();
-		}
-
-		Ref<FakeMesh> mesh;
-		mesh.instantiate();
-		mesh->load_type = ResourceCompatLoader::get_default_load_type();
-		List<PropertyInfo> property_info;
-		mr->get_property_list(&property_info);
-		for (auto &property : property_info) {
-			bool is_storage = property.usage & PROPERTY_USAGE_STORAGE;
-			// if (property.usage & PROPERTY_USAGE_STORAGE) {
-			if (property.name == "resource_path") {
-				mesh->set_path_cache(mr->get(property.name));
-			} else if (is_storage) {
-				mesh->set(property.name, mr->get(property.name));
-			} else {
-				// WARN_PRINT("Property " + property.name + " is not storage");
-			}
-			// }
-		}
-		mesh->set_path_cache(mr->get_path());
-		mesh->merge_meta_from(mr.ptr());
-
-		meshes.push_back(mesh);
-	}
-	return meshes;
-}
-
 Ref<ExportReport> ObjExporter::export_resource(const String &p_output_dir, Ref<ImportInfo> p_import_info) {
 	// TODO: This may fail on Godot 2.x objs due to "blend_shapes" property being named "morph_targets" in 2.x,
 	// but I can't find any to test...
@@ -563,37 +581,16 @@ Ref<ExportReport> ObjExporter::export_resource(const String &p_output_dir, Ref<I
 	Error err;
 	Vector<Ref<Mesh>> meshes;
 	// deduplicate
-	size_t errors_before = supports_multithread() ? GDRELogger::get_thread_error_count() : GDRELogger::get_error_count();
 	auto dest_files = gdre::vector_to_hashset(p_import_info->get_dest_files());
 	// always force this if we're using multithreading, or if we're <= 3.x
 	// if we support multithreading, loading real ArrayMesh objects on the task thread will often cause segfaults
 	// if we're recovering a mesh from 3.x or lower, they supported meshes with > 256 surfaces, loading those will fail
-	bool use_fake_meshes = supports_multithread() || p_import_info->get_ver_major() <= 3;
-	if (use_fake_meshes) {
-		meshes = load_meshes_as_fake_meshes(dest_files, report);
-	} else {
-		for (auto &path : dest_files) {
-			Ref<ArrayMesh> mesh;
-			if (!ResourceCompatLoader::is_globally_available() || ResourceCompatLoader::get_default_load_type() != ResourceInfo::LoadType::GLTF_LOAD) {
-				mesh = ResourceCompatLoader::custom_load(path, "ArrayMesh", ResourceInfo::LoadType::GLTF_LOAD, &err, false, ResourceFormatLoader::CACHE_MODE_IGNORE_DEEP);
-			} else {
-				mesh = ResourceCompatLoader::load_with_real_resource_loader(path, "ArrayMesh", &err, false, ResourceFormatLoader::CACHE_MODE_IGNORE_DEEP);
-				// mesh = ResourceLoader::load(path, "ArrayMesh", ResourceFormatLoader::CACHE_MODE_IGNORE_DEEP, &err);
-			}
-			if (mesh.is_null()) {
-				report->set_error(ERR_FILE_UNRECOGNIZED);
-				report->set_message("Not a valid mesh resource: " + path);
-				return report;
-			}
-			meshes.push_back(mesh);
-		}
-	}
-	size_t errors_after = supports_multithread() ? GDRELogger::get_thread_error_count() : GDRELogger::get_error_count();
-	if (errors_after > errors_before) {
+	meshes = load_meshes(dest_files, p_import_info->get_ver_major(), false);
+	if (meshes.is_empty()) {
 #if DEBUG_ENABLED
 		// save it to a text resource so that we can see the resource errors
 		for (auto &path : dest_files) {
-			ResourceCompatLoader::to_text(path, p_output_dir.path_join((path.get_basename() + ".tres").trim_prefix("res://")), err);
+			ResourceCompatLoader::to_text(path, p_output_dir.path_join((path.get_basename() + ".tres").trim_prefix("res://")), 0);
 		}
 #endif
 		report->set_error(ERR_INVALID_DATA);
