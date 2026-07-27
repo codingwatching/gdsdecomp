@@ -15,4 +15,6 @@ dest_files=["res://.godot/imported/gdre_ResBT.svg-f69b579f4913cd80591ac91026e46d
 base_scale=2.0
 saturation=1.0
 color_map={}
+fix_alpha_border=false
+premult_alpha=false
 compress=true
