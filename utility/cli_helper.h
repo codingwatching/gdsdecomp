@@ -28,6 +28,7 @@ static void print_version() {
 	print_line("Godot RE Tools " + String(GDRE_VERSION));
 }
 
+[[maybe_unused]]
 static void remove_flag(List<String> *args, const String &flag, bool has_value = false) {
 	for (List<String>::Element *E = args->front(); E; E = E->next()) {
 		auto arg_and_value = E->get().split("=", true, 1);
@@ -42,6 +43,7 @@ static void remove_flag(List<String> *args, const String &flag, bool has_value =
 	}
 }
 
+[[maybe_unused]]
 static void insert_flag_at_front(List<String> *args, const String &flag, const String &value = "") {
 	for (List<String>::Element *E = args->front(); E; E = E->next()) {
 		if (E->get().begins_with("-")) {
@@ -49,8 +51,12 @@ static void insert_flag_at_front(List<String> *args, const String &flag, const S
 			if (!value.is_empty()) {
 				args->insert_after(inserted, value);
 			}
-			break;
+			return;
 		}
+	}
+	auto inserted = args->push_back(flag);
+	if (!value.is_empty()) {
+		args->insert_after(inserted, value);
 	}
 }
 
@@ -68,6 +74,7 @@ static bool modify_cli_args(List<String> *args, List<String> *user_args) {
 	Vector<String> engine_args;
 	bool found_help = false;
 	String path = "";
+	bool display_driver_chosen = false;
 	for (List<String>::Element *E = args->front(); E; E = E->next()) {
 		String arg = E->get();
 		if (arg == "--path" && E->next()) {
@@ -87,6 +94,8 @@ static bool modify_cli_args(List<String> *args, List<String> *user_args) {
 			user_args->clear();
 			args->push_back("--help");
 			return false;
+		} else if (arg == "--headless" || arg == "--display-driver") {
+			display_driver_chosen = true;
 		}
 	}
 	if (found_help) {
@@ -113,7 +122,9 @@ static bool modify_cli_args(List<String> *args, List<String> *user_args) {
 			break;
 		}
 	}
-	add_wayland_args(args);
+	if (!display_driver_chosen) {
+		add_wayland_args(args);
+	}
 	return false;
 }
 } //namespace gdre
