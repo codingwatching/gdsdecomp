@@ -5,6 +5,10 @@
 extern "C" {
 #endif
 
+// Unless documented otherwise, all char pointers passed across this API are
+// null-terminated UTF-8 strings. Strings returned by this API must be released
+// with GodotMonoDecomp_FreeString or GodotMonoDecomp_FreeArray, as applicable.
+
 typedef enum {
 AUTO_LANGUAGE_VERSION = 0,
 LANG_VER_CSharp1 = 1,

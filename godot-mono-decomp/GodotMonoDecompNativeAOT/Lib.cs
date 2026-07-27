@@ -7,6 +7,15 @@ namespace GodotMonoDecomp.NativeLibrary;
 
 static public class Lib
 {
+	static IntPtr StringToHGlobalUtf8(string value)
+	{
+		byte[] bytes = Encoding.UTF8.GetBytes(value);
+		IntPtr ptr = Marshal.AllocHGlobal(bytes.Length + 1);
+		Marshal.Copy(bytes, 0, ptr, bytes.Length);
+		Marshal.WriteByte(ptr, bytes.Length, 0);
+		return ptr;
+	}
+
 	static string[]? GetStringArray(IntPtr ptr, int count)
 	{
 		if (count == 0 || ptr == IntPtr.Zero) return null;
@@ -14,7 +23,7 @@ static public class Lib
 		for (int i = 0; i < count; i++)
 		{
 			IntPtr pathPtr = Marshal.ReadIntPtr(ptr, i * IntPtr.Size);
-			strs[i] = Marshal.PtrToStringAnsi(pathPtr) ?? string.Empty;
+			strs[i] = Marshal.PtrToStringUTF8(pathPtr) ?? string.Empty;
 		}
 		return strs;
 	}
@@ -30,9 +39,9 @@ static public class Lib
         int referencePathsCount
     )
     {
-        string assemblyFileNameStr = Marshal.PtrToStringAnsi(assemblyPath) ?? string.Empty;
-        string outputPathStr = Marshal.PtrToStringAnsi(outputCSProjectPath) ?? string.Empty;
-        string  projectFileNameStr = Marshal.PtrToStringAnsi(projectPath) ?? string.Empty;
+        string assemblyFileNameStr = Marshal.PtrToStringUTF8(assemblyPath) ?? string.Empty;
+        string outputPathStr = Marshal.PtrToStringUTF8(outputCSProjectPath) ?? string.Empty;
+        string  projectFileNameStr = Marshal.PtrToStringUTF8(projectPath) ?? string.Empty;
         string[]? referencePathsStrs = GetStringArray(AssemblyReferenceDirs, referencePathsCount);
         return GodotMonoDecomp.Lib.DecompileProject(assemblyFileNameStr, outputPathStr,projectFileNameStr, referencePathsStrs);
     }
@@ -64,10 +73,10 @@ static public class Lib
 		int OverrideLanguageVersion
 	)
 	{
-		string assemblyFileNameStr = Marshal.PtrToStringAnsi(assemblyPath) ?? string.Empty;
+		string assemblyFileNameStr = Marshal.PtrToStringUTF8(assemblyPath) ?? string.Empty;
 		var originalProjectFilesStrs = GetStringArray(originalProjectFiles, originalProjectFilesCount);
 		var referencePathsStrs = GetStringArray(referencePaths, referencePathsCount);
-		var godotVersionOverrideStr = GodotVersionOverride == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(GodotVersionOverride) ?? null;
+		var godotVersionOverrideStr = GodotVersionOverride == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(GodotVersionOverride) ?? null;
 		var settings = new GodotMonoDecompSettings
 		{
 			WriteNuGetPackageReferences = writeNuGetPackageReferences,
@@ -106,7 +115,7 @@ static public class Lib
 		{
 			return -1;
 		}
-		var outputCSProjectPathStr = Marshal.PtrToStringAnsi(outputCSProjectPath) ?? string.Empty;
+		var outputCSProjectPathStr = Marshal.PtrToStringUTF8(outputCSProjectPath) ?? string.Empty;
 		var excludeFilesStrs = GetStringArray(excludeFiles, excludeFilesCount);
 		return decompiler.DecompileModule(outputCSProjectPathStr, excludeFilesStrs);
 	}
@@ -136,7 +145,7 @@ static public class Lib
 		public void Report(DecompilationProgress value)
 		{
 			if (progressFunction == null) return;
-			var statusCStr = Marshal.StringToHGlobalAnsi(value.Status ?? string.Empty);
+			var statusCStr = StringToHGlobalUtf8(value.Status ?? string.Empty);
 			var ret = progressFunction(userData, value.UnitsCompleted, value.TotalUnits, statusCStr);
 			if (ret != 0) {
 				try {
@@ -168,7 +177,7 @@ static public class Lib
 		{
 			return -1;
 		}
-		var outputCSProjectPathStr = Marshal.PtrToStringAnsi(outputCSProjectPath) ?? string.Empty;
+		var outputCSProjectPathStr = Marshal.PtrToStringUTF8(outputCSProjectPath) ?? string.Empty;
 		var excludeFilesStrs = GetStringArray(excludeFiles, excludeFilesCount);
 		var progress = new AOTGodotModuleDecompilerProgress(reportFunc, userData);
 		return decompiler.DecompileModule(outputCSProjectPathStr, excludeFilesStrs, progress, progress.CancellationToken);
@@ -196,9 +205,9 @@ static public class Lib
 		{
 			return IntPtr.Zero;
 		}
-		var fileStr = Marshal.PtrToStringAnsi(file) ?? string.Empty;
+		var fileStr = Marshal.PtrToStringUTF8(file) ?? string.Empty;
 		var code = decompiler.DecompileIndividualFile(fileStr);
-		return Marshal.StringToHGlobalAnsi(code);
+		return StringToHGlobalUtf8(code);
 	}
 
 	[UnmanagedCallersOnly(EntryPoint = "GodotMonoDecomp_GetNumberOfFilesNotPresentInFileMap")]
@@ -228,7 +237,7 @@ static public class Lib
 		var arrayPtr = Marshal.AllocHGlobal(files.Length * IntPtr.Size);
 		for (int i = 0; i < files.Length; i++)
 		{
-			Marshal.WriteIntPtr(arrayPtr + i * IntPtr.Size, Marshal.StringToHGlobalAnsi(files[i]));
+			Marshal.WriteIntPtr(arrayPtr + i * IntPtr.Size, StringToHGlobalUtf8(files[i]));
 		}
 		return arrayPtr;
 	}
@@ -260,7 +269,7 @@ static public class Lib
 		var arrayPtr = Marshal.AllocHGlobal(files.Length * IntPtr.Size);
 		for (int i = 0; i < files.Length; i++)
 		{
-			Marshal.WriteIntPtr(arrayPtr + i * IntPtr.Size, Marshal.StringToHGlobalAnsi(files[i]));
+			Marshal.WriteIntPtr(arrayPtr + i * IntPtr.Size, StringToHGlobalUtf8(files[i]));
 		}
 		return arrayPtr;
 	}
@@ -314,14 +323,14 @@ static public class Lib
 		{
 			return IntPtr.Zero;
 		}
-		var fileStr = Marshal.PtrToStringAnsi(file) ?? string.Empty;
+		var fileStr = Marshal.PtrToStringUTF8(file) ?? string.Empty;
 		var scriptInfo = decompiler.GetScriptInfo(fileStr);
 		if (scriptInfo == null)
 		{
 			return IntPtr.Zero;
 		}
 		var jsons = scriptInfo.ToJson(false);
-		return Marshal.StringToHGlobalAnsi(jsons);
+		return StringToHGlobalUtf8(jsons);
 	}
 
 
@@ -359,7 +368,7 @@ static public class Lib
 		IntPtr file
 	)
 	{
-		var fileStr = Marshal.PtrToStringAnsi(file) ?? string.Empty;
+		var fileStr = Marshal.PtrToStringUTF8(file) ?? string.Empty;
 		try
 		{
 			var assemblyName = System.Reflection.AssemblyName.GetAssemblyName(fileStr);
