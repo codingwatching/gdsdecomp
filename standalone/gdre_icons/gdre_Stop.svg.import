@@ -15,4 +15,6 @@ dest_files=["res://.godot/imported/gdre_Stop.svg-5e008734a41f86d1d6dd922429f3373
 base_scale=2.0
 saturation=1.0
 color_map={}
+fix_alpha_border=false
+premult_alpha=false
 compress=true

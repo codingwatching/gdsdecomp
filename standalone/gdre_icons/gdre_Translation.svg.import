@@ -15,4 +15,6 @@ dest_files=["res://.godot/imported/gdre_Translation.svg-46b428564f905f308174bad7
 base_scale=1.0
 saturation=1.0
 color_map={}
+fix_alpha_border=false
+premult_alpha=false
 compress=true

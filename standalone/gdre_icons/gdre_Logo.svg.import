@@ -15,4 +15,6 @@ dest_files=["res://.godot/imported/gdre_Logo.svg-03c78c677d3ee90e9fbfc520e5118ed
 base_scale=2.0
 saturation=1.0
 color_map={}
+fix_alpha_border=false
+premult_alpha=false
 compress=true

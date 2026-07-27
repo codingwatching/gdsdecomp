@@ -15,4 +15,6 @@ dest_files=["res://.godot/imported/gdre_MaterialPreviewLight1.svg-4cf0b0e5e2d2ef
 base_scale=1.0
 saturation=1.0
 color_map={}
+fix_alpha_border=false
+premult_alpha=false
 compress=true

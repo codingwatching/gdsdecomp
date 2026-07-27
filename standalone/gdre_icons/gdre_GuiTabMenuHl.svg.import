@@ -15,4 +15,6 @@ dest_files=["res://.godot/imported/gdre_GuiTabMenuHl.svg-6ed85db88d8026812387151
 base_scale=1.0
 saturation=1.0
 color_map={}
+fix_alpha_border=false
+premult_alpha=false
 compress=true
