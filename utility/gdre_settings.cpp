@@ -3393,6 +3393,7 @@ Variant GDRESettings::get_shader_global(const String &p_name) const {
 	return shader_globals.get(p_name);
 }
 
+namespace {
 struct ODBDLoadTask {
 	Vector<String> paths;
 	Mutex global_lock;
@@ -3534,6 +3535,7 @@ struct ODBDLoadTask {
 		return vformat("Loading resource: %s", paths[i]);
 	}
 };
+} //namespace
 
 Error GDRESettings::_load_obdb_resources() {
 	// gather all the files that have `.optimized.scn` or `.optimized.res` extensions

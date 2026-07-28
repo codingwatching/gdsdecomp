@@ -862,6 +862,7 @@ void ImportExporter::recreate_uid_file(const String &src_path, bool is_import, c
 	}
 }
 
+namespace {
 struct ProcessRunnerStruct : public TaskRunnerStruct {
 	String command;
 	Vector<String> arguments;
@@ -960,6 +961,7 @@ struct ProcessRunnerStruct : public TaskRunnerStruct {
 		}
 	}
 };
+} //namespace
 
 bool detect_uses_prebuilt_steam_template() {
 	String glob = DirAccess::dir_exists_absolute("res://addons") ? "res://addons/*" : "res://Addons/*";
