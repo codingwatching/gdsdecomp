@@ -4,6 +4,7 @@
 
 #include "register_types.h"
 #include "compat/fake_script.h"
+#include "compat/font_loader_compat.h"
 #include "core/io/image_loader.h"
 #include "core/object/class_db.h"
 #include "exporters/dialogue_exporter.h"
@@ -114,6 +115,7 @@ static Ref<ResourceFormatLoaderCompatTexture2D> texture_loader = nullptr;
 static Ref<ResourceFormatLoaderCompatTexture3D> texture3d_loader = nullptr;
 static Ref<ResourceFormatLoaderCompatTextureLayered> texture_layered_loader = nullptr;
 static Ref<ResourceFormatLoaderImageTextureCompat> image_texture_loader = nullptr;
+static Ref<ResourceFormatLoaderCompatFont> font_loader = nullptr;
 static Ref<ResourceFormatGDScriptLoader> script_loader = nullptr;
 static Ref<ResourceFormatLoaderCompatImage> image_loader = nullptr;
 static Ref<ResourceFormatLoaderCompatVideo> video_loader = nullptr;
@@ -181,6 +183,7 @@ void init_loaders() {
 	texture3d_loader = memnew(ResourceFormatLoaderCompatTexture3D);
 	texture_layered_loader = memnew(ResourceFormatLoaderCompatTextureLayered);
 	image_texture_loader = memnew(ResourceFormatLoaderImageTextureCompat);
+	font_loader = memnew(ResourceFormatLoaderCompatFont);
 	script_loader = memnew(ResourceFormatGDScriptLoader);
 	image_loader = memnew(ResourceFormatLoaderCompatImage);
 	video_loader = memnew(ResourceFormatLoaderCompatVideo);
@@ -201,6 +204,7 @@ void init_loaders() {
 	ResourceCompatLoader::add_resource_format_loader(texture_loader, true);
 	ResourceCompatLoader::add_resource_format_loader(texture3d_loader, true);
 	ResourceCompatLoader::add_resource_format_loader(texture_layered_loader, true);
+	ResourceCompatLoader::add_resource_format_loader(font_loader, true);
 	ResourceCompatLoader::add_resource_format_loader(script_loader, true);
 	ResourceCompatLoader::add_resource_format_loader(image_loader, true);
 	ResourceCompatLoader::add_resource_format_loader(video_loader, true);
@@ -390,6 +394,9 @@ void deinit_loaders() {
 	if (image_texture_loader.is_valid()) {
 		ResourceCompatLoader::remove_resource_format_loader(image_texture_loader);
 	}
+	if (font_loader.is_valid()) {
+		ResourceCompatLoader::remove_resource_format_loader(font_loader);
+	}
 	if (script_loader.is_valid()) {
 		ResourceCompatLoader::remove_resource_format_loader(script_loader);
 	}
@@ -436,6 +443,7 @@ void deinit_loaders() {
 	texture3d_loader = nullptr;
 	texture_layered_loader = nullptr;
 	image_texture_loader = nullptr;
+	font_loader = nullptr;
 	script_loader = nullptr;
 	image_loader = nullptr;
 	video_loader = nullptr;
@@ -519,6 +527,7 @@ void initialize_gdsdecomp_module(ModuleInitializationLevel p_level) {
 	ClassDB::register_class<ResourceFormatLoaderCompatTexture3D>();
 	ClassDB::register_class<ResourceFormatLoaderCompatTextureLayered>();
 	ClassDB::register_class<ResourceFormatLoaderImageTextureCompat>();
+	ClassDB::register_class<ResourceFormatLoaderCompatFont>();
 	ClassDB::register_class<ResourceFormatGDScriptLoader>();
 	ClassDB::register_class<ResourceFormatLoaderCompatImage>();
 	ClassDB::register_class<ResourceFormatLoaderCompatVideo>();
