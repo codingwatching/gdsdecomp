@@ -130,6 +130,8 @@ void ImportExporter::save_filesystem_cache(const Vector<std::shared_ptr<FileInfo
 		{ 3, "ea4bc82a6ad023ab7ee23ee620429895" },
 		{ 4, "ea4bc82a6ad023ab7ee23ee620429895" },
 		{ 5, "63f7b34db8d8cdea90c76aacccf841ec" },
+		{ 6, "72322a848ab928aa5c89f0cb78209805" },
+		{ 7, "78098b89c88a74ebe8c20117b8754620" },
 	};
 
 	String cache_path = get_ver_minor() < 4 ? "filesystem_cache8" : "filesystem_cache10";
