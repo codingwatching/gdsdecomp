@@ -7,6 +7,7 @@ using ICSharpCode.Decompiler.CSharp.Transforms;
 using ICSharpCode.Decompiler.Metadata;
 using ICSharpCode.Decompiler.Semantics;
 using ICSharpCode.Decompiler.TypeSystem;
+using ICSharpCode.Decompiler.Util;
 
 namespace GodotMonoDecomp;
 
@@ -353,7 +354,7 @@ public static class GodotStuff
 		var canonicalPaths = new HashSet<string>();
 		var canonicalHandles = new HashSet<TypeDefinitionHandle>();
 		var metadata = module.Metadata;
-		Dictionary<string, string>? metadataFQNToFileMap = null;
+		Dictionary<string, string[]>? metadataFQNToFileMap = null;
 		// look at the files in the original project and find a common root for all the files
 		// var allFiles = filesInOriginal.Select(f => Path.GetDirectoryName(f) ?? "").Where(d => !string.IsNullOrEmpty(d) && !d.StartsWith("addons", StringComparison.OrdinalIgnoreCase)).ToHashSet<string>();
 		string? globalCommonRoot = null;//Common.FindCommonRoot(allFiles) ?? null;
@@ -361,14 +362,11 @@ public static class GodotStuff
 		if (scriptMetadata != null)
 		{
 			// create a map of metadata FQN to file path
-			metadataFQNToFileMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+			metadataFQNToFileMap = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
 			foreach (var pair in scriptMetadata)
 			{
 				var fqn = pair.Value.Class.GetFullClassName();
-				if (!metadataFQNToFileMap.ContainsKey(fqn))
-				{
-					metadataFQNToFileMap[fqn] = pair.Key;
-				}
+				metadataFQNToFileMap[fqn] = metadataFQNToFileMap.TryGetValue(fqn, out var files) ? files.Append(pair.Key).ToArray() : [pair.Key];
 			}
 		}
 
@@ -552,10 +550,11 @@ public static class GodotStuff
 				{
 					// check if the type has a metadata FQN in the script metadata
 					var fqn = type.GetFullTypeName(metadata).ToString();
-					if (metadataFQNToFileMap.TryGetValue(fqn, out var filePath))
+					if (metadataFQNToFileMap.TryGetValue(fqn, out var filePaths))
 					{
-						filePath = Common.TrimPrefix(filePath, "res://");
-						addToCanonicalPaths(filePath, h, type);
+						// If more than one file path exists in the metadata for the class name, pick the one that is actually in the original project.
+						var filePath = filePaths.Count() == 1 ? filePaths.First() : filePaths.FirstOrDefault(f => filesInOriginal.Contains(Common.TrimPrefix(f, "res://")), filePaths.First());
+						addToCanonicalPaths(Common.TrimPrefix(filePath, "res://"), h, type);
 						continue;
 					}
 				}
