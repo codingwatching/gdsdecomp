@@ -3137,7 +3137,7 @@ bool is_packed_scene(const Ref<Resource> &p_resource) {
 	return p_resource.is_valid() && _resource_get_class(p_resource) == "PackedScene";
 }
 
-Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resource, int recursion_depth) {
+Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resource, int recursion_depth, HashMap<Ref<Resource>, Ref<PackedScene>> &r_replaced_packed_scenes) {
 	Ref<PackedScene> r_packed_scene = p_resource;
 	if (recursion_depth > 256) {
 		ERR_PRINT("Recursion depth exceeded.");
@@ -3153,7 +3153,12 @@ Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resourc
 			for (int i = 0; i < arr.size(); i++) {
 				Ref<Resource> res = arr[i];
 				if (res.is_valid() && res->get_save_class() == "PackedScene") {
-					arr[i] = _ensure_resource_is_packed_scene(res, recursion_depth);
+					if (r_replaced_packed_scenes.has(res)) {
+						arr[i] = r_replaced_packed_scenes[res];
+					} else {
+						arr[i] = _ensure_resource_is_packed_scene(res, recursion_depth, r_replaced_packed_scenes);
+						r_replaced_packed_scenes[res] = arr[i];
+					}
 				}
 			}
 			bundle.set("variants", arr);
@@ -3183,5 +3188,6 @@ Ref<PackedScene> ResourceFormatSaverCompatTextInstance::ensure_packed_scenes(con
 	} else if (p_resource->get_class() == "PackedScene") {
 		return p_resource;
 	}
-	return _ensure_resource_is_packed_scene(p_resource, 0);
+	HashMap<Ref<Resource>, Ref<PackedScene>> replaced_packed_scenes;
+	return _ensure_resource_is_packed_scene(p_resource, 0, replaced_packed_scenes);
 }
