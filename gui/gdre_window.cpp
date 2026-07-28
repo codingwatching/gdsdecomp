@@ -181,6 +181,7 @@ void GDREWindow::_bind_methods() {
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("popup_box", "p_parent", "p_box", "p_message", "p_title", "p_confirm_callback", "p_cancel_callback", "p_ok_button_text", "p_cancel_button_text"), &GDREWindow::popup_box, DEFVAL(Callable()), DEFVAL(Callable()), DEFVAL("OK"), DEFVAL("Cancel"));
 	ClassDB::bind_method(D_METHOD("popup_confirm_box", "p_message", "p_title", "p_confirm_callback", "p_cancel_callback", "p_ok_button_text", "p_cancel_button_text"), &GDREWindow::popup_confirm_box, DEFVAL(Callable()), DEFVAL(Callable()), DEFVAL("OK"), DEFVAL("Cancel"));
 	ClassDB::bind_method(D_METHOD("popup_error_box", "p_message", "p_title", "p_callback"), &GDREWindow::popup_error_box, DEFVAL("Error"), DEFVAL(Callable()));
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("set_window_autoscaling", "p_window", "p_min_size"), &GDREWindow::set_window_autoscaling);
 }
 
 void GDREAcceptDialogBase::_bind_methods() {

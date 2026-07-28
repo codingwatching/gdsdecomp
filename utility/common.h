@@ -418,3 +418,16 @@ protected:
 
 // Can only pass in string literals
 #define _GDRE_CHECK_HEADER(p_buffer, p_expected_header) gdre::check_header(p_buffer, p_expected_header, sizeof(p_expected_header) - 1)
+
+#define WARN_PRINT_COND(cond, msg) \
+	if (unlikely(cond)) {          \
+		WARN_PRINT(msg);           \
+	}
+
+#ifdef DEBUG_ENABLED
+#define WARN_PRINT_DEBUG(msg) WARN_PRINT(msg)
+#define WARN_PRINT_DEBUG_COND(cond, msg) WARN_PRINT_COND(cond, msg)
+#else
+#define WARN_PRINT_DEBUG(msg) (void)(msg)
+#define WARN_PRINT_DEBUG_COND(cond, msg) (void)(msg)
+#endif

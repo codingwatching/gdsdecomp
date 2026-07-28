@@ -236,7 +236,7 @@ class ResourceFormatSaverCompatBinaryInstance {
 	void _find_resources(const Variant &p_variant, bool p_main = false);
 	static void save_unicode_string(Ref<FileAccess> f, const String &p_string, bool p_bit_on_len = false);
 	int get_string_index(const String &p_string);
-	Dictionary fix_scene_bundle(const Ref<PackedScene> &p_scene, int original_version);
+	Dictionary fix_scene_bundle_format(const Ref<PackedScene> &p_scene);
 	Error set_save_settings(const Ref<Resource> &p_resource, uint32_t p_flags);
 
 	static String get_local_path(const String &p_path, const Ref<Resource> &p_resource);

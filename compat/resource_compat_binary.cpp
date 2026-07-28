@@ -46,6 +46,7 @@
 #include "core/io/resource_format_binary.h"
 
 #include "compat/image_parser_v2.h"
+#include "utility/common.h"
 #include "utility/file_access_buffer.h"
 #include "utility/gdre_settings.h"
 #include "utility/resource_info.h"
@@ -954,7 +955,6 @@ Error ResourceLoaderCompatBinary::load() {
 			}
 
 			if (is_scene && name == "_bundled") {
-				Dictionary _bundled = res->get("_bundled");
 				if (!main) {
 					// ??????
 					// WARN_PRINT("PackedScene found in non-main resource?!!??!?!?!");
@@ -963,10 +963,10 @@ Error ResourceLoaderCompatBinary::load() {
 					if (!compat.is_valid()) {
 						compat.instantiate();
 					}
-					compat->packed_scene_version = (int)_bundled.get("version", -1);
+					compat->packed_scene_version = (int)value.operator Dictionary().get("version", 1);
 					compat->set_on_resource(res);
-				} else if (_bundled.has("version")) {
-					packed_scene_version = (int)_bundled.get("version", -1);
+				} else {
+					packed_scene_version = (int)value.operator Dictionary().get("version", 1);
 				}
 			}
 
@@ -1051,10 +1051,6 @@ Error ResourceLoaderCompatBinary::load() {
 			}
 			f.unref();
 			resource = res;
-			if (res->get_save_class() == "PackedScene") {
-				Dictionary _bundled = res->get("_bundled");
-				packed_scene_version = _bundled.get("version", -1);
-			}
 			// skip translation remapping for fake and non-global loads
 			if (is_real_load()) {
 				resource->set_as_translation_remapped(translation_remapped);
@@ -2748,14 +2744,7 @@ Error ResourceFormatSaverCompatBinaryInstance::_save_to_file(const Ref<FileAcces
 			if (p.pi.name == "_bundled") {
 				// If this is a real PackedScene (vs. a MissingResource), we may need to fix the format
 				if (rd.type == "PackedScene" && saved_resources.get(i)->get_class() == "PackedScene") {
-					Dictionary bundled = p.value;
-					int packed_scene_version = bundled.get("version", -1);
-					Ref<ResourceInfo> ri = ResourceInfo::get_info_from_resource(saved_resources.get(i));
-					int original_scene_version = ri.is_valid() ? ri->packed_scene_version : -1;
-					if (original_scene_version < 0 || original_scene_version != packed_scene_version) {
-						value = fix_scene_bundle(saved_resources.get(i), original_scene_version);
-						// we have to fix this
-					}
+					value = fix_scene_bundle_format(saved_resources.get(i));
 				}
 			}
 			f->store_32(uint32_t(p.name_idx));
@@ -3350,23 +3339,58 @@ struct ConnectionData {
 	Vector<int> binds;
 };
 
-Dictionary ResourceFormatSaverCompatBinaryInstance::fix_scene_bundle(const Ref<PackedScene> &p_scene, int original_version) {
+Dictionary ResourceFormatSaverCompatBinaryInstance::fix_scene_bundle_format(const Ref<PackedScene> &p_scene) {
 	Dictionary bundled = p_scene->get("_bundled");
-	int ver = bundled.get("version", -1);
+	int ver = bundled.get("version", 1);
 	if (ver > ResourceFormatLoaderCompatBinary::CURRENT_PACKED_SCENE_VERSION) {
 		ERR_FAIL_V_MSG(bundled, "THEY INCREASED THE PACKED SCENE VERSION AGAIN!!!!!! REPORT THIS!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 	}
-
-	int conn_count = p_scene->get_state()->get_connection_count();
-	bool requires_version_3 = false;
-	for (int i = 0; i < conn_count; i++) {
-		if (p_scene->get_state()->get_connection_unbinds(i) > 0) {
-			requires_version_3 = true;
-			break;
+	Ref<ResourceInfo> ri = ResourceInfo::get_info_from_resource(p_scene);
+	int original_version = ri.is_valid() ? ri->packed_scene_version : -1;
+	if (original_version < 0) {
+		switch (ver_major) {
+			case 0:
+			case 1:
+				original_version = 1;
+				break;
+			case 2:
+			case 3:
+				original_version = 2;
+				break;
+			case 4:
+			default:
+				original_version = ResourceFormatLoaderCompatBinary::CURRENT_PACKED_SCENE_VERSION;
+				break;
 		}
 	}
-	if (requires_version_3) {
+
+	if (original_version == ver) {
 		return bundled;
+	}
+
+	int conn_count = p_scene->get_state()->get_connection_count();
+	for (int i = 0; i < conn_count; i++) {
+		if (p_scene->get_state()->get_connection_unbinds(i) > 0) {
+			// Requires version 3, we can't fix this, return the original bundled dictionary
+			WARN_PRINT_DEBUG_COND(original_version < 3, vformat("Non-v3 scene bundle '%s' has unbinds. This is not supported.", p_scene->get_path()));
+			return bundled;
+		}
+	}
+	int new_version = original_version; // default to 1
+	if (new_version == 1) {
+		static Vector<String> non_v1_keys = { "node_paths", "editable_instances", "base_scene" };
+		for (auto &key : non_v1_keys) {
+			if (bundled.has(key) && bundled[key].get_type() != Variant::NIL) {
+				auto &value = bundled[key];
+				if (value.get_type() == Variant::ARRAY && value.operator Array().size() > 0) {
+					WARN_PRINT_DEBUG_COND(original_version == 1, vformat("Non-v1 scene bundle '%s' has non-empty %s array. This is not supported.", p_scene->get_path(), key));
+					new_version = 2;
+				} else if (value.get_type() == Variant::INT && value.operator int64_t() >= 0) {
+					WARN_PRINT_DEBUG_COND(original_version == 1, vformat("Non-v1 scene bundle '%s' has base_scene index. This is not supported.", p_scene->get_path()));
+					new_version = 2;
+				}
+			}
+		}
 	}
 	Dictionary ret = bundled.duplicate(true);
 	PackedInt32Array conns = ret["conns"];
@@ -3389,7 +3413,12 @@ Dictionary ResourceFormatSaverCompatBinaryInstance::fix_scene_bundle(const Ref<P
 		idx++;
 	}
 	ret["conns"] = newconns;
-	ret["version"] = original_version > 0 ? original_version : 2; // default to 2
+	ret["version"] = new_version;
+	if (new_version == 1) {
+		ret.erase("node_paths");
+		ret.erase("editable_instances");
+		ret.erase("base_scene");
+	}
 
 	return ret;
 }
