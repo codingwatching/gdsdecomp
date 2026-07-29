@@ -1195,7 +1195,7 @@ struct KeyWorker {
 
 	void stage_1(uint32_t i, String *input_resource_strings) {
 		const String &key = input_resource_strings[i];
-		try_key(key);
+		try_key(key) || try_key(key.to_upper()) || try_key(key.to_lower());
 	}
 
 	int64_t pop_keys(bool quiet = false) {
