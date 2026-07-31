@@ -20,6 +20,8 @@ Implementing the `_parse_and_decrypt()` method will require a knowledge of the e
 
 For reference, a custom decryption script that implements the standard Godot encryption scheme is provided in the [`gdre_standard_encryption.gd`](./gdre_standard_encryption.gd) file.
 
+Further assistance can be provided in the [GDRE Tools discord](https://discord.gg/B3yDzuYvb).
+
 ## File structure:
 In most cases, the file structure will be something like this:
 - magic (32-bit int, 4 bytes) (optional, not present if it's a file in a PCK)
