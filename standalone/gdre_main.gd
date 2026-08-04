@@ -1706,6 +1706,12 @@ func handle_cli(args: PackedStringArray) -> bool:
 				var secs_taken = (end_time - start_time) / 1000
 				print("Prepop complete in %02dm%02ds" % [(secs_taken) / 60, (secs_taken) % 60])
 		elif main_cmds.has("list-files"):
+			if !enc_key.is_empty():
+				if GDRESettings.set_encryption_key_string(enc_key) != OK:
+					print_usage()
+					print("Invalid key! Key must be a hex string with 64 characters")
+					ret_code = 1
+					return true
 			ret_code = list_files(input_file)
 		elif compile_files.size() > 0:
 			ret_code = compile(compile_files, bytecode_version, output_dir)
