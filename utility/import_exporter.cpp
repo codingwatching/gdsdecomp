@@ -985,7 +985,7 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 	report = Ref<ImportExporterReport>(memnew(ImportExporterReport(get_settings()->get_version_string(), get_settings()->get_game_name())));
 	report->log_file_location = get_settings()->get_log_file_path();
 	ERR_FAIL_COND_V_MSG(!get_settings()->is_pack_loaded(), ERR_DOES_NOT_EXIST, "pack/dir not loaded!");
-	output_dir = gdre::get_full_path(p_out_dir, DirAccess::ACCESS_FILESYSTEM);
+	output_dir = gdre::get_full_path(p_out_dir);
 	report->output_dir = output_dir;
 	ERR_FAIL_COND_V_MSG(gdre::ensure_dir(output_dir) != OK, ERR_FILE_CANT_WRITE, "Failed to create output directory " + output_dir);
 	Error err = OK;

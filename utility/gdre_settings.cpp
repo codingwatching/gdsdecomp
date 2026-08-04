@@ -502,7 +502,7 @@ Vector<String> GDRESettings::sort_and_validate_pck_files(const Vector<String> &p
 	// A common pattern for games is to have DLC releases come as additional pcks that override paths in the main pck
 	// We want to ensure that the main pck comes first
 	for (int i = 0; i < p_paths.size(); i++) {
-		String path = p_paths[i];
+		String path = gdre::get_full_path(p_paths[i]);
 		String ext = path.get_extension().to_lower();
 		// directories come first
 		if (DirAccess::exists(path)) {
