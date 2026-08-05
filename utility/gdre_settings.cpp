@@ -5,6 +5,7 @@
 #include "compat/config_file_compat.h"
 #include "compat/resource_compat_binary.h"
 #include "compat/resource_loader_compat.h"
+#include "compat/variant_writer_compat.h"
 #include "core/error/error_list.h"
 #include "core/error/error_macros.h"
 #include "core/io/dir_access.h"
@@ -2603,6 +2604,52 @@ void GDRESettings::_do_string_load(uint32_t i, StringLoadToken *tokens) {
 		}
 		return;
 	}
+	if (src_ext == "dch") {
+		Ref<FileAccess> f = FileAccess::open(tokens[i].path, FileAccess::READ);
+		ERR_FAIL_COND_MSG(f.is_null(), "Failed to open file " + tokens[i].path);
+		String text = f->get_as_text();
+		Variant var = VariantParserCompat::str_to_var(text);
+		ERR_FAIL_COND_MSG(var.get_type() == Variant::Type::NIL, "Failed to parse string " + tokens[i].path);
+		gdre::get_strings_from_variant(var, tokens[i].strings, tokens[i].engine_version);
+		Dictionary dict = var;
+		static const StringName TRANSLATION_ID = StringName("_translation_id");
+		if (dict.has(TRANSLATION_ID)) {
+			String translation_id = dict.get(TRANSLATION_ID, "");
+			tokens[i].strings.push_back(vformat("Character/%s/name", translation_id));
+			tokens[i].strings.push_back(vformat("Character/%s/nicknames", translation_id));
+		}
+		return;
+	}
+	if (src_ext == "dtl") {
+		Ref<FileAccess> f = FileAccess::open(tokens[i].path, FileAccess::READ);
+		ERR_FAIL_COND_MSG(f.is_null(), "Failed to open file " + tokens[i].path);
+		String text = f->get_as_text();
+		auto lines = text.split("\n");
+		for (auto &line : lines) {
+			String translation_id = line.get_slice("#id:", 1).strip_edges();
+			if (!translation_id.is_empty()) {
+				line = line.strip_edges();
+				String event_key = "Text";
+				Vector<String> translatable_properties = { "text" };
+				if (line.begins_with("-")) {
+					// choice
+					event_key = "Choice";
+					translatable_properties.push_back("disabled_text");
+				} else if (line.begins_with("label")) {
+					event_key = "Label";
+					translatable_properties = { "display_name" };
+				} else if (line.begins_with("emotion")) {
+					event_key = "Emotion";
+					translatable_properties = { "emotion_identifier" };
+				} else {
+				}
+				for (auto &property : translatable_properties) {
+					tokens[i].strings.push_back(vformat("%s/%s/%s", event_key, translation_id, property));
+				}
+			}
+		}
+		return;
+	}
 	if (src_ext == "dll") { // .NET assembly
 		if (has_loaded_dotnet_assembly() && tokens[i].path == get_dotnet_assembly_path()) {
 			Ref<GodotMonoDecompWrapper> decompiler = get_dotnet_decompiler();
@@ -2784,6 +2831,8 @@ void GDRESettings::load_all_resource_strings() {
 	wildcards.push_back("*.cfg");
 	wildcards.push_back("*.esc");
 	wildcards.push_back("*.nut");
+	wildcards.push_back("*.dch");
+	wildcards.push_back("*.dtl");
 
 	Vector<String> r_files = get_file_list(wildcards);
 	if (has_loaded_dotnet_assembly()) {
