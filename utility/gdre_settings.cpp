@@ -785,6 +785,8 @@ Error GDRESettings::_project_post_load(bool initial_load, const String &csharp_a
 		WARN_PRINT("Could not determine bytecode revision, not able to decompile scripts...");
 	}
 
+	ResourceCompatLoader::make_globally_available();
+
 	// Load the project config if it exists
 	if (!pack_has_project_config()) {
 		WARN_PRINT("Could not find project configuration in directory, may be a seperate resource pack...");
@@ -840,7 +842,6 @@ Error GDRESettings::_project_post_load(bool initial_load, const String &csharp_a
 	}
 	_ensure_script_cache_complete();
 
-	ResourceCompatLoader::make_globally_available();
 	_set_shader_globals();
 
 	_get_app_version();

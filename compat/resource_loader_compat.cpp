@@ -281,6 +281,28 @@ void ResourceCompatLoader::get_type_for_extension(const String &p_extension, Lis
 	}
 }
 
+// TODO: A more comprehensive way to handle cases like this
+// Also make Resource savers use this after proper testing
+String ResourceCompatLoader::object_get_class_name_for_saving(const Object *p_object) {
+	String class_name = p_object->get_class();
+	if (class_name == "FakeGDScript") {
+		return "GDScript";
+	} else if (class_name == "FakeCSharpScript") {
+		return "CSharpScript";
+	} else if (class_name == "FakeGDNativeScript") {
+		return "GDNativeScript";
+	}
+	const FakeScript *fake_script = Object::cast_to<FakeScript>(p_object);
+	if (fake_script != nullptr) {
+		return fake_script->get_original_class();
+	}
+	const MissingResource *missing_resource = Object::cast_to<MissingResource>(p_object);
+	if (missing_resource != nullptr) {
+		return missing_resource->get_original_class();
+	}
+	return class_name;
+}
+
 Ref<Resource> ResourceCompatLoader::fake_load(const String &p_path, const String &p_type_hint, Error *r_error) {
 	auto loadr = get_loader_for_path(p_path, p_type_hint);
 	FAIL_LOADER_NOT_FOUND(loadr);

@@ -1271,7 +1271,7 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 
 			//store as generic object
 
-			p_store_string_func(p_store_string_ud, "Object(" + obj->get_class() + ",");
+			p_store_string_func(p_store_string_ud, "Object(" + ResourceCompatLoader::object_get_class_name_for_saving(obj) + ",");
 
 			List<PropertyInfo> props;
 			obj->get_property_list(&props);
@@ -1720,7 +1720,7 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 
 			// store as generic object
 
-			p_store_string_func(p_store_string_ud, "Object(" + obj->get_save_class() + ",");
+			p_store_string_func(p_store_string_ud, "Object(" + ResourceCompatLoader::object_get_class_name_for_saving(obj) + ",");
 
 			List<PropertyInfo> props;
 			obj->get_property_list(&props);
