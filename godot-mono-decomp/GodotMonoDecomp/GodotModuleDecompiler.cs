@@ -618,7 +618,13 @@ public class GodotModuleDecompiler
 				args = invokeMethod.Parameters.Select(p => p.Name).ToArray();
 				argTypes = invokeMethod.Parameters.Select(p => p.Type.Name).ToArray();
 			}
-			signalsInfo.Add(new MethodInfo(signal.Name.Substring(0, signal.Name.Length - GodotStuff.SIGNAL_DELEGATE_SUFFIX.Length), "void", args, argTypes, false, false, false));
+			var name = signal.Name;
+			 // 4.x signal delegate name requires the suffix, 3.x signals delegate name is the same as the signal name
+			if (signal.Name.EndsWith(GodotStuff.SIGNAL_DELEGATE_SUFFIX))
+			{
+				name = name.Substring(0, name.Length - GodotStuff.SIGNAL_DELEGATE_SUFFIX.Length);
+			}
+			signalsInfo.Add(new MethodInfo(name, "void", args, argTypes, false, false, false));
 		}
 
 		foreach (var method in typeDef.Methods)
