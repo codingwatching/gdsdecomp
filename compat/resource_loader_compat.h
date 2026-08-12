@@ -65,6 +65,8 @@ public:
 	static void get_base_extensions(List<String> *p_extensions, int ver_major = 0);
 	static void get_type_for_extension(const String &p_extension, List<String> *p_types, int ver_major = 0);
 
+	static String object_get_class_name_for_saving(const Object *p_object);
+
 	static void _init();
 
 #ifdef TESTS_ENABLED

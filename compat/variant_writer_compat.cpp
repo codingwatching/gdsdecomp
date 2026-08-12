@@ -251,6 +251,13 @@ Error VariantParserCompat::parse_value(VariantParser::Token &token, Variant &r_v
 			}
 
 			String type = token.value;
+			// If the type is `GDScript`, use `FakeGDScript` instead to prevent script injection
+			if (type == "GDScript") {
+				type = "FakeGDScript";
+			} else if (type == "CSharpScript") { // Godot technically can't execute inline C# scripts, but just in case...
+				type = "FakeCSharpScript";
+			}
+
 			// TODO: Need to make ParserCompat take in a ver_major so we can make use of the converters; as it stands, this rarely ever is needed
 			// hacks for v3 input_event
 			bool v3_input_key_hacks = InputEventConverterCompat::handles_type_static(type, 3);
@@ -1264,7 +1271,7 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 
 			//store as generic object
 
-			p_store_string_func(p_store_string_ud, "Object(" + obj->get_class() + ",");
+			p_store_string_func(p_store_string_ud, "Object(" + ResourceCompatLoader::object_get_class_name_for_saving(obj) + ",");
 
 			List<PropertyInfo> props;
 			obj->get_property_list(&props);
@@ -1713,7 +1720,7 @@ Error VarWriter<ver_major, is_pcfg, is_script, p_compat, after_4_4>::write_compa
 
 			// store as generic object
 
-			p_store_string_func(p_store_string_ud, "Object(" + obj->get_save_class() + ",");
+			p_store_string_func(p_store_string_ud, "Object(" + ResourceCompatLoader::object_get_class_name_for_saving(obj) + ",");
 
 			List<PropertyInfo> props;
 			obj->get_property_list(&props);
