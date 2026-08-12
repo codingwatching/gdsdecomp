@@ -25,6 +25,7 @@
 #include "scene/resources/3d/box_shape_3d.h"
 #include "scene/resources/3d/capsule_shape_3d.h"
 #include "scene/resources/3d/cylinder_shape_3d.h"
+#include "scene/resources/3d/mesh_library.h"
 #include "scene/resources/3d/sphere_shape_3d.h"
 #include "scene/resources/bone_map.h"
 #include "scene/resources/surface_tool.h"
@@ -3863,6 +3864,61 @@ Error _create_packed_scene_from_animation_library(const String &p_original_path,
 	root = nullptr;
 	return OK;
 }
+
+Error _create_packed_scene_from_mesh_library(const String &p_original_path, const Ref<MeshLibrary> &mesh_library, Ref<PackedScene> &scene) {
+	ERR_FAIL_COND_V_MSG(mesh_library.is_null(), ERR_INVALID_PARAMETER, "Array mesh is null");
+	String scene_name = p_original_path.get_file().get_basename();
+	Node3D *root = memnew(Node3D);
+	root->set_name("root_" + scene_name);
+
+	for (int i = 0; i < mesh_library->get_item_count(); i++) {
+		Ref<Mesh> mesh = mesh_library->get_item_mesh(i);
+		ERR_CONTINUE_MSG(mesh.is_null(), "Mesh is null for mesh library item " + itos(i));
+		String mesh_name = mesh_library->get_item_name(i);
+		if (mesh_name.is_empty()) {
+			mesh_name = mesh->get_name();
+		}
+		if (mesh_name.is_empty() && mesh->get_path().is_resource_file()) {
+			mesh_name = mesh->get_path().get_file().get_basename();
+		}
+		if (mesh_name.is_empty()) {
+			mesh_name = "Mesh_" + itos(i).pad_zeros(3);
+		}
+		MeshInstance3D *mi = memnew(MeshInstance3D);
+		mi->set_transform(mesh_library->get_item_mesh_transform(i));
+		mi->set_mesh(mesh);
+		mi->set_name(mesh_name);
+		root->add_child(mi);
+		mi->set_owner(root);
+
+		Ref<NavigationMesh> nmesh = mesh_library->get_item_navigation_mesh(i);
+		if (nmesh.is_valid()) {
+			NavigationRegion3D *nmi = memnew(NavigationRegion3D);
+			nmi->set_name(mesh_name + "_navigation_region");
+			nmi->set_navigation_mesh(nmesh);
+			nmi->set_navigation_layers(mesh_library->get_item_navigation_layers(i));
+			mi->add_child(nmi, true);
+			nmi->set_owner(mi->get_owner());
+		}
+
+		auto shapes = mesh_library->get_item_shapes(i);
+
+		if (shapes.size() > 0) {
+			StaticBody3D *static_body = memnew(StaticBody3D);
+			static_body->set_name(mesh_name + "_static_body");
+			mi->add_child(static_body);
+			static_body->set_owner(root);
+			auto owner_id = static_body->create_shape_owner(static_body);
+			for (auto &shape : shapes) {
+				static_body->shape_owner_add_shape(owner_id, shape.shape);
+			}
+		}
+	}
+	scene.instantiate();
+	scene->pack(root);
+	memdelete(root);
+	return OK;
+}
 } //namespace
 
 struct BatchExportToken : public TaskRunnerStruct {
@@ -4012,6 +4068,14 @@ struct BatchExportToken : public TaskRunnerStruct {
 				.value_or(ERR_SKIP);
 	}
 
+	Error create_packed_scene_from_mesh_library(const Ref<MeshLibrary> &mesh_library, Ref<PackedScene> &scene) {
+		ERR_FAIL_COND_V_MSG(mesh_library.is_null(), ERR_INVALID_PARAMETER, "Mesh library is null");
+		return TaskManager::get_singleton()->dispatch_to_main_thread(std::function<Error()>([&]() -> Error {
+											   return _create_packed_scene_from_mesh_library(p_original_path, mesh_library, scene);
+										   }))
+				.value_or(ERR_SKIP);
+	}
+
 	// scene loading and scene instancing has to be done on the main thread to avoid deadlocks and crashes
 	bool batch_preload() {
 		GDRELogger::clear_error_queues();
@@ -4044,9 +4108,12 @@ struct BatchExportToken : public TaskRunnerStruct {
 			String resource_type = report->get_import_info()->get_type();
 			bool is_mesh = false;
 			bool is_animation_library = false;
+			bool is_mesh_library = false;
 			if (resource_type != "PackedScene") {
 				if (resource_type == "AnimationLibrary") {
 					is_animation_library = true;
+				} else if (resource_type == "MeshLibrary") {
+					is_mesh_library = true;
 				} else if (resource_type == "Mesh" || ClassDB::is_parent_class(resource_type, "Mesh")) {
 					is_mesh = true;
 				} else {
@@ -4066,6 +4133,8 @@ struct BatchExportToken : public TaskRunnerStruct {
 					err = create_packed_scene_from_mesh(resource, scene);
 				} else if (is_animation_library) {
 					err = create_packed_scene_from_animation_library(resource, scene);
+				} else if (is_mesh_library) {
+					err = create_packed_scene_from_mesh_library(resource, scene);
 				} else {
 					err = ERR_CANT_ACQUIRE_RESOURCE;
 				}
@@ -4325,6 +4394,8 @@ void SceneExporter::get_handled_types(List<String> *out) const {
 void SceneExporter::get_handled_importers(List<String> *out) const {
 	out->push_back("scene");
 	out->push_back("animation_library");
+	out->push_back("MeshLibrary");
+	out->push_back("ArrayMesh");
 }
 
 String SceneExporter::get_name() const {
