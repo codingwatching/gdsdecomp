@@ -26,6 +26,7 @@
 #include "scene/resources/3d/capsule_shape_3d.h"
 #include "scene/resources/3d/cylinder_shape_3d.h"
 #include "scene/resources/3d/sphere_shape_3d.h"
+#include "scene/resources/bone_map.h"
 #include "scene/resources/surface_tool.h"
 #include "scene/resources/texture.h"
 #include "utility/common.h"
@@ -1293,6 +1294,22 @@ Dictionary get_node_options(Node *p_node, Node *original_node = nullptr) {
 	if (script.is_valid()) {
 		node_options_dict["node/script"] = script;
 	}
+	if (skeleton) {
+		if (skeleton->is_unique_name_in_owner()) {
+			Ref<BoneMap> bone_map = memnew(BoneMap);
+			// have to set the bone map to an empty bonemap for the renamer to work
+			node_options_dict["retarget/bone_map"] = bone_map;
+			node_options_dict["retarget/bone_renamer/rename_bones"] = true;
+			node_options_dict["retarget/bone_renamer/unique_node/make_unique"] = true;
+			node_options_dict["retarget/bone_renamer/unique_node/skeleton_name"] = String(skeleton->get_name());
+			// need to set these to false to avoid mutating the bones after import
+			node_options_dict["retarget/remove_tracks/unimportant_positions"] = false;
+			node_options_dict["retarget/rest_fixer/apply_node_transforms"] = false;
+			node_options_dict["retarget/rest_fixer/keep_global_rest_on_leftovers"] = false;
+			node_options_dict["retarget/rest_fixer/normalize_position_tracks"] = false;
+			node_options_dict["retarget/rest_fixer/reset_all_bone_poses_after_import"] = false;
+		}
+	}
 	if (mesh_instance) {
 		// node_options_dict["import/skip_import"] = false;
 		// only used internally
@@ -1897,7 +1914,14 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 			}
 		}
 		if (updating_import_info && node != root) {
-			node_options[get_node_path(node).operator String()] = get_node_options(node, original_node);
+			auto node_path = get_node_path(node);
+			// The Skeleton3D node is not exported, only its bones, and the Godot importer will create a Skeleton3D node for us.
+			if (Object::cast_to<Skeleton3D>(node)) {
+				auto names = node_path.get_names();
+				names.write[names.size() - 1] = StringName("Skeleton3D");
+				node_path = NodePath(names, node_path.is_absolute());
+			}
+			node_options[node_path.operator String()] = get_node_options(node, original_node);
 		}
 
 		if (original_node) {
