@@ -10,13 +10,21 @@ static const HashMap<String, Vector<String>> tag_masks = {
 	{ "godotsteam_server", { "*gdn*", "*gde*" } },
 };
 
-static const HashMap<String, Vector<String>> release_file_masks = {};
+static const HashMap<String, Vector<String>> release_file_masks = {
+	{ "discord-rpc-gd", { "*RPC*" } },
+	{ "discord-sdk-gd", { "*SDK*" } },
+};
 
-static const HashMap<String, Vector<String>> release_file_exclude_masks = {};
+static const HashMap<String, Vector<String>> release_file_exclude_masks = {
+	{ "discord-rpc-gd", { "*Demo*" } },
+	{ "discord-sdk-gd", { "*Demo*" } },
+};
 
-static const HashMap<String, String> plugin_map = {
-	{ "godotsteam", "https://codeberg.org/godotsteam/godotsteam" },
-	{ "godotsteam_server", "https://codeberg.org/godotsteam/godotsteam-server" },
+static const HashMap<String, Vector<String>> plugin_map = {
+	{ "godotsteam", { "https://codeberg.org/godotsteam/godotsteam" } },
+	{ "godotsteam_server", { "https://codeberg.org/godotsteam/godotsteam-server" } },
+	{ "discord-sdk-gd", { "https://codeberg.org/GDRETools/discord-rpc-gd", "https://codeberg.org/DiscordGodot/RPC-Legacy" } },
+	{ "discord-rpc-gd", { "https://codeberg.org/GDRETools/discord-rpc-gd", "https://codeberg.org/DiscordGodot/RPC-Legacy" } },
 };
 
 } // namespace
@@ -29,7 +37,7 @@ CodebergSource::~CodebergSource() {
 	// Clean up any resources
 }
 
-const HashMap<String, String> &CodebergSource::get_plugin_repo_map() {
+const HashMap<String, Vector<String>> &CodebergSource::get_plugin_repo_map() {
 	return plugin_map;
 }
 

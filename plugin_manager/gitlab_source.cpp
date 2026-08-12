@@ -11,8 +11,8 @@ static const HashMap<String, Vector<String>> release_file_masks = {
 	{ "sg-physics-2d", { "*gdextension*" } },
 };
 static const HashMap<String, Vector<String>> release_file_exclude_masks = {};
-static const HashMap<String, String> plugin_map = {
-	{ "sg-physics-2d", "https://gitlab.com/snopek-games/sg-physics-2d" },
+static const HashMap<String, Vector<String>> plugin_map = {
+	{ "sg-physics-2d", { "https://gitlab.com/snopek-games/sg-physics-2d" } },
 };
 } // namespace
 GitLabSource::GitLabSource() {
@@ -23,7 +23,7 @@ GitLabSource::~GitLabSource() {
 	// Clean up any resources
 }
 
-const HashMap<String, String> &GitLabSource::get_plugin_repo_map() {
+const HashMap<String, Vector<String>> &GitLabSource::get_plugin_repo_map() {
 	return plugin_map;
 }
 
@@ -58,66 +58,67 @@ Error GitLabSource::recache_release_list(const String &plugin_name) {
 			}
 		}
 	}
-
-	String repo_url = get_repo_url(plugin_name);
-	if (repo_url.is_empty() || !repo_url.contains("gitlab.com")) {
-		return ERR_INVALID_PARAMETER;
-	}
-
 	double now = OS::get_singleton()->get_unix_time();
-	// Extract org and repo from URL
-	String org = repo_url.get_slice("/", 3);
-	String repo = repo_url.get_slice("/", 4);
-
-	Vector<Dictionary> releases;
-	String request_url = gitlab_release_api_url.replace("{0}", org).replace("{1}", repo);
-
-	Vector<uint8_t> response;
-	Error err = HTTPRequester::wget_sync(request_url, response, 15, 2);
-	if (err) {
-		return err;
-	}
-
-	String response_str;
-	response_str.append_utf8((const char *)response.ptr(), response.size());
-	Array response_obj = JSON::parse_string(response_str);
-	if (response_obj.is_empty()) {
-		return ERR_PARSE_ERROR;
-	}
-
-	for (int i = 0; i < response_obj.size(); i++) {
-		Dictionary release = response_obj[i];
-		releases.push_back(release);
-	}
-
 	GHReleaseCache cache;
 	cache.retrieved_time = now;
 
-	for (int i = 0; i < releases.size(); i++) {
-		Dictionary release = releases[i];
-		String tag_name = release.get("tag_name", "");
-		int64_t release_id = tag_name.hash(); // GitLab doesn't provide release IDs, so we hash the tag name
-		release["id"] = release_id;
+	Vector<String> repo_urls = get_repo_urls(plugin_name);
+	for (const String &repo_url : repo_urls) {
+		ERR_CONTINUE_MSG(repo_url.is_empty(), "Repo URL is empty");
+		ERR_CONTINUE_MSG(!repo_url.contains("gitlab.com"), "INVALID SOURCE: Repo URL does not contain gitlab.com");
 
-		Dictionary assets_obj = release.get("assets", Dictionary());
-		Array assets_arr = assets_obj.get("links", Array());
-		HashMap<int64_t, Dictionary> asset_map;
+		// Extract org and repo from URL
+		String org = repo_url.get_slice("/", 3);
+		String repo = repo_url.get_slice("/", 4);
 
-		for (int j = 0; j < assets_arr.size(); j++) {
-			Dictionary asset = assets_arr[j];
-			// Convert GitLab asset format to match GitHub's
-			asset["browser_download_url"] = asset.get("direct_asset_url", "");
-			asset["created_at"] = release.get("created_at", "");
-			asset["updated_at"] = release.get("released_at", "");
+		Vector<Dictionary> releases;
+		String request_url = gitlab_release_api_url.replace("{0}", org).replace("{1}", repo);
 
-			int64_t asset_id = int64_t(asset.get("id", 0));
-			asset_map[asset_id] = asset;
-			assets_arr[j] = asset;
+		Vector<uint8_t> response;
+		Error err = HTTPRequester::wget_sync(request_url, response, 15, 2);
+		if (err) {
+			return err;
 		}
-		release["assets"] = assets_arr;
-		cache.releases[release_id] = {};
-		cache.releases[release_id].release = release;
-		cache.releases[release_id].assets = asset_map;
+
+		String response_str;
+		response_str.append_utf8((const char *)response.ptr(), response.size());
+		Array response_obj = JSON::parse_string(response_str);
+		if (response_obj.is_empty()) {
+			return ERR_PARSE_ERROR;
+		}
+
+		for (int i = 0; i < response_obj.size(); i++) {
+			Dictionary release = response_obj[i];
+			releases.push_back(release);
+		}
+
+		for (int i = 0; i < releases.size(); i++) {
+			Dictionary release = releases[i];
+			String tag_name = release.get("tag_name", "");
+			int64_t release_id = tag_name.hash(); // GitLab doesn't provide release IDs, so we hash the tag name
+			release["id"] = release_id;
+
+			Dictionary assets_obj = release.get("assets", Dictionary());
+			Array assets_arr = assets_obj.get("links", Array());
+			HashMap<int64_t, Dictionary> asset_map;
+
+			for (int j = 0; j < assets_arr.size(); j++) {
+				Dictionary asset = assets_arr[j];
+				// Convert GitLab asset format to match GitHub's
+				asset["browser_download_url"] = asset.get("direct_asset_url", "");
+				asset["created_at"] = release.get("created_at", "");
+				asset["updated_at"] = release.get("released_at", "");
+
+				int64_t asset_id = int64_t(asset.get("id", 0));
+				asset_map[asset_id] = asset;
+				assets_arr[j] = asset;
+			}
+			release["assets"] = assets_arr;
+			release["repository_url"] = repo_url;
+			cache.releases[release_id] = {};
+			cache.releases[release_id].release = release;
+			cache.releases[release_id].assets = asset_map;
+		}
 	}
 
 	{

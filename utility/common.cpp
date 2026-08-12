@@ -12,6 +12,7 @@
 #include "core/object/class_db.h"
 #include "modules/regex/regex.h"
 #include "modules/zip/zip_reader.h"
+#include "utility/gdre_logger.h"
 #include "utility/task_manager.h"
 
 namespace {
@@ -392,7 +393,12 @@ Error gdre::unzip_file_to_dir(const String &zip_path, const String &output_dir) 
 	auto files = zip->get_files();
 	for (int i = 0; i < files.size(); i++) {
 		auto file = files[i];
+		int errors_before = GDRELogger::get_thread_error_count();
 		auto data = zip->read_file(file, true);
+		int errors_after = GDRELogger::get_thread_error_count();
+		if (errors_after > errors_before) {
+			ERR_FAIL_V_MSG(ERR_FILE_CANT_READ, vformat("Error reading file %s in %s", file, zip_path));
+		}
 		if (data.size() == 0) {
 			continue;
 		}

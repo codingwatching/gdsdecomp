@@ -237,6 +237,8 @@ PluginVersion PluginManager::get_plugin_info(const String &plugin_name, const Ve
 					return plugin_version;
 				}
 			}
+		} else {
+			ERR_FAIL_V_MSG(found_version, "Could not find live release info for plugin " + plugin_name + ", version: " + found_version.release_info.version + ", download url: " + found_version.release_info.download_url);
 		}
 	}
 	Error err = OK;
