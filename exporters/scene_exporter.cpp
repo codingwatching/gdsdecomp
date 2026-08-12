@@ -3742,17 +3742,11 @@ Error _create_packed_scene_from_animation_library(const String &p_original_path,
 	if (animation_library_name.is_empty()) {
 		animation_library_name = p_original_path.get_file().get_basename();
 	}
-	root->set_name("root_" + animation_library_name);
-	Node3D *armature = memnew(Node3D);
-	armature->set_name(animation_library_name);
-	root->add_child(armature);
-	armature->set_owner(root);
+	root->set_name(animation_library_name);
+	Node3D *armature = nullptr;
 	std::function<Node *(const NodePath &, bool)> ensure_node = [&](const NodePath &node_path, bool is_skeleton) -> Node * {
 		const String node_path_to = node_path.get_concatenated_names();
 		Node *node = root->get_node_or_null(node_path_to);
-		if (!node && node_path.get_name(0).is_node_unique_name()) {
-			node = armature->get_node_or_null(node_path_to);
-		}
 		if (!node) {
 			NodePath parent_path = NodePath(node_path.get_names().slice(0, node_path.get_name_count() - 1), node_path.is_absolute());
 			StringName node_name = node_path.get_name(node_path.get_name_count() - 1);
@@ -3765,6 +3759,13 @@ Error _create_packed_scene_from_animation_library(const String &p_original_path,
 			}
 			Node *parent;
 			if (node_name.is_node_unique_name()) {
+				if (!armature) {
+					root->set_name("root_" + animation_library_name);
+					armature = memnew(Node3D);
+					armature->set_name(animation_library_name);
+					root->add_child(armature);
+					armature->set_owner(root);
+				}
 				parent = armature;
 			} else if (node_path.get_name_count() == 1 || (node_path.get_name_count() == 2 && node_path.get_name(0) == ".")) {
 				parent = root;
@@ -4133,6 +4134,7 @@ struct BatchExportToken : public TaskRunnerStruct {
 					err = create_packed_scene_from_mesh(resource, scene);
 				} else if (is_animation_library) {
 					err = create_packed_scene_from_animation_library(resource, scene);
+					instance.force_export_multi_root = true;
 				} else if (is_mesh_library) {
 					err = create_packed_scene_from_mesh_library(resource, scene);
 				} else {
