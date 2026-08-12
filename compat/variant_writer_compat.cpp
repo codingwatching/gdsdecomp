@@ -251,6 +251,13 @@ Error VariantParserCompat::parse_value(VariantParser::Token &token, Variant &r_v
 			}
 
 			String type = token.value;
+			// If the type is `GDScript`, use `FakeGDScript` instead to prevent script injection
+			if (type == "GDScript") {
+				type = "FakeGDScript";
+			} else if (type == "CSharpScript") { // Godot technically can't execute inline C# scripts, but just in case...
+				type = "FakeCSharpScript";
+			}
+
 			// TODO: Need to make ParserCompat take in a ver_major so we can make use of the converters; as it stands, this rarely ever is needed
 			// hacks for v3 input_event
 			bool v3_input_key_hacks = InputEventConverterCompat::handles_type_static(type, 3);
