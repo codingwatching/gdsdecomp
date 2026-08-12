@@ -3806,14 +3806,14 @@ Error _create_packed_scene_from_animation_library(const String &p_original_path,
 				if (bone_idx != 0) {
 					skeleton->set_bone_parent(bone_idx, 0);
 				}
+				ERR_CONTINUE_MSG(!node_path_to_bone_infos.has(node_name), "No bone infos found for skeleton " + node_name);
+				HashMap<StringName, BoneInfo> &bone_infos = node_path_to_bone_infos[node_name];
+				BoneInfo &bone_info = bone_infos[bone_name];
+				Transform3D rest_transform = Transform3D(Basis(bone_info.rotation).scaled(bone_info.scale), bone_info.position);
+				skeleton->set_bone_rest(bone_idx, rest_transform);
+				skeleton->set_bone_pose(bone_idx, rest_transform);
 			}
 			skeleton_path_to_skeleton.insert(node_name, skeleton);
-
-			ERR_CONTINUE_MSG(!node_path_to_bone_infos.has(node_name), "No bone infos found for skeleton " + node_name);
-			HashMap<StringName, BoneInfo> &bone_infos = node_path_to_bone_infos[node_name];
-			BoneInfo &bone_info = bone_infos[bone_name];
-			Transform3D rest_transform = Transform3D(Basis(bone_info.rotation).scaled(bone_info.scale), bone_info.position);
-			skeleton->set_bone_rest(bone_idx, rest_transform);
 		}
 	}
 
