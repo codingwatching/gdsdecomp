@@ -7,6 +7,7 @@
 #include "core/error/error_macros.h"
 #include "core/object/class_db.h"
 #include "core/string/print_string.h"
+#include "core/version_generated.gen.h"
 #include "exporters/export_report.h"
 #include "exporters/gdextension_exporter.h"
 #include "exporters/gdscript_exporter.h"
@@ -864,7 +865,6 @@ void ImportExporter::recreate_uid_file(const String &src_path, bool is_import, c
 	}
 }
 
-namespace {
 struct ProcessRunnerStruct : public TaskRunnerStruct {
 	String command;
 	Vector<String> arguments;
@@ -875,6 +875,7 @@ struct ProcessRunnerStruct : public TaskRunnerStruct {
 	Ref<FileAccess> fa_stdout;
 	Ref<FileAccess> fa_stderr;
 	String output;
+	TaskManager::TaskManagerID task_id = -1;
 
 	ProcessRunnerStruct() {
 	}
@@ -963,7 +964,6 @@ struct ProcessRunnerStruct : public TaskRunnerStruct {
 		}
 	}
 };
-} //namespace
 
 bool detect_uses_prebuilt_steam_template() {
 	String glob = DirAccess::dir_exists_absolute("res://addons") ? "res://addons/*" : "res://Addons/*";
@@ -976,6 +976,67 @@ bool detect_uses_prebuilt_steam_template() {
 	}
 
 	return GDRESettings::get_singleton()->detected_godotsteam_usage();
+}
+
+String ImportExporter::get_csharp_project_path() const {
+	return output_dir.path_join(GDRESettings::get_singleton()->get_project_dotnet_assembly_name() + ".csproj");
+}
+
+Error ImportExporter::decompile_csharp_scripts(const Vector<String> &cs_files, const HashSet<String> &files_to_export_set) {
+	Error err = ERR_UNAVAILABLE;
+	if (get_settings()->project_requires_dotnet_assembly() && (cs_files.size() > 0 || GDRESettings::get_singleton()->has_loaded_dotnet_assembly())) {
+		report->mono_detected = true;
+		Vector<String> exclude_files;
+		for (int i = 0; i < cs_files.size(); i++) {
+			if (!files_to_export_set.has(cs_files[i])) {
+				exclude_files.push_back(cs_files[i]);
+			}
+		}
+		if (exclude_files.size() == cs_files.size() && !cs_files.is_empty()) {
+			// nothing to do
+		} else if (GDRESettings::get_singleton()->has_loaded_dotnet_assembly()) {
+			auto decompiler = GDRESettings::get_singleton()->get_dotnet_decompiler();
+
+			err = decompiler->decompile_module(get_csharp_project_path(), exclude_files);
+			if (err != OK) {
+				if (err == ERR_SKIP) {
+					return ERR_SKIP;
+				}
+				report->failed_scripts.append_array(cs_files);
+			} else {
+				report->custom_version_detected = decompiler->is_custom_version_detected();
+				auto failed = decompiler->get_files_not_present_in_file_map();
+				for (int i = 0; i < cs_files.size(); i++) {
+					if (!failed.has(cs_files[i])) {
+						report->decompiled_scripts.push_back(cs_files[i]);
+					}
+				}
+				report->failed_scripts.append_array(failed);
+			}
+		} else {
+			report->failed_scripts.append_array(cs_files);
+		}
+	}
+	return err;
+}
+
+Error ImportExporter::compile_csharp_scripts() {
+	String csproj_path = get_csharp_project_path();
+	if (!FileAccess::exists(csproj_path)) {
+		return ERR_FILE_NOT_FOUND;
+	}
+	if (get_ver_major() < GODOT_VERSION_MAJOR) {
+		return ERR_UNAVAILABLE;
+	}
+	int ret_code;
+	if (OS::get_singleton()->execute("dotnet", { "--version" }, nullptr, &ret_code) == OK && ret_code == 0) {
+		String solution_path = csproj_path.get_basename() + ".sln";
+		process_runner = std::make_shared<ProcessRunnerStruct>("dotnet", Vector<String>({ "build", solution_path, "--property", "WarningLevel=0" }));
+		process_runner->task_id = TaskManager::get_singleton()->add_task(process_runner, nullptr, "Compiling C# project...", -1, true, true);
+	} else {
+		return ERR_UNAVAILABLE;
+	}
+	return OK;
 }
 
 // export all the imported resources
@@ -1009,15 +1070,12 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 	report->uses_double_precision = GDRESettings::get_singleton()->requires_double_precision();
 	// *** Detect steam
 	report->godotsteam_detected = detect_uses_prebuilt_steam_template();
-	std::shared_ptr<ProcessRunnerStruct> process_runner;
-	TaskManager::TaskManagerID process_runner_task_id = -1;
 	auto check_process_done = [&](bool p_cancelled = false) {
-		if (process_runner_task_id != -1) {
-			if (p_cancelled && process_runner && !process_runner->is_cancelled) {
+		if (process_runner) {
+			if (p_cancelled && !process_runner->is_cancelled) {
 				process_runner->cancel();
 			}
-			Error err = TaskManager::get_singleton()->wait_for_task_completion(process_runner_task_id);
-			process_runner_task_id = -1;
+			Error err = TaskManager::get_singleton()->wait_for_task_completion(process_runner->task_id);
 			process_runner = nullptr;
 			// err != OK means cancelled or timed out
 			return err != OK;
@@ -1040,57 +1098,37 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 		if (!resource_compat_loader_was_available) {
 			ResourceCompatLoader::unmake_globally_available();
 		}
-		check_process_done(cancelled);
+		check_process_done();
 	};
 
-	// check if the pack has .cs files
-	auto cs_files = GDRESettings::get_singleton()->get_file_list({ "*.cs" });
-	if (get_settings()->project_requires_dotnet_assembly() && (cs_files.size() > 0 || GDRESettings::get_singleton()->has_loaded_dotnet_assembly())) {
-		report->mono_detected = true;
-		Vector<String> exclude_files;
-		for (int i = 0; i < cs_files.size(); i++) {
-			if (!files_to_export_set.has(cs_files[i])) {
-				exclude_files.push_back(cs_files[i]);
-			}
-		}
-		if (exclude_files.size() == cs_files.size() && !cs_files.is_empty()) {
-			// nothing to do
-		} else if (GDRESettings::get_singleton()->has_loaded_dotnet_assembly()) {
-			auto decompiler = GDRESettings::get_singleton()->get_dotnet_decompiler();
-
-			String csproj_path = output_dir.path_join(GDRESettings::get_singleton()->get_project_dotnet_assembly_name() + ".csproj");
-			err = decompiler->decompile_module(csproj_path, exclude_files);
-			if (err != OK) {
-				if (err == ERR_SKIP) {
-					reset_before_return(true);
-					return ERR_SKIP;
-				}
+	// true == should exit
+	auto decompile_and_compile_csharp_scripts = [&]() -> bool {
+		auto cs_files = GDRESettings::get_singleton()->get_file_list({ "*.cs" });
+		if (Error csharp_err = decompile_csharp_scripts(cs_files, files_to_export_set); csharp_err != OK) {
+			if (csharp_err == ERR_SKIP) {
+				reset_before_return(true);
+				return true;
+			} else if (csharp_err != ERR_UNAVAILABLE) {
 				ERR_PRINT("Failed to decompile C# scripts!");
-				report->failed_scripts.append_array(cs_files);
-			} else {
-				report->custom_version_detected = decompiler->is_custom_version_detected();
-				// compile the project to prevent editor errors
-				if (GDREConfig::get_singleton()->get_setting("CSharp/compile_after_decompile", false)) {
-					int ret_code;
-					if (get_ver_major() >= 4 && OS::get_singleton()->execute("dotnet", { "--version" }, nullptr, &ret_code) == OK && ret_code == 0) {
-						String solution_path = csproj_path.get_basename() + ".sln";
-						process_runner = std::make_shared<ProcessRunnerStruct>("dotnet", Vector<String>({ "build", solution_path, "--property", "WarningLevel=0" }));
-						process_runner_task_id = TaskManager::get_singleton()->add_task(process_runner, nullptr, "Compiling C# project...", -1, true, true);
-					} else {
-						print_line("Unable to compile C# project; ensure that the project is built in the editor before making any changes.");
-					}
-				}
-				auto failed = decompiler->get_files_not_present_in_file_map();
-				for (int i = 0; i < cs_files.size(); i++) {
-					if (!failed.has(cs_files[i])) {
-						report->decompiled_scripts.push_back(cs_files[i]);
-					}
-				}
-				report->failed_scripts.append_array(failed);
 			}
-		} else {
-			report->failed_scripts.append_array(cs_files);
+			return false;
 		}
+		if (GDREConfig::get_singleton()->get_setting("CSharp/compile_after_decompile", false)) {
+			if (Error compile_err = compile_csharp_scripts(); compile_err != OK) {
+				if (compile_err == ERR_SKIP) {
+					reset_before_return(true);
+					return true;
+				}
+				ERR_PRINT("Failed to compile C# project!");
+				return false;
+			}
+		}
+		return false;
+	};
+
+	if (decompile_and_compile_csharp_scripts()) {
+		reset_before_return(true);
+		return ERR_SKIP;
 	}
 
 	Ref<EditorProgressGDDC> pr = memnew(EditorProgressGDDC("export_imports", "Exporting resources...", export_files_count, true));
@@ -1940,6 +1978,10 @@ void ImportExporter::reset_log() {
 }
 
 void ImportExporter::reset() {
+	if (process_runner) {
+		process_runner->cancel();
+	}
+	process_runner = nullptr;
 	output_dir.clear();
 	src_to_report.clear();
 	textfile_extensions.clear();

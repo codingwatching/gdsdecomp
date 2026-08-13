@@ -12,6 +12,7 @@
 class ImportExporter;
 class ExportReport;
 struct EditorProgressGDDC;
+struct ProcessRunnerStruct;
 class ImportExporterReport : public RefCounted {
 	GDCLASS(ImportExporterReport, RefCounted)
 	friend class ImportExporter;
@@ -120,6 +121,7 @@ class ImportExporter : public RefCounted {
 	HashSet<String> textfile_extensions;
 	HashSet<String> other_file_extensions;
 	HashSet<String> valid_extensions;
+	std::shared_ptr<ProcessRunnerStruct> process_runner;
 
 	// for the cache file
 	struct FileInfo {
@@ -148,6 +150,10 @@ class ImportExporter : public RefCounted {
 	};
 
 	void update_exts();
+
+	String get_csharp_project_path() const;
+	Error decompile_csharp_scripts(const Vector<String> &cs_files, const HashSet<String> &files_to_export_set);
+	Error compile_csharp_scripts();
 
 	void save_filesystem_cache(const Vector<std::shared_ptr<FileInfo>> &reports, String output_dir);
 	Vector<std::shared_ptr<FileInfo>> read_filesystem_cache(const String &p_path);
