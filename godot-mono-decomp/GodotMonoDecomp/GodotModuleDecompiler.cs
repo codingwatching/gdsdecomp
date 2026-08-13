@@ -160,7 +160,7 @@ public class GodotModuleDecompiler
 	}
 
 
-	public void AddSubProjects(string assemblyPath, DotNetCoreDepInfo depInfo, List<string> names, HashSet<string> canonicalSubDirs)
+	public void AddSubProjects(string assemblyPath, DotNetCoreDepInfo depInfo, List<string> names, HashSet<string> mainModuleSubDirs, HashSet<string> otherSubDirs)
 	{
 		foreach (var dep in depInfo.deps.Where(d => d is { Type: "project" })
 			         .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
@@ -172,6 +172,7 @@ public class GodotModuleDecompiler
 			}
 
 			names.Add(dep.Name);
+			var existingSubdirs = otherSubDirs.Where(subdir => subdir == dep.Name || Path.GetFileName(subdir) == dep.Name).ToHashSet();
 
 			var assemblynameRef = dep.AssemblyRef;
 			var supposedPath = Path.Combine(Path.GetDirectoryName(assemblyPath) ?? "", assemblynameRef.Name + ".dll");
@@ -186,8 +187,8 @@ public class GodotModuleDecompiler
 
 			if (reference is PEFile module)
 			{
-				var subdir = canonicalSubDirs.Contains(module.Name) ? "subprojects" + "/" + module.Name : module.Name;
-				while (subdir != null && canonicalSubDirs.Contains(subdir))
+				var subdir = existingSubdirs.Count == 1 ? existingSubdirs.First() : (mainModuleSubDirs.Contains(module.Name) ? "subprojects" + "/" + module.Name : module.Name);
+				while (subdir != null && mainModuleSubDirs.Contains(subdir))
 				{
 					subdir = "_" + subdir;
 				}
@@ -195,7 +196,7 @@ public class GodotModuleDecompiler
 				AdditionalModules.Add(new GodotModule(module, dep, subdir, Settings, AssemblyResolver));
 			}
 
-			AddSubProjects(assemblyPath, dep, names, canonicalSubDirs);
+			AddSubProjects(assemblyPath, dep, names, mainModuleSubDirs, otherSubDirs);
 		}
 	}
 
@@ -236,13 +237,15 @@ public class GodotModuleDecompiler
 		List<string> names = [];
 		if (Settings.CreateAdditionalProjectsForProjectReferences && MainModule.depInfo != null)
 		{
-			HashSet<string> canonicalSubDirs = GodotStuff.GetCanonicalGodotScriptPaths(MainModule.Module,
+			HashSet<string> mainModuleSubDirs = GodotStuff.GetCanonicalGodotScriptPaths(MainModule.Module,
 			 	MainModule.GetProjectDecompiler().GetTypesToDecompile(MainModule.Module), godot3xMetadata)
 				.Where(p => !string.IsNullOrEmpty(Path.GetDirectoryName(p)))
 				.Select(p => Path.GetDirectoryName(p)!)
 				.ToHashSet();
 
-			AddSubProjects(assemblyPath, MainModule.depInfo, names, canonicalSubDirs);
+			HashSet<string> otherSubDirs = this.originalProjectFiles?.Select(path => Path.GetDirectoryName(path) ?? "").Where(p => !string.IsNullOrEmpty(p) && !mainModuleSubDirs.Contains(p)).ToHashSet() ?? [];
+
+			AddSubProjects(assemblyPath, MainModule.depInfo, names, mainModuleSubDirs, otherSubDirs);
 
 		}
 
