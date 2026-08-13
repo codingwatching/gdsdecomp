@@ -105,7 +105,14 @@ TextureLoaderCompat::TextureVersionType TextureLoaderCompat::recognize(const Str
 	const String res_path = p_path;
 	Ref<FileAccess> f = FileAccess::open(res_path, FileAccess::READ, r_err);
 
-	ERR_FAIL_COND_V_MSG(*r_err != OK || f.is_null(), FORMAT_NOT_TEXTURE, "Can't open texture file " + p_path);
+	if (*r_err != OK || f.is_null()) {
+		// fail silently if the file doesn't exist
+		if (!FileAccess::exists(res_path)) {
+			*r_err = ERR_FILE_NOT_FOUND;
+			return FORMAT_NOT_TEXTURE;
+		}
+		ERR_FAIL_COND_V_MSG(*r_err != OK || f.is_null(), FORMAT_NOT_TEXTURE, "Can't open texture file " + p_path);
+	}
 
 	uint8_t header[4];
 	uint64_t got = f->get_buffer(header, 4);
