@@ -606,6 +606,10 @@ Error ImportInfoModern::_load(const String &p_path) {
 	ERR_FAIL_COND_V_MSG(err != OK, err, "Could not load " + path);
 	import_md_path = path;
 	preferred_import_path = cf->get_value("remap", "path", "");
+	// short circuit silently if the import file is marked as invalid
+	if (cf->get_value("remap", "valid", true).operator bool() == false) { // defaults to true because "valid" isn't present if it's valid
+		return ERR_INVALID_DATA;
+	}
 
 	Vector<String> dest_files;
 
