@@ -1,4 +1,5 @@
 #pragma once
+#include "core/variant/type_info.h"
 #include "exporters/resource_exporter.h"
 
 class Translation;
@@ -15,6 +16,11 @@ protected:
 	static void _bind_methods();
 
 public:
+	enum RecoveryMode {
+		MODE_DEFAULT,
+		MODE_THOROUGH,
+		MODE_ONLY_RES_STRINGS
+	};
 	static constexpr float threshold = 0.15; // TODO: put this in the project configuration
 
 	static constexpr const char *const EXPORTER_NAME = "Translation";
@@ -30,6 +36,8 @@ public:
 	virtual bool supports_nonpack_export() const override { return false; }
 	virtual String get_default_export_extension(const String &res_path) const override;
 	virtual Vector<String> get_export_extensions(const String &res_path) const override;
+	virtual void prebatch_export() override;
+	virtual void postbatch_export() override;
 
 	static TypedDictionary<String, Vector<String>> get_messages_from_translation(Ref<ImportInfo> translation_info);
 	static TypedDictionary<String, Vector<String>> get_csv_messages(const String &csv_path, Dictionary ret_info);
@@ -39,3 +47,5 @@ public:
 	static Error patch_translations(const String &output_dir, const String &csv_path, Ref<ImportInfo> translation_info, const Vector<String> &locales_to_patch, Dictionary r_file_map);
 	static Error patch_project_config(const String &output_dir, Dictionary file_map);
 };
+
+VARIANT_ENUM_CAST(TranslationExporter::RecoveryMode);
