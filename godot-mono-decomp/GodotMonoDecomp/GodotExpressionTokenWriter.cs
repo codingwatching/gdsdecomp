@@ -289,8 +289,9 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 		StartNode(objectCreateExpression);
 		WriteKeyword(ObjectCreateExpression.NewKeyword);
 		var typename = GodotStuff.CSharpTypeToGodotType(objectCreateExpression.Type.ToString());
+		var initializer = objectCreateExpression.Initializer;
 
-		bool useParenthesis = objectCreateExpression.Arguments.Any() || objectCreateExpression.Initializer is null;
+		bool useParenthesis = objectCreateExpression.Arguments.Any() || initializer is null;
 		bool isPackedArray = typename.StartsWith("Packed");
 		isDict = typename.StartsWith("Dictionary");
 		if (!(isDict && !useParenthesis))
@@ -312,7 +313,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 		{
 			LPar();
 		}
-		objectCreateExpression.Initializer.AcceptVisitor(this);
+		initializer?.AcceptVisitor(this);
 		isDict = false;
 		if (!useParenthesis && isPackedArray)
 		{
@@ -323,7 +324,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 
 	public override void VisitInvocationExpression(InvocationExpression invocationExpression)
 	{
-		if (invocationExpression.GetSymbol().Name == "Color8")
+		if (string.Equals(invocationExpression.GetSymbol()?.Name, "Color8", StringComparison.Ordinal))
 		{
 			int[] args = invocationExpression.Arguments.Select(a => {
 				if (a is PrimitiveExpression pe && pe.Value is int i)
@@ -347,7 +348,11 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 	{
 		StartNode(arrayCreateExpression);
 		// WriteKeyword(ArrayCreateExpression.NewKeywordRole);
-		var typename = GodotStuff.CSharpTypeToGodotType(arrayCreateExpression.Type.GetSymbol().Name + "[]");
+		var arrayType = arrayCreateExpression.Type;
+		var arrayElementName = arrayType != null
+			? arrayType.GetSymbol()?.Name ?? arrayType.ToString()
+			: string.Empty;
+		var typename = GodotStuff.CSharpTypeToGodotType(arrayElementName + "[]");
 		// arrayCreateExpression.Type.AcceptVisitor(this);
 		// if (arrayCreateExpression.Arguments.Count > 0)
 		// {
@@ -369,7 +374,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 			// Dictionary expressions are written like this: { key: value, key2: value2 }
 			isDict = true;
 		}
-		arrayCreateExpression.Initializer.AcceptVisitor(this);
+		arrayCreateExpression.Initializer?.AcceptVisitor(this);
 		isDict = false;
 		if (typename.StartsWith("Packed"))
 		{
@@ -460,8 +465,8 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 			last = node;
 			node.AcceptVisitor(this);
 		}
-		if (last != null)
-			Comma(last.NextSibling);
+		if (last?.NextSibling is AstNode nextNode)
+			Comma(nextNode);
 		if (wrap)
 			NewLine();
 		else
