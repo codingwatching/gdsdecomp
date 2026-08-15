@@ -2,6 +2,7 @@
 
 #include "compat/optimized_translation_extractor.h"
 #include "compat/resource_loader_compat.h"
+#include "core/string/print_string.h"
 #include "core/templates/hash_set.h"
 #include "exporters/export_report.h"
 #include "utility/common.h"
@@ -159,7 +160,7 @@ struct KeyWorker {
 		return ret;
 	}
 
-	bool more_thorough_recovery = false;
+	TranslationExporter::RecoveryMode recovery_mode = TranslationExporter::RecoveryMode::MODE_DEFAULT;
 
 	enum class Stage {
 		RESOURCE_STRINGS_AND_MESSAGES,
@@ -256,7 +257,7 @@ struct KeyWorker {
 		gd_format_regex.instantiate();
 		gd_format_regex->compile(GD_FORMAT_REGEX);
 
-		more_thorough_recovery = GDREConfig::get_singleton()->get_setting("Exporter/Translation/more_thorough_recovery", false);
+		recovery_mode = GDREConfig::get_singleton()->get_setting("Exporter/Translation/more_thorough_recovery", TranslationExporter::RecoveryMode::MODE_DEFAULT);
 
 		non_blank_keys = 0;
 		for (int64_t i = 0; i < default_messages.size(); i++) {
@@ -265,6 +266,10 @@ struct KeyWorker {
 			}
 		}
 		set_step_limits();
+	}
+
+	bool in_thorough_mode() const {
+		return recovery_mode == TranslationExporter::MODE_THOROUGH;
 	}
 
 	String sanitize_key(const String &s) {
@@ -845,6 +850,9 @@ struct KeyWorker {
 	}
 
 	void end_stage() {
+		if (current_stage.is_empty()) {
+			return;
+		}
 		HashSet<String> hs;
 		for (const auto &E : current_stage_keys_found) {
 			hs.insert(E);
@@ -852,6 +860,7 @@ struct KeyWorker {
 		stage_keys_found.insert(current_stage, hs);
 		stage_time_and_keys_total.insert(current_stage, { OS::get_singleton()->get_ticks_msec(), current_stage_keys_found.size() });
 		current_stage_keys_found.clear();
+		current_stage.clear();
 	}
 
 	void skip_stage(const String &stage_name) {
@@ -1081,6 +1090,7 @@ struct KeyWorker {
 	// Rise of the Golden Idol specific hack
 	void dynamic_rgi_hack() {
 		if (GDRESettings::get_singleton()->get_game_name() == "The Rise of the Golden Idol") {
+			current_stage = "Rise of the Golden Idol Hack";
 			constexpr const char *ITEM_TR_SEP = "|";
 			constexpr const char *ITEM_TR = "DB_%d";
 			constexpr const char *ITEM_TR_PREFIX_ARC = "ARC";
@@ -1115,7 +1125,6 @@ struct KeyWorker {
 					try_key(get_composite_arc_translation_id(arc_id, item_id));
 				}
 			}
-			current_stage = "Rise of the Golden Idol Hack";
 			end_stage();
 		}
 	}
@@ -1166,6 +1175,37 @@ struct KeyWorker {
 		return err;
 	}
 
+	template <typename M, class VE>
+	Error run_intermediary_stage(M p_multi_method, Vector<VE> p_userdata, const String &intermediary_stage_name, bool multi = true) {
+		// assert that M is a method belonging to this class
+		auto desc = "TranslationExporter::find_missing_keys::" + intermediary_stage_name;
+		static_assert(std::is_member_function_pointer<M>::value, "M must be a method of this class");
+		int tasks = 1;
+		if (multi) {
+			tasks = -1;
+		}
+		if (p_userdata.is_empty()) {
+			WARN_PRINT(vformat("No userdata to run %s with!", intermediary_stage_name));
+			skip_stage(intermediary_stage_name);
+			return OK;
+		}
+		working_set_size = p_userdata.size();
+		working_set_size_str = String::num_uint64(working_set_size);
+		// set_most_popular_punctuation();
+		String label = vformat("Key search: %s (%s)", current_stage, intermediary_stage_name);
+
+		Error err = TaskManager::get_singleton()->run_multithreaded_group_task(
+				this,
+				p_multi_method,
+				p_userdata.ptrw(),
+				p_userdata.size(),
+				&KeyWorker::get_step_desc<VE>,
+				desc,
+				label, true, tasks, true);
+
+		return err;
+	}
+
 	uint64_t get_last_stage_keys_found() {
 		ERR_FAIL_COND_V(!stage_time_and_keys_total.has(current_stage), 0);
 		return stage_time_and_keys_total[current_stage].second;
@@ -1195,7 +1235,15 @@ struct KeyWorker {
 
 	void stage_1(uint32_t i, String *input_resource_strings) {
 		const String &key = input_resource_strings[i];
+		if (key.is_empty()) {
+			return;
+		}
 		try_key(key) || try_key(key.to_upper()) || try_key(key.to_lower());
+	}
+
+	void stage_1_intermediary(uint32_t i, String *input_resource_strings) {
+		const String &key = input_resource_strings[i];
+		stage_1_intermediary_try_key(key) || try_key(key.to_upper()) || try_key(key.to_lower());
 	}
 
 	int64_t pop_keys(bool quiet = false) {
@@ -1352,19 +1400,30 @@ struct KeyWorker {
 			return pop_keys(); \
 		}                      \
 	}
+#define RET_ON_FOUND_ALL()                                              \
+	{                                                                   \
+		if (all_keys_present()) {                                       \
+			end_stage();                                                \
+			return pop_and_print_report(time_to_load_resource_strings); \
+		}                                                               \
+	}
 
-	void stage_1_try_key(const String &key) {
+	bool stage_1_intermediary_try_key(const String &key) {
 		if (key.is_empty()) {
-			return;
+			return false;
 		}
 		if (try_key(key)) {
+			MutexLock lock(mutex);
 			resource_strings.insert(key);
-			return;
+			return true;
 		}
 		String sanitized_key = sanitize_string(key);
 		if (!sanitized_key.is_empty() && try_key(sanitized_key)) {
+			MutexLock lock(mutex);
 			resource_strings.insert(sanitized_key);
+			return true;
 		}
+		return false;
 	}
 
 	template <typename T>
@@ -1763,7 +1822,7 @@ struct KeyWorker {
 					all_non_placeholder_strings_are_valid = false;
 				}
 			}
-			if (more_thorough_recovery && splits.size() > 1 && all_non_placeholder_strings_are_valid) {
+			if (in_thorough_mode() && splits.size() > 1 && all_non_placeholder_strings_are_valid) {
 				auto &first = splits[0];
 				auto &last = splits[splits.size() - 1];
 				if (!should_filter(first) && !common_prefixes.has(first) && first.length() > 1) {
@@ -1781,7 +1840,7 @@ struct KeyWorker {
 	}
 
 	void set_step_limits() {
-		if (more_thorough_recovery) {
+		if (in_thorough_mode()) {
 			for (auto &step : step_to_max_filt_res_strings) {
 				step.value = THOROUGH_MAX;
 			}
@@ -1808,7 +1867,7 @@ struct KeyWorker {
 		if (all_keys_present()) {
 			return false;
 		}
-		if (!more_thorough_recovery && step >= START_OF_LONG_RUNNING_STAGES && get_found_key_ratio()) {
+		if (!in_thorough_mode() && step >= START_OF_LONG_RUNNING_STAGES && get_found_key_ratio()) {
 			return false;
 		}
 		return !step_too_long(step);
@@ -1821,7 +1880,6 @@ struct KeyWorker {
 		test_format_placeholder_splitting();
 #endif
 
-		uint64_t missing_keys = 0;
 		auto progress = EditorProgressGDDC::create(nullptr, "TranslationExporter - " + path, "Exporting translation " + path + "...", -1, true);
 		start_time = OS::get_singleton()->get_ticks_msec();
 
@@ -1849,30 +1907,37 @@ struct KeyWorker {
 		}
 		GDRESettings::get_singleton()->get_resource_strings(resource_strings);
 		DEBUG_SORT_INPUT(resource_strings);
-		Error err = run_stage(&KeyWorker::stage_1, gdre::hashset_to_vector(resource_strings), "Resource strings and messages", false, true);
+		Error err = run_stage(&KeyWorker::stage_1, gdre::hashset_to_vector(resource_strings), "Resource strings and messages", true, true);
 		if (err != OK) {
 			return pop_keys();
 		}
+		RET_ON_FOUND_ALL();
 
 		// Stage 1.25: try the messages themselves; normalize the key characteristics first so that the transformations are consistent
 		normalize_key_characteristics(0.99);
 
 		if (should_run_step(Stage::RESOURCE_STRINGS_AND_MESSAGES)) {
-			for (const Vector<String> &messages : translation_messages) {
-				for (const String &message : messages) {
-					stage_1_try_key(message);
-				}
+			Vector<String> messages;
+			for (const Vector<String> &n : translation_messages) {
+				messages.append_array(n);
 			}
+			err = run_intermediary_stage(&KeyWorker::stage_1_intermediary, messages, "Translation Messages");
+			RET_ON_ERROR(err);
 		}
+		RET_ON_FOUND_ALL();
 
 		// try the basenames of all files in the pack, as filenames can correspond to keys
 		if (should_run_step(Stage::RESOURCE_STRINGS_AND_MESSAGES)) {
 			auto file_list = GDRESettings::get_singleton()->get_file_info_list();
+			Vector<String> basenames;
 			for (auto &file : file_list) {
 				String key = file->get_path().get_file().get_basename();
-				stage_1_try_key(key);
+				basenames.push_back(key);
 			}
+			err = run_intermediary_stage(&KeyWorker::stage_1_intermediary, basenames, "Basenames");
+			RET_ON_ERROR(err);
 		}
+		RET_ON_FOUND_ALL();
 
 		// Stage 1.5: Previous keys found
 		if (should_run_step(Stage::RESOURCE_STRINGS_AND_MESSAGES)) {
@@ -1885,6 +1950,10 @@ struct KeyWorker {
 			done_setting_key_stats = false;
 		}
 		end_stage();
+		RET_ON_FOUND_ALL();
+		if (recovery_mode == TranslationExporter::MODE_ONLY_RES_STRINGS) {
+			return pop_and_print_report(time_to_load_resource_strings);
+		}
 		common_to_all_prefix = find_common_prefix(key_to_message);
 		has_common_prefix = !common_to_all_prefix.is_empty();
 
@@ -1915,17 +1984,20 @@ struct KeyWorker {
 		} else {
 			skip_stage("Partials");
 		}
+		RET_ON_FOUND_ALL();
 
 		// Stage 2.75: dynamic_rgi_hack
 		if (should_run_step(Stage::DYNAMIC_RGI_HACK)) {
 			dynamic_rgi_hack();
 		}
+		RET_ON_FOUND_ALL();
 
 		// filter resource strings before subsequent stages, as they can be very large
 		if (should_run_step(Stage::NUM_SUFFIXES)) {
 			normalize_key_characteristics();
 			filter_resource_strings();
 		}
+		RET_ON_FOUND_ALL();
 
 		// Stage 3: Try to find keys with numeric suffixes
 		if (should_run_step(Stage::NUM_SUFFIXES)) {
@@ -1936,6 +2008,8 @@ struct KeyWorker {
 		} else {
 			skip_stage("Numeric suffixes");
 		}
+		RET_ON_FOUND_ALL();
+
 		// Stage 3.5: Try to find keys with numeric suffixes (keys only, with max num 1000)
 		if (should_run_step(Stage::NUM_SUFFIXES_KEYS_ONLY)) {
 			// try the same thing but with just the already found keys, and set the max num to try to 1000
@@ -1945,6 +2019,7 @@ struct KeyWorker {
 		} else {
 			skip_stage("Numeric suffixes (keys only)");
 		}
+		RET_ON_FOUND_ALL();
 
 		// looking for format strings; eg "${foo}_DESC"
 
@@ -2030,6 +2105,7 @@ struct KeyWorker {
 			}
 			skip_stage("Common prefix/suffix");
 		}
+		RET_ON_FOUND_ALL();
 
 		// Stage 5: Combine resource strings with detected prefixes and suffixes
 		// If we're still missing keys and no keys have spaces, we try combining every string with every other string
@@ -2082,6 +2158,7 @@ struct KeyWorker {
 		} else {
 			skip_stage("Detected prefix/suffix");
 		}
+		RET_ON_FOUND_ALL();
 
 		if (should_run_step(Stage::COMMON_PREFIX_SUFFIX_COMBINED)) {
 			common_prefixes = prefixes_for_COMMON_PREFIX_SUFFIX_COMBINED;
@@ -2094,6 +2171,7 @@ struct KeyWorker {
 		} else {
 			skip_stage("Common prefix/suffix (combined)");
 		}
+		RET_ON_FOUND_ALL();
 
 		if (should_run_step(Stage::DETECTED_PREFIX_SUFFIX_COMBINED)) {
 			auto check_prefixes = prefixes_for_DETECTED_PREFIX_SUFFIX_COMBINED;
@@ -2133,6 +2211,7 @@ struct KeyWorker {
 		} else {
 			skip_stage("Detected prefix/suffix (combined)");
 		}
+		RET_ON_FOUND_ALL();
 
 		do_combine_all = do_combine_all && !skipped_last_stage() && key_to_message.size() != default_messages.size();
 		if (do_combine_all) {
@@ -2145,8 +2224,19 @@ struct KeyWorker {
 		} else {
 			skip_stage("Combine all");
 		}
+		return pop_and_print_report(time_to_load_resource_strings);
+	}
 
-		missing_keys = pop_keys();
+	int64_t pop_and_print_report(int64_t time_to_load_resource_strings) {
+		int64_t missing_keys = pop_keys();
+#ifdef DEBUG_ENABLED
+		bool should_print_report = true;
+#else
+		bool should_print_report = is_print_verbose_enabled();
+#endif
+		if (!should_print_report) {
+			return missing_keys;
+		}
 		// print out the times taken
 		bl_debug("Key guessing took " + itos(OS::get_singleton()->get_ticks_msec() - start_time) + "ms");
 		int i = 0;
@@ -2504,6 +2594,13 @@ Vector<String> TranslationExporter::get_export_extensions(const String &res_path
 	return { "csv" };
 }
 
+void TranslationExporter::prebatch_export() {
+}
+
+void TranslationExporter::postbatch_export() {
+	all_keys_found.clear();
+}
+
 Error TranslationExporter::parse_csv(const String &csv_path, HashMap<String, Vector<String>> &new_messages, int64_t &missing_keys, bool &has_non_empty_lines_without_key, int64_t &non_empty_line_count) {
 	Ref<FileAccess> f = FileAccess::open(csv_path, FileAccess::READ);
 	ERR_FAIL_COND_V_MSG(f.is_null(), ERR_CANT_ACQUIRE_RESOURCE, "Could not open file " + csv_path);
@@ -2784,6 +2881,10 @@ TypedDictionary<String, Vector<String>> TranslationExporter::get_csv_messages(co
 }
 
 void TranslationExporter::_bind_methods() {
+	BIND_ENUM_CONSTANT(MODE_DEFAULT);
+	BIND_ENUM_CONSTANT(MODE_THOROUGH);
+	BIND_ENUM_CONSTANT(MODE_ONLY_RES_STRINGS);
+
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("patch_translations", "output_dir", "csv_path", "translation_info", "locales_to_patch", "file_map"), &TranslationExporter::patch_translations);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("patch_project_config", "output_dir", "file_map"), &TranslationExporter::patch_project_config);
 	ClassDB::bind_static_method(get_class_static(), D_METHOD("get_messages_from_translation", "translation_info"), &TranslationExporter::get_messages_from_translation);

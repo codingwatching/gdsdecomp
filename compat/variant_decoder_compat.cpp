@@ -4356,6 +4356,8 @@ Error VariantDecoderCompat::encode_variant_4(const Variant &p_variant, uint8_t *
 
 	uint32_t header = p_variant.get_type();
 
+	const int real_t_size = p_real_t_is_double ? sizeof(double) : sizeof(float);
+
 	switch (p_variant.get_type()) {
 		case Variant::INT: {
 			int64_t val = p_variant;
@@ -4530,10 +4532,10 @@ Error VariantDecoderCompat::encode_variant_4(const Variant &p_variant, uint8_t *
 			if (buf) {
 				Vector2 v2 = p_variant;
 				_encode_real(v2.x, &buf[0], p_real_t_is_double);
-				_encode_real(v2.y, &buf[sizeof(real_t)], p_real_t_is_double);
+				_encode_real(v2.y, &buf[real_t_size], p_real_t_is_double);
 			}
 
-			r_len += 2 * sizeof(real_t);
+			r_len += 2 * real_t_size;
 
 		} break;
 		case Variant::VECTOR2I: {
@@ -4550,11 +4552,11 @@ Error VariantDecoderCompat::encode_variant_4(const Variant &p_variant, uint8_t *
 			if (buf) {
 				Rect2 r2 = p_variant;
 				_encode_real(r2.position.x, &buf[0], p_real_t_is_double);
-				_encode_real(r2.position.y, &buf[sizeof(real_t)], p_real_t_is_double);
-				_encode_real(r2.size.x, &buf[sizeof(real_t) * 2], p_real_t_is_double);
-				_encode_real(r2.size.y, &buf[sizeof(real_t) * 3], p_real_t_is_double);
+				_encode_real(r2.position.y, &buf[real_t_size], p_real_t_is_double);
+				_encode_real(r2.size.x, &buf[real_t_size * 2], p_real_t_is_double);
+				_encode_real(r2.size.y, &buf[real_t_size * 3], p_real_t_is_double);
 			}
-			r_len += 4 * sizeof(real_t);
+			r_len += 4 * real_t_size;
 
 		} break;
 		case Variant::RECT2I: {
@@ -4572,11 +4574,11 @@ Error VariantDecoderCompat::encode_variant_4(const Variant &p_variant, uint8_t *
 			if (buf) {
 				Vector3 v3 = p_variant;
 				_encode_real(v3.x, &buf[0], p_real_t_is_double);
-				_encode_real(v3.y, &buf[sizeof(real_t)], p_real_t_is_double);
-				_encode_real(v3.z, &buf[sizeof(real_t) * 2], p_real_t_is_double);
+				_encode_real(v3.y, &buf[real_t_size], p_real_t_is_double);
+				_encode_real(v3.z, &buf[real_t_size * 2], p_real_t_is_double);
 			}
 
-			r_len += 3 * sizeof(real_t);
+			r_len += 3 * real_t_size;
 
 		} break;
 		case Variant::VECTOR3I: {
@@ -4595,24 +4597,24 @@ Error VariantDecoderCompat::encode_variant_4(const Variant &p_variant, uint8_t *
 				Transform2D val = p_variant;
 				for (int i = 0; i < 3; i++) {
 					for (int j = 0; j < 2; j++) {
-						memcpy(&buf[(i * 2 + j) * sizeof(real_t)], &val.columns[i][j], sizeof(real_t));
+						memcpy(&buf[(i * 2 + j) * real_t_size], &val.columns[i][j], real_t_size);
 					}
 				}
 			}
 
-			r_len += 6 * sizeof(real_t);
+			r_len += 6 * real_t_size;
 
 		} break;
 		case Variant::VECTOR4: {
 			if (buf) {
 				Vector4 v4 = p_variant;
 				_encode_real(v4.x, &buf[0], p_real_t_is_double);
-				_encode_real(v4.y, &buf[sizeof(real_t)], p_real_t_is_double);
-				_encode_real(v4.z, &buf[sizeof(real_t) * 2], p_real_t_is_double);
-				_encode_real(v4.w, &buf[sizeof(real_t) * 3], p_real_t_is_double);
+				_encode_real(v4.y, &buf[real_t_size], p_real_t_is_double);
+				_encode_real(v4.z, &buf[real_t_size * 2], p_real_t_is_double);
+				_encode_real(v4.w, &buf[real_t_size * 3], p_real_t_is_double);
 			}
 
-			r_len += 4 * sizeof(real_t);
+			r_len += 4 * real_t_size;
 
 		} break;
 		case Variant::VECTOR4I: {
@@ -4631,38 +4633,38 @@ Error VariantDecoderCompat::encode_variant_4(const Variant &p_variant, uint8_t *
 			if (buf) {
 				Plane p = p_variant;
 				_encode_real(p.normal.x, &buf[0], p_real_t_is_double);
-				_encode_real(p.normal.y, &buf[sizeof(real_t)], p_real_t_is_double);
-				_encode_real(p.normal.z, &buf[sizeof(real_t) * 2], p_real_t_is_double);
-				_encode_real(p.d, &buf[sizeof(real_t) * 3], p_real_t_is_double);
+				_encode_real(p.normal.y, &buf[real_t_size], p_real_t_is_double);
+				_encode_real(p.normal.z, &buf[real_t_size * 2], p_real_t_is_double);
+				_encode_real(p.d, &buf[real_t_size * 3], p_real_t_is_double);
 			}
 
-			r_len += 4 * sizeof(real_t);
+			r_len += 4 * real_t_size;
 
 		} break;
 		case Variant::QUATERNION: {
 			if (buf) {
 				Quaternion q = p_variant;
 				_encode_real(q.x, &buf[0], p_real_t_is_double);
-				_encode_real(q.y, &buf[sizeof(real_t)], p_real_t_is_double);
-				_encode_real(q.z, &buf[sizeof(real_t) * 2], p_real_t_is_double);
-				_encode_real(q.w, &buf[sizeof(real_t) * 3], p_real_t_is_double);
+				_encode_real(q.y, &buf[real_t_size], p_real_t_is_double);
+				_encode_real(q.z, &buf[real_t_size * 2], p_real_t_is_double);
+				_encode_real(q.w, &buf[real_t_size * 3], p_real_t_is_double);
 			}
 
-			r_len += 4 * sizeof(real_t);
+			r_len += 4 * real_t_size;
 
 		} break;
 		case Variant::AABB: {
 			if (buf) {
 				AABB aabb = p_variant;
 				_encode_real(aabb.position.x, &buf[0], p_real_t_is_double);
-				_encode_real(aabb.position.y, &buf[sizeof(real_t)], p_real_t_is_double);
-				_encode_real(aabb.position.z, &buf[sizeof(real_t) * 2], p_real_t_is_double);
-				_encode_real(aabb.size.x, &buf[sizeof(real_t) * 3], p_real_t_is_double);
-				_encode_real(aabb.size.y, &buf[sizeof(real_t) * 4], p_real_t_is_double);
-				_encode_real(aabb.size.z, &buf[sizeof(real_t) * 5], p_real_t_is_double);
+				_encode_real(aabb.position.y, &buf[real_t_size], p_real_t_is_double);
+				_encode_real(aabb.position.z, &buf[real_t_size * 2], p_real_t_is_double);
+				_encode_real(aabb.size.x, &buf[real_t_size * 3], p_real_t_is_double);
+				_encode_real(aabb.size.y, &buf[real_t_size * 4], p_real_t_is_double);
+				_encode_real(aabb.size.z, &buf[real_t_size * 5], p_real_t_is_double);
 			}
 
-			r_len += 6 * sizeof(real_t);
+			r_len += 6 * real_t_size;
 
 		} break;
 		case Variant::BASIS: {
@@ -4670,12 +4672,12 @@ Error VariantDecoderCompat::encode_variant_4(const Variant &p_variant, uint8_t *
 				Basis val = p_variant;
 				for (int i = 0; i < 3; i++) {
 					for (int j = 0; j < 3; j++) {
-						memcpy(&buf[(i * 3 + j) * sizeof(real_t)], &val.rows[i][j], sizeof(real_t));
+						_encode_real(val.rows[i][j], &buf[(i * 3 + j) * real_t_size], p_real_t_is_double);
 					}
 				}
 			}
 
-			r_len += 9 * sizeof(real_t);
+			r_len += 9 * real_t_size;
 
 		} break;
 		case Variant::TRANSFORM3D: {
@@ -4683,16 +4685,16 @@ Error VariantDecoderCompat::encode_variant_4(const Variant &p_variant, uint8_t *
 				Transform3D val = p_variant;
 				for (int i = 0; i < 3; i++) {
 					for (int j = 0; j < 3; j++) {
-						memcpy(&buf[(i * 3 + j) * sizeof(real_t)], &val.basis.rows[i][j], sizeof(real_t));
+						_encode_real(val.basis.rows[i][j], &buf[(i * 3 + j) * real_t_size], p_real_t_is_double);
 					}
 				}
 
-				_encode_real(val.origin.x, &buf[sizeof(real_t) * 9], p_real_t_is_double);
-				_encode_real(val.origin.y, &buf[sizeof(real_t) * 10], p_real_t_is_double);
-				_encode_real(val.origin.z, &buf[sizeof(real_t) * 11], p_real_t_is_double);
+				_encode_real(val.origin.x, &buf[real_t_size * 9], p_real_t_is_double);
+				_encode_real(val.origin.y, &buf[real_t_size * 10], p_real_t_is_double);
+				_encode_real(val.origin.z, &buf[real_t_size * 11], p_real_t_is_double);
 			}
 
-			r_len += 12 * sizeof(real_t);
+			r_len += 12 * real_t_size;
 
 		} break;
 		case Variant::PROJECTION: {
@@ -4700,12 +4702,12 @@ Error VariantDecoderCompat::encode_variant_4(const Variant &p_variant, uint8_t *
 				Projection val = p_variant;
 				for (int i = 0; i < 4; i++) {
 					for (int j = 0; j < 4; j++) {
-						memcpy(&buf[(i * 4 + j) * sizeof(real_t)], &val.columns[i][j], sizeof(real_t));
+						_encode_real(val.columns[i][j], &buf[(i * 4 + j) * real_t_size], p_real_t_is_double);
 					}
 				}
 			}
 
-			r_len += 16 * sizeof(real_t);
+			r_len += 16 * real_t_size;
 
 		} break;
 
@@ -5030,12 +5032,12 @@ Error VariantDecoderCompat::encode_variant_4(const Variant &p_variant, uint8_t *
 					Vector2 v = data.get(i);
 
 					_encode_real(v.x, &buf[0], p_real_t_is_double);
-					_encode_real(v.y, &buf[sizeof(real_t)], p_real_t_is_double);
-					buf += sizeof(real_t) * 2;
+					_encode_real(v.y, &buf[real_t_size], p_real_t_is_double);
+					buf += real_t_size * 2;
 				}
 			}
 
-			r_len += sizeof(real_t) * 2 * len;
+			r_len += real_t_size * 2 * len;
 
 		} break;
 		case Variant::PACKED_VECTOR3_ARRAY: {
@@ -5054,13 +5056,13 @@ Error VariantDecoderCompat::encode_variant_4(const Variant &p_variant, uint8_t *
 					Vector3 v = data.get(i);
 
 					_encode_real(v.x, &buf[0], p_real_t_is_double);
-					_encode_real(v.y, &buf[sizeof(real_t)], p_real_t_is_double);
-					_encode_real(v.z, &buf[sizeof(real_t) * 2], p_real_t_is_double);
-					buf += sizeof(real_t) * 3;
+					_encode_real(v.y, &buf[real_t_size], p_real_t_is_double);
+					_encode_real(v.z, &buf[real_t_size * 2], p_real_t_is_double);
+					buf += real_t_size * 3;
 				}
 			}
 
-			r_len += sizeof(real_t) * 3 * len;
+			r_len += real_t_size * 3 * len;
 
 		} break;
 		case Variant::PACKED_COLOR_ARRAY: {
@@ -5105,14 +5107,14 @@ Error VariantDecoderCompat::encode_variant_4(const Variant &p_variant, uint8_t *
 					Vector4 v = data.get(i);
 
 					_encode_real(v.x, &buf[0], p_real_t_is_double);
-					_encode_real(v.y, &buf[sizeof(real_t)], p_real_t_is_double);
-					_encode_real(v.z, &buf[sizeof(real_t) * 2], p_real_t_is_double);
-					_encode_real(v.w, &buf[sizeof(real_t) * 3], p_real_t_is_double);
-					buf += sizeof(real_t) * 4;
+					_encode_real(v.y, &buf[real_t_size], p_real_t_is_double);
+					_encode_real(v.z, &buf[real_t_size * 2], p_real_t_is_double);
+					_encode_real(v.w, &buf[real_t_size * 3], p_real_t_is_double);
+					buf += real_t_size * 4;
 				}
 			}
 
-			r_len += sizeof(real_t) * 4 * len;
+			r_len += real_t_size * 4 * len;
 
 		} break;
 		default: {

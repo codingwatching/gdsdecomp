@@ -40,7 +40,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 			{
 				foreach (var variable in field.Variables)
 				{
-					if (!variable.AssignToken.IsNull || !variable.Initializer.IsNull)
+					if (variable.Initializer is not null)
 					{
 						foreach (var v in field.Variables)
 						{
@@ -52,7 +52,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 			}
 			else if (member is PropertyDeclaration property)
 			{
-				if (!property.Initializer.IsNull || !property.AssignToken.IsNull)
+				if (property.Initializer is not null)
 				{
 					participatingMembers.Add(property.Name);
 				}
@@ -64,7 +64,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 
 	public override void VisitConstructorDeclaration(ConstructorDeclaration constructorDeclaration)
 	{
-		if (currentType == null || constructorDeclaration.Body.IsNull)
+		if (currentType == null || constructorDeclaration.Body is null)
 		{
 			base.VisitConstructorDeclaration(constructorDeclaration);
 			return;
@@ -172,6 +172,11 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 			if (TryMatchSimpleAssignment(statements[i], currentType, out var simpleTarget, out var simpleInitializer))
 			{
 				var candidateInitializer = simpleInitializer;
+				if (candidateInitializer == null)
+				{
+					i++;
+					continue;
+				}
 				if (ReferencesCtorLocal(candidateInitializer, localNames)
 					&& TryRewriteInitializerWithRecoveredLocals(candidateInitializer, matchedListInitByLocal, out var rewrittenInitializer))
 				{
@@ -243,7 +248,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 		// drop the constructor declaration entirely.
 		if (statementsToRemove.Count > 0
 			&& constructorDeclaration.Body.Statements.Count == 0
-			&& constructorDeclaration.Initializer.IsNull)
+			&& constructorDeclaration.Initializer is null)
 		{
 			constructorDeclaration.Remove();
 			ReorderRecoveredMembers(currentType, recoveredMemberOrder, memberMap);
@@ -435,10 +440,10 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 			.Any(id => localNames.Contains(id.Identifier));
 	}
 
-	private static bool TryMatchSimpleAssignment(Statement statement, TypeDeclaration currentType, out string memberName, out Expression initializer)
+	private static bool TryMatchSimpleAssignment(Statement statement, TypeDeclaration currentType, out string memberName, out Expression? initializer)
 	{
 		memberName = string.Empty;
-		initializer = Expression.Null;
+		initializer = null;
 		if (statement is not ExpressionStatement { Expression: AssignmentExpression { Operator: AssignmentOperatorType.Assign } assignment })
 		{
 			return false;
@@ -471,7 +476,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 			|| statements[startIndex] is not VariableDeclarationStatement tempDecl
 			|| tempDecl.Variables.Count != 1
 			|| tempDecl.Variables.FirstOrDefault() is not { } tempVar
-			|| !tempVar.Initializer.IsNull)
+			|| tempVar.Initializer is null)
 		{
 			return false;
 		}
@@ -515,13 +520,12 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 		TypeDeclaration currentType,
 		out Expression branchInitializer)
 	{
-		branchInitializer = Expression.Null;
+		branchInitializer = null!;
 		if (branchBlock.Statements.Count != 2
 			|| branchBlock.Statements.FirstOrDefault() is not VariableDeclarationStatement localDecl
 			|| localDecl.Variables.Count != 1
 			|| localDecl.Variables.FirstOrDefault() is not { } localVar
 			|| localVar.Initializer is not { } localInitializer
-			|| localInitializer.IsNull
 			|| !IsAllowedLiftInitializerExpression(localInitializer, currentType)
 			|| branchBlock.Statements.LastOrDefault() is not ExpressionStatement
 			{
@@ -613,7 +617,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 
 	private static bool TryUnwrapReadOnlyListOfListCollection(ObjectCreateExpression readOnlyListCreate, out Expression collectionExpression)
 	{
-		collectionExpression = Expression.Null;
+		collectionExpression = null!;
 		if (!IsTypeIdentifier(readOnlyListCreate.Type, "_003C_003Ez__ReadOnlyList")
 			|| readOnlyListCreate.Arguments.Count != 1
 			|| readOnlyListCreate.Arguments.FirstOrDefault() is not ObjectCreateExpression listCreate
@@ -1135,6 +1139,10 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 		{
 			[listVarName] = listBuilderInitializer
 		};
+		if (assignmentInitializer == null)
+		{
+			return false;
+		}
 		if (!TryRewriteInitializerWithRecoveredLocals(assignmentInitializer, replacementMap, out var rewrittenInitializer))
 		{
 			return false;
@@ -1165,7 +1173,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 		string methodName,
 		out Expression argument)
 	{
-		argument = Expression.Null;
+		argument = null!;
 		if (statement is not ExpressionStatement { Expression: InvocationExpression invocation }
 			|| invocation.Target is not MemberReferenceExpression memberRef
 			|| !string.Equals(memberRef.MemberName, methodName, StringComparison.Ordinal)
@@ -1189,7 +1197,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 		string setVariableName,
 		out Expression spreadEnumerable)
 	{
-		spreadEnumerable = Expression.Null;
+		spreadEnumerable = null!;
 		if (statement is not ForeachStatement foreachStatement
 			|| foreachStatement.EmbeddedStatement is not BlockStatement foreachBlock
 			|| foreachBlock.Statements.Count != 1
@@ -1216,7 +1224,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 		IReadOnlyList<Statement> matchedStatements,
 		out Expression initializer)
 	{
-		initializer = Expression.Null;
+		initializer = null!;
 		if (segments.Count == 0)
 		{
 			return false;
@@ -1289,7 +1297,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 
 	private static bool TryCollectSpanAssignmentValue(Statement statement, string spanVarName, out Expression value)
 	{
-		value = Expression.Null;
+		value = null!;
 		if (statement is not ExpressionStatement { Expression: AssignmentExpression { Operator: AssignmentOperatorType.Assign } assignment })
 		{
 			return false;
@@ -1317,7 +1325,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 		out int nextIndex,
 		out List<Statement> matchedStatements)
 	{
-		value = Expression.Null;
+		value = null!;
 		nextIndex = -1;
 		matchedStatements = [];
 		if (startIndex + 1 >= boundaryIndex)
@@ -1439,7 +1447,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 		out int nextIndex)
 	{
 		memberName = string.Empty;
-		initializerValue = Expression.Null;
+		initializerValue = null!;
 		matchedStatements = [];
 		nextIndex = -1;
 		if (startIndex + 3 >= boundaryIndex)
@@ -1526,7 +1534,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 		out Expression memberValue)
 	{
 		memberName = string.Empty;
-		memberValue = Expression.Null;
+		memberValue = null!;
 		if (statement is not ExpressionStatement
 			{
 				Expression: AssignmentExpression
@@ -1661,6 +1669,10 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 
 	private static void CleanupLeadingTempNoise(ConstructorDeclaration constructorDeclaration)
 	{
+		if (constructorDeclaration.Body == null)
+		{
+			return;
+		}
 		var statements = constructorDeclaration.Body.Statements.ToArray();
 		var prefixNoise = new List<Statement>();
 
@@ -1705,7 +1717,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 	private static bool IsIdentifierReferencedOutsidePrefix(
 		string identifier,
 		IReadOnlyList<Statement> statementsAfterPrefix,
-		ConstructorInitializer constructorInitializer)
+		ConstructorInitializer? constructorInitializer)
 	{
 		foreach (var statement in statementsAfterPrefix)
 		{
@@ -1716,7 +1728,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 			}
 		}
 
-		if (!constructorInitializer.IsNull
+		if (constructorInitializer is not null
 			&& constructorInitializer.Descendants.OfType<IdentifierExpression>()
 				.Any(id => string.Equals(id.Identifier, identifier, StringComparison.Ordinal)))
 		{
@@ -1752,7 +1764,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 		out ConstructorInitializer constructorInitializer,
 		out List<Statement> matchedCtorPreludeStatements)
 	{
-		constructorInitializer = ConstructorInitializer.Null;
+		constructorInitializer = null!;
 		matchedCtorPreludeStatements = [];
 		if (!TryGetCtorInvocation(boundaryStatement, out var initType, out var invocation))
 		{
@@ -1810,7 +1822,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 		out Expression initializer,
 		out List<Statement> matchedStatements)
 	{
-		initializer = Expression.Null;
+		initializer = null!;
 		matchedStatements = [];
 		int startIndex = -1;
 		VariableDeclarationStatement? listDecl = null;
@@ -1944,7 +1956,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 
 		foreach (var member in rewrittenMembers)
 		{
-			typeDeclaration.InsertChildBefore(typeDeclaration.RBraceToken, member, Roles.TypeMemberRole);
+			typeDeclaration.Members.Add(member);
 		}
 	}
 

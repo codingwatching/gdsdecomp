@@ -25,7 +25,9 @@
 #include "scene/resources/3d/box_shape_3d.h"
 #include "scene/resources/3d/capsule_shape_3d.h"
 #include "scene/resources/3d/cylinder_shape_3d.h"
+#include "scene/resources/3d/mesh_library.h"
 #include "scene/resources/3d/sphere_shape_3d.h"
+#include "scene/resources/bone_map.h"
 #include "scene/resources/surface_tool.h"
 #include "scene/resources/texture.h"
 #include "utility/common.h"
@@ -1293,6 +1295,22 @@ Dictionary get_node_options(Node *p_node, Node *original_node = nullptr) {
 	if (script.is_valid()) {
 		node_options_dict["node/script"] = script;
 	}
+	if (skeleton) {
+		if (skeleton->is_unique_name_in_owner()) {
+			Ref<BoneMap> bone_map = memnew(BoneMap);
+			// have to set the bone map to an empty bonemap for the renamer to work
+			node_options_dict["retarget/bone_map"] = bone_map;
+			node_options_dict["retarget/bone_renamer/rename_bones"] = true;
+			node_options_dict["retarget/bone_renamer/unique_node/make_unique"] = true;
+			node_options_dict["retarget/bone_renamer/unique_node/skeleton_name"] = String(skeleton->get_name());
+			// need to set these to false to avoid mutating the bones after import
+			node_options_dict["retarget/remove_tracks/unimportant_positions"] = false;
+			node_options_dict["retarget/rest_fixer/apply_node_transforms"] = false;
+			node_options_dict["retarget/rest_fixer/keep_global_rest_on_leftovers"] = false;
+			node_options_dict["retarget/rest_fixer/normalize_position_tracks"] = false;
+			node_options_dict["retarget/rest_fixer/reset_all_bone_poses_after_import"] = false;
+		}
+	}
 	if (mesh_instance) {
 		// node_options_dict["import/skip_import"] = false;
 		// only used internally
@@ -1897,7 +1915,14 @@ Node *GLBExporterInstance::_set_stuff_from_instanced_scene(Node *root) {
 			}
 		}
 		if (updating_import_info && node != root) {
-			node_options[get_node_path(node).operator String()] = get_node_options(node, original_node);
+			auto node_path = get_node_path(node);
+			// The Skeleton3D node is not exported, only its bones, and the Godot importer will create a Skeleton3D node for us.
+			if (Object::cast_to<Skeleton3D>(node)) {
+				auto names = node_path.get_names();
+				names.write[names.size() - 1] = StringName("Skeleton3D");
+				node_path = NodePath(names, node_path.is_absolute());
+			}
+			node_options[node_path.operator String()] = get_node_options(node, original_node);
 		}
 
 		if (original_node) {
@@ -3188,6 +3213,714 @@ Error _check_cancelled() {
 	}
 	return OK;
 }
+namespace {
+Ref<PackedScene> _ensure_resource_is_packed_scene(const Ref<Resource> &p_resource, int recursion_depth, HashMap<Ref<Resource>, Ref<PackedScene>> &r_replaced_packed_scenes) {
+	Ref<PackedScene> r_packed_scene = p_resource;
+	if (recursion_depth > 256) {
+		ERR_PRINT("Recursion depth exceeded.");
+		return r_packed_scene;
+	}
+	if (p_resource->get_save_class() == "PackedScene") {
+		Dictionary bundle = p_resource->get("_bundled");
+		// we need to go through the variants in the bundle and ensure that any MissingResources that are PackedScenes are also replaced with instantiated packed scenes
+		// this is because of PackedScene::SceneState::get_node_instance, which returns a Ref<PackedScene>, which will be null if it's not an instance of a PackedScene
+		// (We do not have to worry about PackedScenes embedded in other resources/dictionaries/arrays because this only matters for SceneState::get_node_instance)
+		Array arr = bundle.get("variants", Array());
+		if (arr.size() > 0) {
+			for (int i = 0; i < arr.size(); i++) {
+				Ref<Resource> res = arr[i];
+				if (res.is_valid() && res->get_save_class() == "PackedScene") {
+					if (r_replaced_packed_scenes.has(res)) {
+						arr[i] = r_replaced_packed_scenes[res];
+					} else {
+						arr[i] = _ensure_resource_is_packed_scene(res, recursion_depth, r_replaced_packed_scenes);
+						r_replaced_packed_scenes[res] = arr[i];
+					}
+				}
+			}
+			bundle.set("variants", arr);
+		}
+		if (r_packed_scene.is_null()) { // MissingResource
+			r_packed_scene = Ref<PackedScene>(memnew(PackedScene));
+			if (!bundle.is_empty()) {
+				r_packed_scene->set("_bundled", bundle);
+			}
+			r_packed_scene->set_script(p_resource->get_script());
+			r_packed_scene->set_local_to_scene(p_resource->is_local_to_scene());
+			r_packed_scene->set_path_cache(p_resource->get_path());
+			r_packed_scene->set_name(p_resource->get_name());
+			r_packed_scene->set_scene_unique_id(p_resource->get_scene_unique_id());
+			r_packed_scene->merge_meta_from(p_resource.ptr());
+		}
+	}
+	return r_packed_scene;
+}
+
+Ref<ArrayMesh> generate_debug_bones_mesh(Skeleton3D *p_skeleton) {
+	static constexpr Color bone_color = Color(1, 0.8, 0.4);
+	static constexpr real_t bone_axis_length = 0.1;
+	static constexpr int bone_shape = 1; // Octahedron
+
+	LocalVector<Color> axis_colors;
+	static constexpr Color axis_x_color = Color(1, 0, 0);
+	static constexpr Color axis_y_color = Color(0, 1, 0);
+	static constexpr Color axis_z_color = Color(0, 0, 1);
+	axis_colors.push_back(axis_x_color);
+	axis_colors.push_back(axis_y_color);
+	axis_colors.push_back(axis_z_color);
+
+	Ref<SurfaceTool> surface_tool(memnew(SurfaceTool));
+	surface_tool->begin(Mesh::PRIMITIVE_LINES);
+	Ref<StandardMaterial3D> unselected_mat;
+	unselected_mat.instantiate();
+	unselected_mat->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
+	unselected_mat->set_transparency(StandardMaterial3D::TRANSPARENCY_ALPHA);
+	unselected_mat->set_flag(StandardMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+	unselected_mat->set_flag(StandardMaterial3D::FLAG_SRGB_VERTEX_COLOR, true);
+	unselected_mat->set_flag(StandardMaterial3D::FLAG_DISABLE_FOG, true);
+	unselected_mat->set_albedo(bone_color);
+	surface_tool->set_material(unselected_mat);
+
+	LocalVector<int> bones;
+	LocalVector<float> weights;
+	bones.resize(4);
+	weights.resize(4);
+	for (int i = 0; i < 4; i++) {
+		bones[i] = 0;
+		weights[i] = 0;
+	}
+	weights[0] = 1;
+
+	int current_bone_index = 0;
+	Vector<int> bones_to_process = p_skeleton->get_parentless_bones();
+
+	while (bones_to_process.size() > current_bone_index) {
+		int current_bone_idx = bones_to_process[current_bone_index];
+		current_bone_index++;
+
+		Vector<int> child_bones_vector;
+		child_bones_vector = p_skeleton->get_bone_children(current_bone_idx);
+		int child_bones_size = child_bones_vector.size();
+
+		for (int i = 0; i < child_bones_size; i++) {
+			// Something wrong.
+			if (child_bones_vector[i] < 0) {
+				continue;
+			}
+
+			int child_bone_idx = child_bones_vector[i];
+
+			Vector3 v0 = p_skeleton->get_bone_global_rest(current_bone_idx).origin;
+			Vector3 v1 = p_skeleton->get_bone_global_rest(child_bone_idx).origin;
+			Vector3 d = (v1 - v0).normalized();
+			real_t dist = v0.distance_to(v1);
+
+			// Find closest axis.
+			int closest = -1;
+			real_t closest_d = 0.0;
+			for (int j = 0; j < 3; j++) {
+				real_t dp = Math::abs(p_skeleton->get_bone_global_rest(current_bone_idx).basis[j].normalized().dot(d));
+				if (j == 0 || dp > closest_d) {
+					closest = j;
+				}
+			}
+
+			// Draw bone.
+			switch (bone_shape) {
+				case 0: { // Wire shape.
+					surface_tool->set_color(bone_color);
+					bones[0] = current_bone_idx;
+					surface_tool->set_bones(Vector<int>(bones));
+					surface_tool->set_weights(Vector<float>(weights));
+					surface_tool->add_vertex(v0);
+					bones[0] = child_bone_idx;
+					surface_tool->set_bones(Vector<int>(bones));
+					surface_tool->set_weights(Vector<float>(weights));
+					surface_tool->add_vertex(v1);
+				} break;
+
+				case 1: { // Octahedron shape.
+					Vector3 first;
+					Vector3 points[6];
+					int point_idx = 0;
+					for (int j = 0; j < 3; j++) {
+						Vector3 axis;
+						if (first == Vector3()) {
+							axis = d.cross(d.cross(p_skeleton->get_bone_global_rest(current_bone_idx).basis[j])).normalized();
+							first = axis;
+						} else {
+							axis = d.cross(first).normalized();
+						}
+
+						surface_tool->set_color(bone_color);
+						for (int k = 0; k < 2; k++) {
+							if (k == 1) {
+								axis = -axis;
+							}
+							Vector3 point = v0 + d * dist * 0.2;
+							point += axis * dist * 0.1;
+
+							bones[0] = current_bone_idx;
+							surface_tool->set_bones(Vector<int>(bones));
+							surface_tool->set_weights(Vector<float>(weights));
+							surface_tool->add_vertex(v0);
+							surface_tool->set_bones(Vector<int>(bones));
+							surface_tool->set_weights(Vector<float>(weights));
+							surface_tool->add_vertex(point);
+
+							surface_tool->set_bones(Vector<int>(bones));
+							surface_tool->set_weights(Vector<float>(weights));
+							surface_tool->add_vertex(point);
+							bones[0] = child_bone_idx;
+							surface_tool->set_bones(Vector<int>(bones));
+							surface_tool->set_weights(Vector<float>(weights));
+							surface_tool->add_vertex(v1);
+							points[point_idx++] = point;
+						}
+					}
+					surface_tool->set_color(bone_color);
+					SWAP(points[1], points[2]);
+					bones[0] = current_bone_idx;
+					for (int j = 0; j < 6; j++) {
+						surface_tool->set_bones(Vector<int>(bones));
+						surface_tool->set_weights(Vector<float>(weights));
+						surface_tool->add_vertex(points[j]);
+						surface_tool->set_bones(Vector<int>(bones));
+						surface_tool->set_weights(Vector<float>(weights));
+						surface_tool->add_vertex(points[(j + 1) % 6]);
+					}
+				} break;
+			}
+
+			// Axis as root of the bone.
+			for (int j = 0; j < 3; j++) {
+				bones[0] = current_bone_idx;
+				surface_tool->set_color(axis_colors[j]);
+				surface_tool->set_bones(Vector<int>(bones));
+				surface_tool->set_weights(Vector<float>(weights));
+				surface_tool->add_vertex(v0);
+				surface_tool->set_bones(Vector<int>(bones));
+				surface_tool->set_weights(Vector<float>(weights));
+				surface_tool->add_vertex(v0 + (p_skeleton->get_bone_global_rest(current_bone_idx).basis.inverse())[j].normalized() * dist * bone_axis_length);
+
+				if (j == closest) {
+					continue;
+				}
+			}
+
+			// Axis at the end of the bone children.
+			if (i == child_bones_size - 1) {
+				for (int j = 0; j < 3; j++) {
+					bones[0] = child_bone_idx;
+					surface_tool->set_color(axis_colors[j]);
+					surface_tool->set_bones(Vector<int>(bones));
+					surface_tool->set_weights(Vector<float>(weights));
+					surface_tool->add_vertex(v1);
+					surface_tool->set_bones(Vector<int>(bones));
+					surface_tool->set_weights(Vector<float>(weights));
+					surface_tool->add_vertex(v1 + (p_skeleton->get_bone_global_rest(child_bone_idx).basis.inverse())[j].normalized() * dist * bone_axis_length);
+
+					if (j == closest) {
+						continue;
+					}
+				}
+			}
+			// Add the bone's children to the list of bones to be processed.
+			bones_to_process.push_back(child_bones_vector[i]);
+		}
+	}
+	return surface_tool->commit();
+}
+
+static const HashSet<Animation::TrackType> bone_track_types = { Animation::TrackType::TYPE_POSITION_3D, Animation::TrackType::TYPE_ROTATION_3D, Animation::TrackType::TYPE_SCALE_3D };
+#if 0
+String find_best_reference_scene(const String &p_original_path, const Ref<AnimationLibrary> &animation_library) {
+	HashMap<NodePath, HashSet<Animation::TrackType>> animation_node_paths_found;
+	LocalVector<StringName> animation_names;
+	animation_library->get_animation_list(&animation_names);
+	ERR_FAIL_COND_V_MSG(animation_names.is_empty(), String(), "Animation library has no animations");
+	for (auto &animation_name : animation_names) {
+		Ref<Animation> animation = animation_library->get_animation(animation_name);
+		ERR_CONTINUE(animation.is_null());
+		for (auto &track : animation->get_tracks()) {
+			animation_node_paths_found[track->path].insert(track->type);
+		}
+	}
+	// now we need to get a list of all the scenes in the project
+	Vector<String> scene_paths = GDRESettings::get_singleton()->get_file_list({ "*.scn", "*.tscn" });
+	HashMap<String, int> scenes_to_check;
+	for (auto &scene_path : scene_paths) {
+		List<String> scene_dependencies;
+		ResourceCompatLoader::get_dependencies(scene_path, &scene_dependencies);
+		for (auto &scene_dependency : scene_dependencies) {
+			Vector<String> splits = scene_dependency.split("::");
+			const String &dep_path = splits.size() >= 3 ? splits[1] : splits[0];
+			if (dep_path == p_original_path) {
+				scenes_to_check[scene_path] = 0;
+			}
+		}
+	}
+	if (scenes_to_check.is_empty()) {
+		return String();
+	}
+	String best_scene;
+	for (auto &[scene_path, has_node_count] : scenes_to_check) {
+		Ref<Resource> res = ResourceCompatLoader::fake_load(scene_path);
+		if (!res.is_valid()) {
+			continue;
+		}
+		HashMap<Ref<Resource>, Ref<PackedScene>> replaced_packed_scenes;
+		Ref<PackedScene> scene = _ensure_resource_is_packed_scene(res, 0, replaced_packed_scenes);
+		auto state = scene->get_state();
+		HashMap<String, int> nodePathToNode;
+		for (int i = 0; i < state->get_node_count(); i++) {
+			auto node_path = state->get_node_path(i);
+			nodePathToNode.insert(node_path.operator String(), i);
+		}
+		for (auto &[node_path, track_types] : animation_node_paths_found) {
+			String full_path = node_path.operator String();
+			String name_only = full_path.get_slice(":", 0);
+			if (node_path.get_name(0).is_node_unique_name()) {
+				String non_unique_name = name_only.substr(1);
+				for (auto &np : nodePathToNode) {
+					if (np.key.ends_with(non_unique_name)) {
+						has_node_count++;
+						break;
+					}
+				}
+				continue;
+			}
+			if (nodePathToNode.has(name_only)) {
+				has_node_count++;
+			}
+		}
+		if (has_node_count == animation_node_paths_found.size()) {
+			return scene_path;
+		}
+	}
+	struct best_scene_sorter {
+		bool operator()(const KeyValue<String, int> &a, const KeyValue<String, int> &b) const {
+			return a.value > b.value;
+		}
+	};
+	scenes_to_check.sort_custom<best_scene_sorter>();
+	return scenes_to_check.begin()->key;
+}
+#endif
+
+static inline HashMap<String, int> get_node_path_to_node_index(const Ref<SceneState> &state) {
+	HashMap<String, int> node_path_to_node_index;
+	for (int i = 0; i < state->get_node_count(); i++) {
+		auto node_path = state->get_node_path(i);
+		node_path_to_node_index.insert(node_path.operator String().trim_prefix("./"), i);
+	}
+	return node_path_to_node_index;
+}
+
+HashMap<StringName, Node *> find_reference_nodes_for_animation_library(const String &p_original_path, const Ref<AnimationLibrary> &animation_library) {
+	HashMap<NodePath, HashSet<Animation::TrackType>> animation_node_paths_found;
+	LocalVector<StringName> animation_names;
+	animation_library->get_animation_list(&animation_names);
+	ERR_FAIL_COND_V_MSG(animation_names.is_empty(), ERR_INVALID_PARAMETER, "Animation library has no animations");
+	for (auto &animation_name : animation_names) {
+		Ref<Animation> animation = animation_library->get_animation(animation_name);
+		ERR_CONTINUE(animation.is_null());
+		for (auto &track : animation->get_tracks()) {
+			animation_node_paths_found[track->path].insert(track->type);
+		}
+	}
+	// now we need to get a list of all the scenes in the project
+	Vector<String> scene_paths = GDRESettings::get_singleton()->get_file_list({ "*.scn", "*.tscn" });
+	HashMap<String, int> scenes_to_check;
+	for (auto &scene_path : scene_paths) {
+		List<String> scene_dependencies;
+		ResourceCompatLoader::get_dependencies(scene_path, &scene_dependencies);
+		for (auto &scene_dependency : scene_dependencies) {
+			Vector<String> splits = scene_dependency.split("::", true);
+			const String &dep_path = splits.size() >= 3 ? splits[2] : splits[0];
+			if (dep_path == p_original_path) {
+				scenes_to_check[scene_path] = 0;
+			}
+		}
+	}
+	if (scenes_to_check.is_empty()) {
+		return HashMap<StringName, Node *>();
+	}
+	HashMap<StringName, Node *> animated_node_path_to_node;
+	HashMap<String, Pair<Ref<PackedScene>, HashMap<String, int>>> scene_path_to_packed_scene_to_skeleton_path_to_node_index;
+	String best_scene;
+	for (auto &[scene_path, has_node_count] : scenes_to_check) {
+		Ref<Resource> res = ResourceCompatLoader::fake_load(scene_path);
+		if (!res.is_valid()) {
+			continue;
+		}
+		HashMap<Ref<Resource>, Ref<PackedScene>> replaced_packed_scenes;
+		Ref<PackedScene> scene = _ensure_resource_is_packed_scene(res, 0, replaced_packed_scenes);
+		auto state = scene->get_state();
+		scene_path_to_packed_scene_to_skeleton_path_to_node_index[scene_path].first = scene;
+		HashMap<String, int> nodePathToNode = get_node_path_to_node_index(state);
+		HashMap<String, int> &animated_node_path_to_node_index = scene_path_to_packed_scene_to_skeleton_path_to_node_index[scene_path].second;
+		for (auto &[node_path, track_types] : animation_node_paths_found) {
+			String full_path = node_path.operator String();
+			String name_only = full_path.get_slice(":", 0);
+			String lookup_name = name_only.trim_prefix("./");
+			if (node_path.get_name(0).is_node_unique_name()) {
+				String non_unique_name = lookup_name.substr(1);
+				for (auto &np : nodePathToNode) {
+					if (np.key.ends_with(non_unique_name)) {
+						has_node_count++;
+						animated_node_path_to_node_index.insert(name_only, np.value);
+						break;
+					}
+				}
+				continue;
+			}
+			if (nodePathToNode.has(lookup_name)) {
+				has_node_count++;
+				animated_node_path_to_node_index.insert(name_only, nodePathToNode[lookup_name]);
+			}
+		}
+		if (has_node_count == animation_node_paths_found.size()) {
+			best_scene = scene_path;
+			break;
+		}
+	}
+	struct _sorter {
+		bool operator()(const KeyValue<String, int> &a, const KeyValue<String, int> &b) const {
+			return a.value > b.value;
+		}
+	};
+	if (best_scene.is_empty()) {
+		scenes_to_check.sort_custom<_sorter>();
+		best_scene = scenes_to_check.begin()->key;
+	}
+	auto &[parent_packed_scene, animated_node_path_to_node_index] = scene_path_to_packed_scene_to_skeleton_path_to_node_index[best_scene];
+	for (auto &[_anim_path, _node_idx] : animated_node_path_to_node_index) {
+		Ref<PackedScene> packed_scene = parent_packed_scene;
+		Ref<SceneState> state = packed_scene->get_state();
+		HashMap<String, int> nodePathToNode = get_node_path_to_node_index(state);
+		String animated_path = state->get_node_path(_node_idx).operator String().trim_prefix("./");
+		int anim_node_index = _node_idx;
+		while (anim_node_index != -1 && state->get_node_type(anim_node_index).is_empty()) {
+			// it's an instantiated node, get the instance
+			Ref<PackedScene> instance;
+			NodePath animated_node_path = NodePath(animated_path);
+			NodePath instance_node_path = NodePath(animated_path);
+			int node_to_check = anim_node_index;
+			while (node_to_check != -1) {
+				instance = state->get_node_instance(node_to_check);
+				if (instance.is_valid()) {
+					break;
+				}
+				instance_node_path = state->get_node_path(node_to_check, true);
+				node_to_check = -1;
+				while (node_to_check == -1 && instance_node_path.get_name_count() > 0) {
+					String parpathstring = instance_node_path.operator String().trim_prefix("./");
+					node_to_check = nodePathToNode.has(parpathstring) ? nodePathToNode[parpathstring] : -1;
+					if (node_to_check != -1) {
+						break;
+					}
+					if (parpathstring == "." || instance_node_path.get_names().size() == 1) {
+						instance = state->get_node_instance(0);
+						break;
+					}
+					auto names = instance_node_path.get_name_count() - 1 == 0 ? Vector<StringName>({ StringName(".") }) : instance_node_path.get_names().slice(0, instance_node_path.get_name_count() - 1);
+
+					instance_node_path = NodePath(instance_node_path.get_names().slice(0, instance_node_path.get_name_count() - 1), instance_node_path.is_absolute());
+				}
+			}
+			anim_node_index = -1;
+			ERR_CONTINUE_MSG(instance.is_null(), "No instance found for skeleton path " + animated_path);
+			// TODO: make fake_load work on remapped paths so we don't have to do this
+			String instance_path = GDRESettings::get_singleton()->get_mapped_path(instance->get_path());
+			Ref<Resource> instance_resource = ResourceCompatLoader::fake_load(instance_path);
+			ERR_CONTINUE_MSG(instance_resource.is_null(), "No resource found for instance path " + instance_path);
+			HashMap<Ref<Resource>, Ref<PackedScene>> replaced_packed_scenes;
+			packed_scene = _ensure_resource_is_packed_scene(instance_resource, 0, replaced_packed_scenes);
+			state = packed_scene->get_state();
+			nodePathToNode = get_node_path_to_node_index(state);
+
+			if (animated_node_path != instance_node_path) {
+				animated_path = NodePath(instance_node_path.get_names(), true).rel_path_to(NodePath(animated_node_path.get_names(), true)).operator String().trim_prefix("/");
+				anim_node_index = nodePathToNode.has(animated_path) ? nodePathToNode[animated_path] : -1;
+			} else {
+				animated_path = ".";
+				anim_node_index = 0;
+			}
+		}
+		ERR_CONTINUE_MSG(anim_node_index == -1, "Skeleton path " + animated_path + " not found in instance");
+		Object *obj = ClassDB::instantiate(state->get_node_type(anim_node_index).operator String());
+		Node *node = Object::cast_to<Node>(obj);
+		ERR_CONTINUE_MSG(node == nullptr, "Failed to instantiate node type " + state->get_node_type(anim_node_index).operator String());
+		int property_count = state->get_node_property_count(anim_node_index);
+		for (int i = 0; i < property_count; i++) {
+			StringName property_name = state->get_node_property_name(anim_node_index, i);
+			Variant property_value = state->get_node_property_value(anim_node_index, i);
+			if (Ref<Resource> res = property_value; res.is_valid()) {
+				property_value = ResourceCompatConverter::get_real_from_missing_resource(res, ResourceInfo::LoadType::REAL_LOAD, HashMap<String, String>());
+			}
+			node->set(property_name, property_value);
+		}
+		animated_node_path_to_node[_anim_path] = node;
+	}
+	return animated_node_path_to_node;
+}
+
+Error _create_packed_scene_from_animation_library(const String &p_original_path, const Ref<AnimationLibrary> &animation_library, HashMap<StringName, Node *> &reference_nodes, Ref<PackedScene> &scene) {
+	HashMap<NodePath, HashSet<Animation::TrackType>> animation_node_paths_found;
+	LocalVector<StringName> animation_names;
+	animation_library->get_animation_list(&animation_names);
+	ERR_FAIL_COND_V_MSG(animation_names.is_empty(), ERR_INVALID_PARAMETER, "Animation library has no animations");
+	Ref<Animation> reset_animation;
+	for (auto &animation_name : animation_names) {
+		Ref<Animation> animation = animation_library->get_animation(animation_name);
+		ERR_CONTINUE(animation.is_null());
+		String animation_name_string = animation_name.operator String();
+		if (animation_name_string.to_upper() == "RESET" || animation_name_string.to_upper().remove_chars("-_").to_upper() == "TPOSE") {
+			reset_animation = animation;
+		}
+		for (auto &track : animation->get_tracks()) {
+			animation_node_paths_found[track->path].insert(track->type);
+		}
+	}
+	if (reset_animation.is_null()) {
+		// just get the first valid animation as the reset animation
+		for (auto &animation_name : animation_names) {
+			Ref<Animation> animation = animation_library->get_animation(animation_name);
+			ERR_CONTINUE(animation.is_null());
+			reset_animation = animation;
+			break;
+		}
+	}
+	// At least ONE of the animations has to be valid, otherwise we can't export the scene
+	ERR_FAIL_COND_V_MSG(reset_animation.is_null(), ERR_INVALID_PARAMETER, "No valid animations in animation library!");
+
+	struct BoneInfo {
+		Vector3 position;
+		Quaternion rotation;
+		Vector3 scale = Vector3(1, 1, 1);
+	};
+	HashMap<StringName, HashMap<StringName, BoneInfo>> node_path_to_bone_infos;
+
+	{
+		const LocalVector<Animation::Track *> &tracks = reset_animation->get_tracks();
+		for (int i = 0; i < tracks.size(); i++) {
+			Animation::Track *track = tracks[i];
+			if (track->path.get_subname_count() != 1 || !bone_track_types.has(track->type)) {
+				continue;
+			}
+			StringName skeleton_path = track->path.get_concatenated_names();
+			HashMap<StringName, BoneInfo> &bone_infos = node_path_to_bone_infos[skeleton_path];
+			StringName bone_name = track->path.get_subname(0);
+			if (!bone_infos.has(bone_name)) {
+				bone_infos[bone_name] = BoneInfo();
+			}
+			if (track->type == Animation::TrackType::TYPE_POSITION_3D) {
+				reset_animation->position_track_get_key(i, 0, &bone_infos[bone_name].position);
+			} else if (track->type == Animation::TrackType::TYPE_ROTATION_3D) {
+				reset_animation->rotation_track_get_key(i, 0, &bone_infos[bone_name].rotation);
+			} else if (track->type == Animation::TrackType::TYPE_SCALE_3D) {
+				reset_animation->scale_track_get_key(i, 0, &bone_infos[bone_name].scale);
+			}
+		}
+	}
+
+	struct _sorter {
+		bool operator()(const KeyValue<NodePath, HashSet<Animation::TrackType>> &a, const KeyValue<NodePath, HashSet<Animation::TrackType>> &b) const {
+			// we want to sort by the number of names in the node path, so that we can add nodes to the scene in the correct order
+			if (a.key.get_name_count() == b.key.get_name_count() && a.key.get_name_count() != 0) {
+				// we want to sort unique names last
+				return a.key.get_name(0).is_node_unique_name() > b.key.get_name(0).is_node_unique_name();
+			}
+			return a.key.get_name_count() < b.key.get_name_count();
+		}
+	};
+	animation_node_paths_found.sort_custom<_sorter>();
+
+	Node3D *root = memnew(Node3D);
+	String animation_library_name = animation_library->get_name();
+	if (animation_library_name.is_empty()) {
+		animation_library_name = p_original_path.get_file().get_basename();
+	}
+	root->set_name(animation_library_name);
+	Node3D *armature = nullptr;
+	std::function<Node *(const NodePath &, bool)> ensure_node = [&](const NodePath &node_path, bool is_skeleton) -> Node * {
+		const String node_path_to = node_path.get_concatenated_names();
+		Node *node = root->get_node_or_null(node_path_to);
+		if (!node) {
+			NodePath parent_path = NodePath(node_path.get_names().slice(0, node_path.get_name_count() - 1), node_path.is_absolute());
+			StringName node_name = node_path.get_name(node_path.get_name_count() - 1);
+			if (reference_nodes.has(node_path_to)) {
+				node = reference_nodes[node_path_to]->duplicate();
+			} else if (is_skeleton) {
+				node = memnew(Skeleton3D);
+			} else {
+				node = memnew(Node3D);
+			}
+			Node *parent;
+			if (node_name.is_node_unique_name()) {
+				if (!armature) {
+					root->set_name("root_" + animation_library_name);
+					armature = memnew(Node3D);
+					armature->set_name(animation_library_name);
+					root->add_child(armature);
+					armature->set_owner(root);
+				}
+				parent = armature;
+			} else if (node_path.get_name_count() == 1 || (node_path.get_name_count() == 2 && node_path.get_name(0) == ".")) {
+				parent = root;
+			} else {
+				parent = ensure_node(parent_path, false);
+			}
+			if (node_name.is_node_unique_name()) {
+				node->set_unique_name_in_owner(true);
+				node_name = node_name.operator String().substr(1);
+			}
+			node->set_name(node_name);
+			parent->add_child(node);
+			node->set_owner(root);
+			node->set_unique_name_in_owner(true);
+			return node;
+		}
+		return node;
+	};
+	HashMap<StringName, Skeleton3D *> skeleton_path_to_skeleton;
+	for (auto &[node_path, track_types] : animation_node_paths_found) {
+		const String node_name = node_path.get_concatenated_names();
+		bool is_bone = false;
+		if (node_path.get_subname_count() == 1) {
+			is_bone = true;
+			for (auto &track_type : track_types) {
+				if (!bone_track_types.has(track_type)) {
+					is_bone = false;
+					break;
+				}
+			}
+		}
+		Node *node = ensure_node(node_path, is_bone);
+		if (Skeleton3D *skeleton = Object::cast_to<Skeleton3D>(node); skeleton) {
+			StringName bone_name = node_path.get_subname(0);
+			int bone_idx = skeleton->find_bone(bone_name);
+			if (bone_idx == -1) {
+				bone_idx = skeleton->add_bone(bone_name);
+				if (bone_idx != 0) {
+					skeleton->set_bone_parent(bone_idx, 0);
+				}
+				ERR_CONTINUE_MSG(!node_path_to_bone_infos.has(node_name), "No bone infos found for skeleton " + node_name);
+				HashMap<StringName, BoneInfo> &bone_infos = node_path_to_bone_infos[node_name];
+				BoneInfo &bone_info = bone_infos[bone_name];
+				Transform3D rest_transform = Transform3D(Basis(bone_info.rotation).scaled(bone_info.scale), bone_info.position);
+				skeleton->set_bone_rest(bone_idx, rest_transform);
+				skeleton->set_bone_pose(bone_idx, rest_transform);
+			}
+			skeleton_path_to_skeleton.insert(node_name, skeleton);
+		}
+	}
+
+	for (auto &[skeleton_path, skeleton] : skeleton_path_to_skeleton) {
+		String skeleton_name = skeleton->get_name();
+		auto skin = skeleton->create_skin_from_rest_transforms();
+		Ref<SkinReference> skin_ref = skeleton->register_skin(skin);
+		auto children = skeleton->find_children("", "MeshInstance3D", false, false);
+		Node *child = nullptr;
+		if (children.size() > 0) {
+			child = Object::cast_to<Node>(children[0]);
+		}
+		MeshInstance3D *mesh_instance = Object::cast_to<MeshInstance3D>(child);
+		if (!mesh_instance) {
+			String child_name = child ? child->get_name().operator String() : skeleton_name + "_mesh_instance";
+			mesh_instance = memnew(MeshInstance3D);
+			Ref<Mesh> debug_bones_mesh = generate_debug_bones_mesh(skeleton);
+			Ref<Material> debug_bones_material = debug_bones_mesh->surface_get_material(0);
+			debug_bones_mesh->set_name(skeleton_name + "_debug_bones_mesh");
+			debug_bones_material->set_name(skeleton_name + "_debug_bones_material");
+			mesh_instance->set_mesh(debug_bones_mesh);
+			mesh_instance->set_name(child_name);
+			if (child) {
+				child->replace_by(mesh_instance);
+				memdelete(child);
+			} else {
+				skeleton->add_child(mesh_instance);
+				mesh_instance->set_owner(root);
+			}
+			mesh_instance->set_skeleton_path(NodePath(".."));
+			mesh_instance->set_surface_override_material(0, debug_bones_material);
+		}
+		mesh_instance->set_skin(skin);
+	}
+	AnimationPlayer *animation_player = memnew(AnimationPlayer);
+	animation_library->set_path_cache(p_original_path);
+	animation_player->set_name("AnimationPlayer");
+	animation_player->add_animation_library("", animation_library);
+	root->add_child(animation_player);
+	animation_player->set_owner(root);
+	scene.instantiate();
+	scene->pack(root);
+	memdelete(root);
+	for (auto &[node_path, node] : reference_nodes) {
+		if (node != nullptr) {
+			memdelete(node);
+		}
+	}
+	root = nullptr;
+	return OK;
+}
+
+Error _create_packed_scene_from_mesh_library(const String &p_original_path, const Ref<MeshLibrary> &mesh_library, Ref<PackedScene> &scene) {
+	ERR_FAIL_COND_V_MSG(mesh_library.is_null(), ERR_INVALID_PARAMETER, "Array mesh is null");
+	String scene_name = p_original_path.get_file().get_basename();
+	Node3D *root = memnew(Node3D);
+	root->set_name("root_" + scene_name);
+
+	for (int i = 0; i < mesh_library->get_item_count(); i++) {
+		Ref<Mesh> mesh = mesh_library->get_item_mesh(i);
+		ERR_CONTINUE_MSG(mesh.is_null(), "Mesh is null for mesh library item " + itos(i));
+		String mesh_name = mesh_library->get_item_name(i);
+		if (mesh_name.is_empty()) {
+			mesh_name = mesh->get_name();
+		}
+		if (mesh_name.is_empty() && mesh->get_path().is_resource_file()) {
+			mesh_name = mesh->get_path().get_file().get_basename();
+		}
+		if (mesh_name.is_empty()) {
+			mesh_name = "Mesh_" + itos(i).pad_zeros(3);
+		}
+		MeshInstance3D *mi = memnew(MeshInstance3D);
+		mi->set_transform(mesh_library->get_item_mesh_transform(i));
+		mi->set_mesh(mesh);
+		mi->set_name(mesh_name);
+		root->add_child(mi);
+		mi->set_owner(root);
+
+		Ref<NavigationMesh> nmesh = mesh_library->get_item_navigation_mesh(i);
+		if (nmesh.is_valid()) {
+			NavigationRegion3D *nmi = memnew(NavigationRegion3D);
+			nmi->set_name(mesh_name + "_navigation_region");
+			nmi->set_navigation_mesh(nmesh);
+			nmi->set_navigation_layers(mesh_library->get_item_navigation_layers(i));
+			mi->add_child(nmi, true);
+			nmi->set_owner(mi->get_owner());
+		}
+
+		auto shapes = mesh_library->get_item_shapes(i);
+
+		if (shapes.size() > 0) {
+			StaticBody3D *static_body = memnew(StaticBody3D);
+			static_body->set_name(mesh_name + "_static_body");
+			mi->add_child(static_body);
+			static_body->set_owner(root);
+			auto owner_id = static_body->create_shape_owner(static_body);
+			for (auto &shape : shapes) {
+				static_body->shape_owner_add_shape(owner_id, shape.shape);
+			}
+		}
+	}
+	scene.instantiate();
+	scene->pack(root);
+	memdelete(root);
+	return OK;
+}
+} //namespace
 
 struct BatchExportToken : public TaskRunnerStruct {
 	static std::atomic<int64_t> in_progress;
@@ -3196,6 +3929,7 @@ struct BatchExportToken : public TaskRunnerStruct {
 	Ref<PackedScene> _scene;
 	Node *root = nullptr;
 	String p_src_path;
+	String p_original_path;
 	String p_dest_path;
 	String original_export_dest;
 	String output_dir;
@@ -3229,6 +3963,7 @@ struct BatchExportToken : public TaskRunnerStruct {
 		scene_size = FileAccess::get_size(p_iinfo->get_path());
 		output_dir = p_output_dir;
 		p_src_path = p_iinfo->get_path();
+		p_original_path = p_iinfo->get_source_file();
 		set_export_dest(new_path);
 	}
 
@@ -3326,6 +4061,22 @@ struct BatchExportToken : public TaskRunnerStruct {
 				.value_or(ERR_SKIP);
 	}
 
+	Error create_packed_scene_from_animation_library(const Ref<AnimationLibrary> &animation_library, Ref<PackedScene> &scene) {
+		HashMap<StringName, Node *> reference_nodes = find_reference_nodes_for_animation_library(p_original_path, animation_library);
+		return TaskManager::get_singleton()->dispatch_to_main_thread(std::function<Error()>([&]() -> Error {
+											   return _create_packed_scene_from_animation_library(p_original_path, animation_library, reference_nodes, scene);
+										   }))
+				.value_or(ERR_SKIP);
+	}
+
+	Error create_packed_scene_from_mesh_library(const Ref<MeshLibrary> &mesh_library, Ref<PackedScene> &scene) {
+		ERR_FAIL_COND_V_MSG(mesh_library.is_null(), ERR_INVALID_PARAMETER, "Mesh library is null");
+		return TaskManager::get_singleton()->dispatch_to_main_thread(std::function<Error()>([&]() -> Error {
+											   return _create_packed_scene_from_mesh_library(p_original_path, mesh_library, scene);
+										   }))
+				.value_or(ERR_SKIP);
+	}
+
 	// scene loading and scene instancing has to be done on the main thread to avoid deadlocks and crashes
 	bool batch_preload() {
 		GDRELogger::clear_error_queues();
@@ -3357,12 +4108,19 @@ struct BatchExportToken : public TaskRunnerStruct {
 		{
 			String resource_type = report->get_import_info()->get_type();
 			bool is_mesh = false;
+			bool is_animation_library = false;
+			bool is_mesh_library = false;
 			if (resource_type != "PackedScene") {
-				if (resource_type != "Mesh" && !ClassDB::is_parent_class(resource_type, "Mesh")) {
+				if (resource_type == "AnimationLibrary") {
+					is_animation_library = true;
+				} else if (resource_type == "MeshLibrary") {
+					is_mesh_library = true;
+				} else if (resource_type == "Mesh" || ClassDB::is_parent_class(resource_type, "Mesh")) {
+					is_mesh = true;
+				} else {
 					after_preload();
 					ERR_FAIL_V_MSG(false, "Unsupported resource type: " + resource_type);
 				}
-				is_mesh = true;
 			}
 			Ref<Resource> resource;
 			err = instance._load_scene_and_deps(resource);
@@ -3371,8 +4129,17 @@ struct BatchExportToken : public TaskRunnerStruct {
 			}
 
 			Ref<PackedScene> scene = resource;
-			if (err == OK && scene.is_null() && is_mesh) {
-				err = create_packed_scene_from_mesh(resource, scene);
+			if (err == OK && scene.is_null()) {
+				if (is_mesh) {
+					err = create_packed_scene_from_mesh(resource, scene);
+				} else if (is_animation_library) {
+					err = create_packed_scene_from_animation_library(resource, scene);
+					instance.force_export_multi_root = true;
+				} else if (is_mesh_library) {
+					err = create_packed_scene_from_mesh_library(resource, scene);
+				} else {
+					err = ERR_CANT_ACQUIRE_RESOURCE;
+				}
 			}
 
 			if (err != OK) {
@@ -3382,7 +4149,9 @@ struct BatchExportToken : public TaskRunnerStruct {
 			}
 			_scene = scene;
 			if (!is_obj_output()) {
-				root = instance._instantiate_scene(scene);
+				if (!root) {
+					root = instance._instantiate_scene(scene);
+				}
 				if (root) {
 					root = instance._set_stuff_from_instanced_scene(root);
 				}
@@ -3626,6 +4395,9 @@ void SceneExporter::get_handled_types(List<String> *out) const {
 
 void SceneExporter::get_handled_importers(List<String> *out) const {
 	out->push_back("scene");
+	out->push_back("animation_library");
+	out->push_back("MeshLibrary");
+	out->push_back("ArrayMesh");
 }
 
 String SceneExporter::get_name() const {

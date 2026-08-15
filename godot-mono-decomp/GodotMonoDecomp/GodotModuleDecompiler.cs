@@ -160,7 +160,7 @@ public class GodotModuleDecompiler
 	}
 
 
-	public void AddSubProjects(string assemblyPath, DotNetCoreDepInfo depInfo, List<string> names, HashSet<string> canonicalSubDirs)
+	public void AddSubProjects(string assemblyPath, DotNetCoreDepInfo depInfo, List<string> names, HashSet<string> mainModuleSubDirs, HashSet<string> otherSubDirs)
 	{
 		foreach (var dep in depInfo.deps.Where(d => d is { Type: "project" })
 			         .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
@@ -172,6 +172,7 @@ public class GodotModuleDecompiler
 			}
 
 			names.Add(dep.Name);
+			var existingSubdirs = otherSubDirs.Where(subdir => subdir == dep.Name || Path.GetFileName(subdir) == dep.Name).ToHashSet();
 
 			var assemblynameRef = dep.AssemblyRef;
 			var supposedPath = Path.Combine(Path.GetDirectoryName(assemblyPath) ?? "", assemblynameRef.Name + ".dll");
@@ -186,8 +187,8 @@ public class GodotModuleDecompiler
 
 			if (reference is PEFile module)
 			{
-				var subdir = canonicalSubDirs.Contains(module.Name) ? "subprojects" + "/" + module.Name : module.Name;
-				while (subdir != null && canonicalSubDirs.Contains(subdir))
+				var subdir = existingSubdirs.Count == 1 ? existingSubdirs.First() : (mainModuleSubDirs.Contains(module.Name) ? "subprojects" + "/" + module.Name : module.Name);
+				while (subdir != null && mainModuleSubDirs.Contains(subdir))
 				{
 					subdir = "_" + subdir;
 				}
@@ -195,7 +196,7 @@ public class GodotModuleDecompiler
 				AdditionalModules.Add(new GodotModule(module, dep, subdir, Settings, AssemblyResolver));
 			}
 
-			AddSubProjects(assemblyPath, dep, names, canonicalSubDirs);
+			AddSubProjects(assemblyPath, dep, names, mainModuleSubDirs, otherSubDirs);
 		}
 	}
 
@@ -236,13 +237,15 @@ public class GodotModuleDecompiler
 		List<string> names = [];
 		if (Settings.CreateAdditionalProjectsForProjectReferences && MainModule.depInfo != null)
 		{
-			HashSet<string> canonicalSubDirs = GodotStuff.GetCanonicalGodotScriptPaths(MainModule.Module,
+			HashSet<string> mainModuleSubDirs = GodotStuff.GetCanonicalGodotScriptPaths(MainModule.Module,
 			 	MainModule.GetProjectDecompiler().GetTypesToDecompile(MainModule.Module), godot3xMetadata)
 				.Where(p => !string.IsNullOrEmpty(Path.GetDirectoryName(p)))
 				.Select(p => Path.GetDirectoryName(p)!)
 				.ToHashSet();
 
-			AddSubProjects(assemblyPath, MainModule.depInfo, names, canonicalSubDirs);
+			HashSet<string> otherSubDirs = this.originalProjectFiles?.Select(path => Path.GetDirectoryName(path) ?? "").Where(p => !string.IsNullOrEmpty(p) && !mainModuleSubDirs.Contains(p)).ToHashSet() ?? [];
+
+			AddSubProjects(assemblyPath, MainModule.depInfo, names, mainModuleSubDirs, otherSubDirs);
 
 		}
 
@@ -811,7 +814,7 @@ public class GodotModuleDecompiler
 
 		public override void VisitInterpolatedStringText(InterpolatedStringText interpolatedStringText)
 		{
-			if (interpolatedStringText.Text != null)
+			if (!string.IsNullOrEmpty(interpolatedStringText.Text))
 			{
 				strings.Add(interpolatedStringText.Text);
 			}
@@ -845,71 +848,93 @@ public class GodotModuleDecompiler
 
 		void VisitAnyNode(AnyNode anyNode)
 		{
-			VisitChildren(anyNode);
+			if (anyNode is not null)
+			{
+				VisitChildren(anyNode!);
+			}
 		}
 
 		void VisitBackreference(Backreference backreference)
 		{
-			VisitChildren(backreference);
+			if (backreference is not null)
+			{
+				VisitChildren(backreference!);
+			}
 		}
 
 		void VisitIdentifierExpressionBackreference(IdentifierExpressionBackreference identifierExpressionBackreference)
 		{
-			VisitChildren(identifierExpressionBackreference);
+			if (identifierExpressionBackreference is not null)
+			{
+				VisitChildren(identifierExpressionBackreference!);
+			}
 		}
 
 		void VisitChoice(Choice choice)
 		{
-			VisitChildren(choice);		}
+			if (choice is not null)
+			{
+				VisitChildren(choice!);
+			}
+		}
 
 		void VisitNamedNode(NamedNode namedNode)
 		{
-			VisitChildren(namedNode);
+			if (namedNode is not null)
+			{
+				VisitChildren(namedNode!);
+			}
 		}
 
 		void VisitRepeat(Repeat repeat)
 		{
-			VisitChildren(repeat);
+			if (repeat is not null)
+			{
+				VisitChildren(repeat!);
+			}
 		}
 
 		void VisitOptionalNode(OptionalNode optionalNode)
 		{
-			VisitChildren(optionalNode);
+			if (optionalNode is not null)
+			{
+				VisitChildren(optionalNode!);
+			}
 		}
 
 		void VisitNodeInPattern(INode childNode)
 		{
-			if (childNode is AstNode)
+			if (childNode is AstNode astNode)
 			{
-				((AstNode)childNode).AcceptVisitor(this);
+				astNode.AcceptVisitor(this);
 			}
-			else if (childNode is IdentifierExpressionBackreference)
+			else if (childNode is IdentifierExpressionBackreference backreference)
 			{
-				VisitIdentifierExpressionBackreference((IdentifierExpressionBackreference)childNode);
+				VisitIdentifierExpressionBackreference(backreference);
 			}
-			else if (childNode is Choice)
+			else if (childNode is Choice choice)
 			{
-				VisitChoice((Choice)childNode);
+				VisitChoice(choice);
 			}
-			else if (childNode is AnyNode)
+			else if (childNode is AnyNode node)
 			{
-				VisitAnyNode((AnyNode)childNode);
+				VisitAnyNode(node);
 			}
-			else if (childNode is Backreference)
+			else if (childNode is Backreference backreference1)
 			{
-				VisitBackreference((Backreference)childNode);
+				VisitBackreference(backreference1);
 			}
-			else if (childNode is NamedNode)
+			else if (childNode is NamedNode node1)
 			{
-				VisitNamedNode((NamedNode)childNode);
+				VisitNamedNode(node1);
 			}
-			else if (childNode is OptionalNode)
+			else if (childNode is OptionalNode node2)
 			{
-				VisitOptionalNode((OptionalNode)childNode);
+				VisitOptionalNode(node2);
 			}
-			else if (childNode is Repeat)
+			else if (childNode is Repeat repeat)
 			{
-				VisitRepeat((Repeat)childNode);
+				VisitRepeat(repeat);
 			}
 		}
 	}

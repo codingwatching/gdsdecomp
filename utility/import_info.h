@@ -83,6 +83,7 @@ public:
 
 protected:
 	String import_md_path; // path to the ".import" file
+	IInfoType iitype;
 	int ver_major = 0; //2, 3, 4
 	int ver_minor = 0;
 	bool not_an_import = false;
@@ -91,7 +92,6 @@ protected:
 	String preferred_import_path;
 	String export_dest;
 	String export_lossless_copy;
-	IInfoType iitype;
 	void _init();
 	virtual Error _load(const String &p_path) = 0;
 
@@ -131,6 +131,7 @@ public:
 	virtual void set_type(const String &p_type) = 0;
 
 	virtual String get_importer() const = 0;
+	virtual void set_importer(const String &p_importer) = 0;
 
 	virtual String get_compat_type() const = 0;
 	// Gets the original file that the godot resource was imported from (e.g. res://icon.png)
@@ -143,6 +144,7 @@ public:
 	virtual void set_source_and_md5(const String &path, const String &md5 = "") = 0;
 
 	virtual String get_uid() const { return String(); }
+	virtual void set_uid(const String &p_uid) { return; }
 	// v2 only, Atlas Textures had more than one source
 	virtual Vector<String> get_additional_sources() const { return Vector<String>(); }
 	virtual void set_additional_sources(const Vector<String> &p_add_sources) { return; }
@@ -213,6 +215,7 @@ public:
 	virtual String get_compat_type() const override;
 
 	virtual String get_importer() const override;
+	virtual void set_importer(const String &p_importer) override;
 
 	// Gets the original file that the godot resource was imported from (e.g. res://icon.png)
 	virtual String get_source_file() const override;
@@ -224,6 +227,7 @@ public:
 	virtual void set_source_and_md5(const String &path, const String &md5 = "") override;
 
 	virtual String get_uid() const override;
+	virtual void set_uid(const String &p_uid) override;
 
 	// Gets the godot resources that were created from from this import (e.g. res://icon.<md5>.stex)
 	virtual Vector<String> get_dest_files() const override;
@@ -274,6 +278,7 @@ public:
 	virtual String get_compat_type() const override;
 
 	virtual String get_importer() const override;
+	virtual void set_importer(const String &p_importer) override;
 
 	// Gets the original file that the godot resource was imported from (e.g. res://icon.png)
 	virtual String get_source_file() const override;
@@ -331,6 +336,7 @@ public:
 	virtual String get_compat_type() const override;
 
 	virtual String get_importer() const override { return importer; }
+	virtual void set_importer(const String &p_importer) override { importer = p_importer; }
 
 	virtual String get_source_file() const override { return source_file; }
 	virtual void set_source_file(const String &path) override { source_file = path; }

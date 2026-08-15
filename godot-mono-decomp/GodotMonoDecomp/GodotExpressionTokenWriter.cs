@@ -248,7 +248,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 	{
 		StartNode(simpleType);
 		// WriteIdentifier(simpleType.Identifier);
-		WriteKeyword(simpleType.ToString(), Roles.Type);
+		WriteKeyword(GodotStuff.CSharpTypeToGodotType(simpleType.ToString()));
 		EndNode(simpleType);
 	}
 
@@ -258,11 +258,11 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 		memberType.Target.AcceptVisitor(this);
 		if (memberType.IsDoubleColon)
 		{
-			WriteToken(Roles.DoubleColon);
+			WriteToken(Tokens.DoubleColon);
 		}
 		else
 		{
-			WriteToken(Roles.Dot);
+			WriteToken(Tokens.Dot);
 		}
 		WriteIdentifier(memberType.MemberNameToken);
 		WriteTypeArguments(memberType.TypeArguments);
@@ -287,10 +287,11 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 	public override void VisitObjectCreateExpression(ObjectCreateExpression objectCreateExpression)
 	{
 		StartNode(objectCreateExpression);
-		WriteKeyword(ObjectCreateExpression.NewKeywordRole);
+		WriteKeyword(ObjectCreateExpression.NewKeyword);
 		var typename = GodotStuff.CSharpTypeToGodotType(objectCreateExpression.Type.ToString());
+		var initializer = objectCreateExpression.Initializer;
 
-		bool useParenthesis = objectCreateExpression.Arguments.Any() || objectCreateExpression.Initializer.IsNull;
+		bool useParenthesis = objectCreateExpression.Arguments.Any() || initializer is null;
 		bool isPackedArray = typename.StartsWith("Packed");
 		isDict = typename.StartsWith("Dictionary");
 		if (!(isDict && !useParenthesis))
@@ -299,7 +300,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 		}
 
 		// also use parenthesis if there is an '(' token
-		if (!objectCreateExpression.LParToken.IsNull)
+		if (objectCreateExpression.ToString().Contains('('))
 		{
 			useParenthesis = true;
 		}
@@ -312,7 +313,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 		{
 			LPar();
 		}
-		objectCreateExpression.Initializer.AcceptVisitor(this);
+		initializer?.AcceptVisitor(this);
 		isDict = false;
 		if (!useParenthesis && isPackedArray)
 		{
@@ -323,7 +324,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 
 	public override void VisitInvocationExpression(InvocationExpression invocationExpression)
 	{
-		if (invocationExpression.GetSymbol().Name == "Color8")
+		if (string.Equals(invocationExpression.GetSymbol()?.Name, "Color8", StringComparison.Ordinal))
 		{
 			int[] args = invocationExpression.Arguments.Select(a => {
 				if (a is PrimitiveExpression pe && pe.Value is int i)
@@ -336,7 +337,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 			string[] stargs = dargs.Select(a => GodotExpressionTokenWriter.PrintPrimitiveValue(a) ?? "0").ToArray();
 			string value = $"Color({string.Join(",", stargs)})";
 			StartNode(invocationExpression);
-			writer.WriteToken(Roles.Identifier, value);
+			writer.WriteToken(value);
 			EndNode(invocationExpression);
 			return;
 		}
@@ -347,7 +348,11 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 	{
 		StartNode(arrayCreateExpression);
 		// WriteKeyword(ArrayCreateExpression.NewKeywordRole);
-		var typename = GodotStuff.CSharpTypeToGodotType(arrayCreateExpression.Type.GetSymbol().Name + "[]");
+		var arrayType = arrayCreateExpression.Type;
+		var arrayElementName = arrayType != null
+			? arrayType.GetSymbol()?.Name ?? arrayType.ToString()
+			: string.Empty;
+		var typename = GodotStuff.CSharpTypeToGodotType(arrayElementName + "[]");
 		// arrayCreateExpression.Type.AcceptVisitor(this);
 		// if (arrayCreateExpression.Arguments.Count > 0)
 		// {
@@ -361,7 +366,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 		{
 			// For Packed* types, we use the Godot type name directly.
 			// This is because the C# type name is not the same as the Godot type name.
-			writer.WriteToken(Roles.Identifier, typename);
+			writer.WriteToken(typename);
 			LPar();
 		}
 		else if (typename.StartsWith("Dictionary"))
@@ -369,7 +374,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 			// Dictionary expressions are written like this: { key: value, key2: value2 }
 			isDict = true;
 		}
-		arrayCreateExpression.Initializer.AcceptVisitor(this);
+		arrayCreateExpression.Initializer?.AcceptVisitor(this);
 		isDict = false;
 		if (typename.StartsWith("Packed"))
 		{
@@ -405,7 +410,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 
 	protected void PrintDictionaryInitializerElements(AstNodeCollection<Expression> elements)
 	{
-		WriteToken(Roles.LBrace);
+		WriteToken(Tokens.LBrace);
 		foreach (var (idx, node) in elements.WithIndex())
 		{
 			// it's an array initalizer expression
@@ -415,7 +420,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 				{
 					if (eidx == 1)
 					{
-						writer.WriteToken(Roles.Colon, ":");
+						writer.WriteToken(Tokens.Colon);
 						Space();
 					}
 					expr.AcceptVisitor(this);
@@ -431,8 +436,9 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 				Space();
 			}
 		}
-		WriteToken(Roles.RBrace);
+		WriteToken(Tokens.RBrace);
 	}
+
 
 	protected void PrintArrayInitializerElements(AstNodeCollection<Expression> elements)
 	{
@@ -442,7 +448,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 		bool wrap = wrapAlways
 					|| elements.Count > 10;
 		// OpenBrace(wrap ? policy.ArrayInitializerBraceStyle : BraceStyle.EndOfLine, newLine: wrap);
-		WriteToken(Roles.LBracket);
+		WriteToken(Tokens.LBracket);
 		if (!wrap)
 			Space();
 		AstNode? last = null;
@@ -459,14 +465,14 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 			last = node;
 			node.AcceptVisitor(this);
 		}
-		if (last != null)
-			OptionalComma(last.NextSibling);
+		if (last?.NextSibling is AstNode nextNode)
+			Comma(nextNode);
 		if (wrap)
 			NewLine();
 		else
 			Space();
 		// CloseBrace(wrap ? policy.ArrayInitializerBraceStyle : BraceStyle.EndOfLine, unindent: wrap);
-		WriteToken(Roles.RBracket);
+		WriteToken(Tokens.RBracket);
 
 		bool IsSimpleExpression(Expression ex)
 		{
@@ -509,7 +515,7 @@ public class GodotExpressionOutputVisitor : CSharpOutputVisitor
 		if (text != null)
 		{
 			StartNode(memberReferenceExpression);
-			writer.WriteToken(Roles.Identifier, text);
+			writer.WriteToken(text);
 			EndNode(memberReferenceExpression);
 			return;
 		}
@@ -579,13 +585,8 @@ public class GodotExpressionTokenWriter : TokenWriter, ILocatable
 		isAtStartOfLine = false;
 	}
 
-	public override void WriteKeyword(Role role, string keyword)
+	public override void WriteKeyword(string keyword)
 	{
-		if (role == Roles.Type || role == Roles.BaseType)
-		{
-			keyword = GodotStuff.CSharpTypeToGodotType(keyword);
-		}
-
 		WriteIndentation();
 		column += keyword.Length;
 		Length += keyword.Length;
@@ -593,12 +594,8 @@ public class GodotExpressionTokenWriter : TokenWriter, ILocatable
 		isAtStartOfLine = false;
 	}
 
-	public override void WriteToken(Role role, string token)
+	public override void WriteToken(string token)
 	{
-		if (role == Roles.Type || role == Roles.BaseType)
-		{
-			token = GodotStuff.CSharpTypeToGodotType(token);
-		}
 		WriteIndentation();
 		column += token.Length;
 		Length += token.Length;
@@ -723,7 +720,7 @@ public class GodotExpressionTokenWriter : TokenWriter, ILocatable
 		}
 	}
 
-	public override void WritePreProcessorDirective(PreProcessorDirectiveType type, string argument)
+	public override void WritePreProcessorDirective(PreProcessorDirectiveType type, string? argument)
 	{
 		// pre-processor directive must start on its own line
 		if (!isAtStartOfLine)

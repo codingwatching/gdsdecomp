@@ -51,7 +51,7 @@ public class GetFieldInitializerValueVisitor : DepthFirstAstVisitor
 		if (targetMember is IProperty property && Equals(propertyDeclaration.GetSymbol(), property))
 		{
 			var initializer = propertyDeclaration.Initializer;
-			if (!(initializer == null || initializer == Expression.Null))
+			if (initializer != null)
 			{
 				strVal = GetInitializerValue(initializer);
 			}
@@ -74,7 +74,7 @@ public class GetFieldInitializerValueVisitor : DepthFirstAstVisitor
 	public string? GetInitializerValue(Expression initializer)
 	{
 		string? value = null;
-		if (initializer == null || initializer == Expression.Null)
+		if (initializer == null)
 		{
 			return null;
 		}
@@ -109,7 +109,7 @@ public class GetFieldInitializerValueVisitor : DepthFirstAstVisitor
 			}
 			else if (init is ObjectCreateExpression oce)
 			{
-				if (oce.Children.Count() == 1  && oce.LastChild is SimpleType simpleType)
+				if (oce.Children.Count == 1 && oce.LastChild is SimpleType simpleType && simpleType.IdentifierToken is not null)
 				{
 					if (simpleType.IdentifierToken.Name == "Array")
 					{
@@ -166,6 +166,10 @@ public class GetFieldInitializerValueVisitor : DepthFirstAstVisitor
 			var intializers = fieldDeclaration.Variables;
 			foreach (var initializer in intializers)
 			{
+				if (initializer.Initializer is null)
+				{
+					continue;
+				}
 				strVal = GetInitializerValue(initializer.Initializer);
 				if (strVal != null)
 				{

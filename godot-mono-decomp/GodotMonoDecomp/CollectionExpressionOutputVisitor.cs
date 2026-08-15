@@ -80,9 +80,14 @@ public class ProxyOutput: ITextOutput
 		{
 			realOutput.WriteReference(member, text, isDefinition);
 		}
-		public void WriteLocalReference(string text, object reference, bool isDefinition = false)
+		public void WriteLocalReference(string text, object reference, bool isDefinition = false, bool isHoverOnly = false)
 		{
-			realOutput.WriteLocalReference(text, reference, isDefinition);
+			realOutput.WriteLocalReference(text, reference, isDefinition, isHoverOnly);
+		}
+
+		public void MarkDefinitionStart()
+		{
+			realOutput.MarkDefinitionStart();
 		}
 
 		public void MarkFoldStart(string collapsedText = "...", bool defaultCollapsed = false, bool isDefinition = false)
@@ -304,27 +309,27 @@ public class GodotCSharpOutputVisitor : CSharpOutputVisitor
 		}
 
 		StartNode(arrayInitializerExpression);
-		WriteToken(Roles.LBracket);
+		WriteToken(Tokens.LBracket);
 
 		bool first = true;
 		foreach (var element in arrayInitializerExpression.Elements)
 		{
 			if (!first)
 			{
-				WriteToken(Roles.Comma);
+				WriteToken(Tokens.Comma);
 				Space();
 			}
 
 			if (element.Annotation<CollectionExpressionSpreadElementAnnotation>() != null)
 			{
-				WriteToken(BinaryOperatorExpression.RangeRole);
+				WriteToken(BinaryOperatorExpression.RangeToken);
 			}
 
 			element.AcceptVisitor(this);
 			first = false;
 		}
 
-		WriteToken(Roles.RBracket);
+		WriteToken(Tokens.RBracket);
 		EndNode(arrayInitializerExpression);
 	}
 }

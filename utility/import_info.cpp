@@ -386,6 +386,11 @@ String ImportInfoModern::get_importer() const {
 	return cf->get_value("remap", "importer", "");
 }
 
+void ImportInfoModern::set_importer(const String &p_importer) {
+	cf->set_value("remap", "importer", p_importer);
+	dirty = true;
+}
+
 String ImportInfoModern::get_source_file() const {
 	return cf->get_value("deps", "source_file", "");
 }
@@ -412,6 +417,11 @@ void ImportInfoModern::set_source_md5(const String &md5) {
 
 String ImportInfoModern::get_uid() const {
 	return cf->get_value("remap", "uid", "");
+}
+
+void ImportInfoModern::set_uid(const String &p_uid) {
+	cf->set_value("remap", "uid", p_uid);
+	dirty = true;
 }
 
 Vector<String> ImportInfoModern::get_dest_files() const {
@@ -606,6 +616,10 @@ Error ImportInfoModern::_load(const String &p_path) {
 	ERR_FAIL_COND_V_MSG(err != OK, err, "Could not load " + path);
 	import_md_path = path;
 	preferred_import_path = cf->get_value("remap", "path", "");
+	// short circuit silently if the import file is marked as invalid
+	if (cf->get_value("remap", "valid", true).operator bool() == false) { // defaults to true because "valid" isn't present if it's valid
+		return ERR_INVALID_DATA;
+	}
 
 	Vector<String> dest_files;
 
@@ -1018,6 +1032,11 @@ String ImportInfov2::get_importer() const {
 	return v2metadata->get_editor();
 }
 
+void ImportInfov2::set_importer(const String &p_importer) {
+	v2metadata->set_editor(p_importer);
+	dirty = true;
+}
+
 String ImportInfov2::get_source_file() const {
 	if (v2metadata->get_source_count() > 0) {
 		return v2metadata->get_source_path(0);
@@ -1304,6 +1323,8 @@ void ImportInfo::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_compat_type"), &ImportInfo::get_compat_type);
 
 	ClassDB::bind_method(D_METHOD("get_importer"), &ImportInfo::get_importer);
+	ClassDB::bind_method(D_METHOD("set_importer", "importer"), &ImportInfo::set_importer);
+	ADD_PROPERTY(PropertyInfo(Variant::STRING, "importer"), "set_importer", "get_importer");
 
 	ClassDB::bind_method(D_METHOD("get_source_file"), &ImportInfo::get_source_file);
 	ClassDB::bind_method(D_METHOD("set_source_file", "path"), &ImportInfo::set_source_file);
@@ -1314,6 +1335,8 @@ void ImportInfo::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::STRING, "source_md5"), "set_source_md5", "get_source_md5");
 
 	ClassDB::bind_method(D_METHOD("get_uid"), &ImportInfo::get_uid);
+	ClassDB::bind_method(D_METHOD("set_uid", "uid"), &ImportInfo::set_uid);
+	ADD_PROPERTY(PropertyInfo(Variant::STRING, "uid"), "set_uid", "get_uid");
 
 	ClassDB::bind_method(D_METHOD("get_dest_files"), &ImportInfo::get_dest_files);
 	ClassDB::bind_method(D_METHOD("set_dest_files", "dest_files"), &ImportInfo::set_dest_files);

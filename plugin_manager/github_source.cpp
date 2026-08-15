@@ -16,8 +16,6 @@ static const HashMap<String, Vector<String>> tag_masks = {};
 static const HashMap<String, Vector<String>> release_file_masks = {
 	{ "limboai", { "*gdextension*" } },
 	{ "orchestrator", { "*plugin*" } },
-	{ "discord-rpc-gd", { "*RPC*" } },
-	{ "discord-sdk-gd", { "*SDK*" } },
 	{ "godot-rapier2d", { "godot-rapier-2d*", "godot-rapier2d*" } },
 	{ "godot-rapier3d", { "godot-rapier-3d*", "godot-rapier3d*" } },
 };
@@ -25,37 +23,33 @@ static const HashMap<String, Vector<String>> release_file_masks = {
 static const HashMap<String, Vector<String>> release_file_exclude_masks = {
 	{ "godot-jolt", { "*symbols*" } },
 	{ "godot-steam-audio", { "*demo*" } },
-	{ "discord-rpc-gd", { "*Demo*" } },
-	{ "discord-sdk-gd", { "*Demo*" } },
 	{ "epic-online-services-godot", { "*-android-*", "*-ios-*", "*-macos-*", "*-windows-*", "*-linux-*", "*-web*" } },
 	{ "fmod", { "*android.zip", "*demo.zip" } },
 	{ "godotgif", { "*_convert_binary_*" } }
 };
 
-static const HashMap<String, String> plugin_map = {
-	{ "epic-online-services-godot", "https://github.com/3ddelano/epic-online-services-godot" },
-	{ "godotgif", "https://github.com/BOTLANNER/godot-gif" },
-	{ "godot-rapier3d", "https://github.com/appsinacup/godot-rapier-physics" },
-	{ "godot-rapier2d", "https://github.com/appsinacup/godot-rapier-physics" },
-	{ "native_dialogs", "https://github.com/98teg/NativeDialogs" },
-	{ "ffmpeg", "https://github.com/EIRTeam/EIRTeam.FFmpeg" },
-	{ "discord-sdk-gd", "https://github.com/vaporvee/discord-rpc-godot" },
-	{ "discord-rpc-gd", "https://github.com/vaporvee/discord-rpc-godot" },
-	{ "godot-steam-audio", "https://github.com/stechyo/godot-steam-audio" },
-	{ "m_terrain", "https://github.com/mohsenph69/Godot-MTerrain-plugin" },
-	{ "godot-jolt", "https://github.com/godot-jolt/godot-jolt" },
-	{ "orchestrator", "https://github.com/CraterCrash/godot-orchestrator" },
-	{ "limboai", "https://github.com/limbonaut/limboai" },
-	{ "terrain_3d", "https://github.com/TokisanGames/Terrain3D" },
-	{ "FMOD", "https://github.com/GDRETools/fmod-for-godot" }, // All caps FMOD
-	{ "fmod", "https://github.com/utopia-rise/fmod-gdextension" }, // lowercase fmod
-	{ "spine_godot_extension", "https://github.com/GDRETools/spine-runtimes" },
-	{ "spine-godot-extension", "https://github.com/GDRETools/spine-runtimes" }, // this isn't distributed as an addon, so there are multiple potential names for the plugin
-	{ "sentry", "https://github.com/getsentry/sentry-godot" },
-	{ "sentrysdk", "https://github.com/getsentry/sentry-godot" },
-	{ "wwise", "https://github.com/alessandrofama/wwise-godot-integration" },
-	{ "Wwise", "https://github.com/alessandrofama/wwise-godot-integration" },
-	{ "audio_gate", "https://github.com/Visssarion/audio-gate" },
+static const HashMap<String, Vector<String>> plugin_map = {
+	{ "epic-online-services-godot", { "https://github.com/3ddelano/epic-online-services-godot" } },
+	{ "godotgif", { "https://github.com/BOTLANNER/godot-gif" } },
+	{ "godot-rapier3d", { "https://github.com/appsinacup/godot-rapier-physics" } },
+	{ "godot-rapier2d", { "https://github.com/appsinacup/godot-rapier-physics" } },
+	{ "native_dialogs", { "https://github.com/98teg/NativeDialogs" } },
+	{ "ffmpeg", { "https://github.com/EIRTeam/EIRTeam.FFmpeg" } },
+	{ "godot-steam-audio", { "https://github.com/stechyo/godot-steam-audio" } },
+	{ "m_terrain", { "https://github.com/mohsenph69/Godot-MTerrain-plugin" } },
+	{ "godot-jolt", { "https://github.com/godot-jolt/godot-jolt" } },
+	{ "orchestrator", { "https://github.com/CraterCrash/godot-orchestrator" } },
+	{ "limboai", { "https://github.com/limbonaut/limboai" } },
+	{ "terrain_3d", { "https://github.com/TokisanGames/Terrain3D" } },
+	{ "FMOD", { "https://github.com/GDRETools/fmod-for-godot" } }, // All caps FMOD
+	{ "fmod", { "https://github.com/utopia-rise/fmod-gdextension" } }, // lowercase fmod
+	{ "spine_godot_extension", { "https://github.com/GDRETools/spine-runtimes" } },
+	{ "spine-godot-extension", { "https://github.com/GDRETools/spine-runtimes" } }, // this isn't distributed as an addon, so there are multiple potential names for the plugin
+	{ "sentry", { "https://github.com/getsentry/sentry-godot" } },
+	{ "sentrysdk", { "https://github.com/getsentry/sentry-godot" } },
+	{ "wwise", { "https://github.com/alessandrofama/wwise-godot-integration" } },
+	{ "Wwise", { "https://github.com/alessandrofama/wwise-godot-integration" } },
+	{ "audio_gate", { "https://github.com/Visssarion/audio-gate" } },
 };
 } // namespace
 GitHubSource::GitHubSource() {
@@ -66,7 +60,7 @@ GitHubSource::~GitHubSource() {
 	// Clean up any resources
 }
 
-const HashMap<String, String> &GitHubSource::get_plugin_repo_map() {
+const HashMap<String, Vector<String>> &GitHubSource::get_plugin_repo_map() {
 	return plugin_map;
 }
 
@@ -173,8 +167,8 @@ bool GitHubSource::should_skip_release(const String &plugin_name, const String &
 	return false;
 }
 
-String GitHubSource::get_repo_url(const String &plugin_name) {
-	return get_plugin_repo_map().has(plugin_name) ? get_plugin_repo_map()[plugin_name] : "";
+Vector<String> GitHubSource::get_repo_urls(const String &plugin_name) {
+	return get_plugin_repo_map().has(plugin_name) ? get_plugin_repo_map()[plugin_name] : Vector<String>();
 }
 
 Error GitHubSource::recache_release_list(const String &plugin_name) {
@@ -190,100 +184,100 @@ Error GitHubSource::recache_release_list(const String &plugin_name) {
 		}
 	}
 
-	String repo_url = get_repo_url(plugin_name);
-	if (repo_url.is_empty()) {
-		return ERR_INVALID_PARAMETER;
-	}
-
+	Vector<String> repo_urls = get_repo_urls(plugin_name);
 	double now = OS::get_singleton()->get_unix_time();
-	// Extract org and repo from URL
-	// the url is like this: https://github.com/GodotSteam/GodotSteam
-	auto thing = repo_url.replace_first("https://", "");
-	// now it's like this: github.com/GodotSteam/GodotSteam
-	String org = thing.get_slice("/", 1);
-	String repo = thing.get_slice("/", 2);
-
-	Vector<Dictionary> releases;
-	int pages = 1000;
-	for (int page = 1; page < pages; page++) {
-		Vector<String> extra_headers;
-		// add the github api key if it's set; this is primarily used for prepopulating the cache to avoid rate limiting
-		if (get_plugin_name() == "github") {
-			String api_key = OS::get_singleton()->get_environment("GITHUB_API_KEY");
-			if (!api_key.is_empty()) {
-				extra_headers.push_back("Authorization: Bearer " + api_key);
-			}
-		}
-		String request_url = get_release_api_url().replace("{0}", org).replace("{1}", repo).replace("{2}", itos(page));
-
-		Vector<uint8_t> response;
-		Error err = make_request(request_url, extra_headers, response);
-		if (err) {
-			if (err == ERR_BUSY) { // rate limit exceeded
-				// use the cached releases if they exist
-				print_line(get_plugin_name() + ": rate limit exceeded!");
-				if (has_cached_releases) {
-					print_line(get_plugin_name() + ": using cached releases...");
-					return OK;
-				}
-				print_line(get_plugin_name() + ": no cached releases, failing...");
-				return ERR_UNAUTHORIZED;
-			}
-			if (err == ERR_FILE_NOT_FOUND && page > 1) {
-				// no more releases
-				break;
-			}
-			if (err != OK) {
-				print_line(get_plugin_name() + ": failed to get releases: " + itos(err));
-				return err;
-			}
-		}
-
-		String response_str;
-		response_str.append_utf8((const char *)response.ptr(), response.size());
-		Array response_obj = JSON::parse_string(response_str);
-		if (response_obj.is_empty()) {
-			break;
-		}
-
-		for (int i = 0; i < response_obj.size(); i++) {
-			Dictionary release = response_obj[i];
-			releases.push_back(release);
-		}
-		if (response_obj.size() < get_release_page_limit()) {
-			break;
-		}
-	}
-
 	GHReleaseCache cache;
 	cache.retrieved_time = now;
 
-	for (int i = 0; i < releases.size(); i++) {
-		Dictionary release = releases[i];
-		int64_t release_id = int64_t(release.get("id", 0));
-		Array assets_arr = release.get("assets", {});
-		HashMap<int64_t, Dictionary> asset_map;
-		// empty out the author field because it takes up way too much space and its not needed
-		release["author"] = Dictionary();
-		for (int j = 0; j < assets_arr.size(); j++) {
-			Dictionary asset = assets_arr[j];
-			// same as author
-			if (asset.has("uploader")) {
-				asset["uploader"] = Dictionary();
+	for (const String &repo_url : repo_urls) {
+		ERR_CONTINUE_MSG(repo_url.is_empty(), "Repo URL is empty");
+
+		// Extract org and repo from URL
+		// the url is like this: https://github.com/GodotSteam/GodotSteam
+		auto thing = repo_url.replace_first("https://", "");
+		// now it's like this: github.com/GodotSteam/GodotSteam
+		String org = thing.get_slice("/", 1);
+		String repo = thing.get_slice("/", 2);
+
+		Vector<Dictionary> releases;
+		int pages = 1000;
+		for (int page = 1; page < pages; page++) {
+			Vector<String> extra_headers;
+			// add the github api key if it's set; this is primarily used for prepopulating the cache to avoid rate limiting
+			if (repo_url.contains("github.com")) {
+				String api_key = OS::get_singleton()->get_environment("GITHUB_API_KEY");
+				if (!api_key.is_empty()) {
+					extra_headers.push_back("Authorization: Bearer " + api_key);
+				}
 			}
-			int64_t asset_id = int64_t(asset.get("id", 0));
-			asset_map[asset_id] = asset;
+			String request_url = get_release_api_url().replace("{0}", org).replace("{1}", repo).replace("{2}", itos(page));
+
+			Vector<uint8_t> response;
+			Error err = make_request(request_url, extra_headers, response);
+			if (err) {
+				if (err == ERR_BUSY) { // rate limit exceeded
+					// use the cached releases if they exist
+					print_line(get_plugin_name() + ": rate limit exceeded!");
+					if (has_cached_releases) {
+						print_line(get_plugin_name() + ": using cached releases...");
+						return OK;
+					}
+					print_line(get_plugin_name() + ": no cached releases, failing...");
+					return ERR_UNAUTHORIZED;
+				}
+				if (err == ERR_FILE_NOT_FOUND && page > 1) {
+					// no more releases
+					break;
+				}
+				if (err != OK) {
+					print_line(get_plugin_name() + ": failed to get releases: " + itos(err));
+					return err;
+				}
+			}
+
+			String response_str;
+			response_str.append_utf8((const char *)response.ptr(), response.size());
+			Array response_obj = JSON::parse_string(response_str);
+			if (response_obj.is_empty()) {
+				break;
+			}
+
+			for (int i = 0; i < response_obj.size(); i++) {
+				Dictionary release = response_obj[i];
+				releases.push_back(release);
+			}
+			if (response_obj.size() < get_release_page_limit()) {
+				break;
+			}
 		}
-		cache.releases[release_id] = {};
-		cache.releases[release_id].release = release;
-		cache.releases[release_id].assets = asset_map;
+
+		for (int i = 0; i < releases.size(); i++) {
+			Dictionary release = releases[i];
+			int64_t release_id = int64_t(release.get("id", 0));
+			Array assets_arr = release.get("assets", {});
+			HashMap<int64_t, Dictionary> asset_map;
+			// empty out the author field because it takes up way too much space and its not needed
+			release["author"] = Dictionary();
+			for (int j = 0; j < assets_arr.size(); j++) {
+				Dictionary asset = assets_arr[j];
+				// same as author
+				if (asset.has("uploader")) {
+					asset["uploader"] = Dictionary();
+				}
+				int64_t asset_id = int64_t(asset.get("id", 0));
+				asset_map[asset_id] = asset;
+			}
+			release["repository_url"] = repo_url;
+			cache.releases[release_id] = {};
+			cache.releases[release_id].release = release;
+			cache.releases[release_id].assets = asset_map;
+		}
 	}
 
 	{
 		MutexLock lock(cache_mutex);
 		release_cache[plugin_name] = cache;
 	}
-
 	return OK;
 }
 namespace {
@@ -343,7 +337,7 @@ ReleaseInfo GitHubSource::get_release_info(const String &plugin_name, int64_t pr
 				release_info.sha256_sum = sha256_sum;
 
 				release_info.download_url = download_url;
-				release_info.repository_url = get_repo_url(plugin_name);
+				release_info.repository_url = release.get("repository_url", "");
 
 				return release_info;
 			}

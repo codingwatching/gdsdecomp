@@ -14,7 +14,7 @@ class GitHubSource : public PluginSource {
 private:
 	static constexpr const char *_github_release_api_url = "https://api.github.com/repos/{0}/{1}/releases?per_page=100&page={2}";
 	static const String github_release_api_url;
-	virtual const HashMap<String, String> &get_plugin_repo_map();
+	virtual const HashMap<String, Vector<String>> &get_plugin_repo_map();
 	virtual const HashMap<String, Vector<String>> &get_plugin_tag_masks();
 	virtual const HashMap<String, Vector<String>> &get_plugin_release_file_masks();
 	virtual const HashMap<String, Vector<String>> &get_plugin_release_file_exclude_masks();
@@ -70,7 +70,7 @@ protected:
 
 	bool should_skip_tag(const String &plugin_name, const String &tag);
 	bool should_skip_release(const String &plugin_name, const String &release);
-	String get_repo_url(const String &plugin_name);
+	Vector<String> get_repo_urls(const String &plugin_name);
 
 	Vector<Dictionary> get_list_of_releases(const String &plugin_name, Error &r_error);
 

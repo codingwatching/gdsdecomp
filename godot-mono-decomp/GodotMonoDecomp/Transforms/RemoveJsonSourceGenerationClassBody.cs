@@ -130,7 +130,7 @@ public class RemoveJsonSourceGenerationClassBody : DepthFirstAstVisitor, IAstTra
 
 	private static bool IsJsonTypeInfoType(AstType type)
 	{
-		if (type.IsNull)
+		if (type == null)
 		{
 			return false;
 		}

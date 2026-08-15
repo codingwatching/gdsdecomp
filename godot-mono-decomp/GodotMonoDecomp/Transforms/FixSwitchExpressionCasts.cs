@@ -77,8 +77,7 @@ public class FixSwitchExpressionCasts : DepthFirstAstVisitor, IAstTransform
 				if (mismatchedSections.Length > 0 && allDefs.Count > 1) {
 				    var first = mismatchedSections.FirstOrDefault()!;
 					var body = first.Body;
-					first.Body = null;
-					first.Body = new CastExpression(context.TypeSystemAstBuilder.ConvertType(resolved.Type), body);
+					first.Body = new CastExpression(context.TypeSystemAstBuilder.ConvertType(resolved.Type), body.Clone());
 				}
 			}
 		}

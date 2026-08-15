@@ -91,7 +91,7 @@ namespace GodotMonoDecomp
 
 		public IAssemblyResolver AssemblyResolver { get; }
 
-		public AssemblyReferenceClassifier AssemblyReferenceClassifier { get; }
+		public IAssemblyReferenceClassifier AssemblyReferenceClassifier { get; }
 
 		public IDebugInfoProvider? DebugInfoProvider { get; set;}
 

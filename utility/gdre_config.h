@@ -68,7 +68,7 @@ public:
 			const String &p_full_name,
 			const String &p_brief,
 			const String &p_description,
-			const Variant &p_default_value,
+			const int &p_default_value,
 			const String &p_enum_values,
 			bool p_hidden = false,
 			bool p_ephemeral = false);

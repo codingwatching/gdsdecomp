@@ -403,11 +403,17 @@ HashMap<String, Ref<GDREConfigSetting>> GDREConfig::_init_default_settings() {
 				"Disable translation key recovery",
 				"Disable translation key recovery.\nThis will skip the translation key recovery process entirely.",
 				false)),
-		memnew(GDREConfigSetting(
+		memnew(GDREConfigSettingEnum(
+				// Name unchanged for backwards compatibility (bool `true` -> `1` == `Very Thorough`)
 				"Exporter/Translation/more_thorough_recovery",
-				"More thorough translation key recovery",
-				"Enable more thorough translation key recovery.\nWARNING: this is not guaranteed to find all the keys in the translation file and may massively increase the time it takes to run.",
-				false)),
+				"Key recovery mode",
+				"Sets the key recovery mode.\n"
+				"* Default: Balanced, runs most stages of key recovery with reduced working set size\n"
+				"* Very Thorough: runs all stages of key recovery with full working set size\n"
+				"    WARNING: this is not guaranteed to find all the keys in the translation file and may massively increase the time it takes to run.\n"
+				"* Only resource strings: Only runs first stage of key recovery, fastest option",
+				0,
+				"Default,Very Thorough,Only resource strings")),
 		memnew(GDREConfigSetting_TranslationExporter_LoadKeyHintFile()),
 		memnew(GDREConfigSetting(
 				"Exporter/Translation/skip_loading_resource_strings",
@@ -676,7 +682,7 @@ GDREConfigSettingEnum::GDREConfigSettingEnum(
 		const String &p_full_name,
 		const String &p_brief,
 		const String &p_description,
-		const Variant &p_default_value,
+		const int &p_default_value,
 		const String &p_enum_values,
 		bool p_hidden,
 		bool p_ephemeral) :
