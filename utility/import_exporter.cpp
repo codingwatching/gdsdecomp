@@ -1034,7 +1034,7 @@ Error ImportExporter::compile_csharp_scripts() {
 		process_runner = std::make_shared<ProcessRunnerStruct>("dotnet", Vector<String>({ "build", solution_path, "--property", "WarningLevel=0" }));
 		process_runner->task_id = TaskManager::get_singleton()->add_task(process_runner, nullptr, "Compiling C# project...", -1, true, true);
 	} else {
-		return ERR_UNAVAILABLE;
+		return ERR_UNCONFIGURED;
 	}
 	return OK;
 }
@@ -1119,7 +1119,17 @@ Error ImportExporter::export_imports(const String &p_out_dir, const Vector<Strin
 					reset_before_return(true);
 					return true;
 				}
-				ERR_PRINT("Failed to compile C# project!");
+				String error_string;
+				if (compile_err == ERR_UNAVAILABLE) {
+					error_string = "Cannot compile 3.x project with dotnet sdk, build the project from the Godot editor first";
+				} else if (compile_err == ERR_UNCONFIGURED) {
+					error_string = "dotnet could not be run, make sure it is installed and configured";
+				} else if (compile_err == ERR_FILE_NOT_FOUND) {
+					error_string = "C# project file not found";
+				} else {
+					error_string = "dotnet build failed";
+				}
+				WARN_PRINT(vformat("Could not compile C# project: %s", error_string));
 				return false;
 			}
 		}
