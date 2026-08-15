@@ -2882,13 +2882,10 @@ void GDRESettings::get_resource_strings(HashSet<String> &r_strings) const {
 Vector<String> GDRESettings::get_errors() {
 	return GDRELogger::get_errors();
 }
-String GDRESettings::find_dotnet_assembly_path(Vector<String> p_search_dirs) const {
-	String assembly_name = get_project_dotnet_assembly_name();
-	if (assembly_name.is_empty()) {
-		return "";
-	}
+
+String GDRESettings::find_dotnet_assembly_path(const String &p_assembly_name, Vector<String> p_search_dirs) const {
 	for (String search_dir : p_search_dirs) {
-		Vector<String> paths = Glob::rglob(search_dir.path_join("**").path_join(assembly_name + ".dll"), true);
+		Vector<String> paths = Glob::rglob(search_dir.path_join("**").path_join(p_assembly_name + ".dll"), true);
 		if (paths.size() > 0) {
 			return paths[0];
 		}
@@ -2897,9 +2894,6 @@ String GDRESettings::find_dotnet_assembly_path(Vector<String> p_search_dirs) con
 }
 
 Error GDRESettings::load_project_dotnet_assembly() {
-	String assembly_name = get_project_dotnet_assembly_name();
-	ERR_FAIL_COND_V_MSG(get_project_dotnet_assembly_name().is_empty(), ERR_INVALID_PARAMETER, "Could not load dotnet assembly: could not determine assembly name");
-	String assembly_file = assembly_name + ".dll";
 	// The game directory
 	String project_dir = get_pack_path().get_base_dir();
 
@@ -2921,17 +2915,39 @@ Error GDRESettings::load_project_dotnet_assembly() {
 		}
 	}
 	search_dirs.push_back(project_dir);
-	String assembly_path = find_dotnet_assembly_path(search_dirs);
+	String assembly_name = get_dotnet_assembly_name_from_settings();
+	String base_name = get_pack_path().get_file().get_basename();
+	String assembly_path;
+	if (!assembly_name.is_empty()) {
+		// get the basename of the pck file
+		assembly_path = find_dotnet_assembly_path(assembly_name, search_dirs);
+	}
+	if (assembly_path.is_empty() && base_name != assembly_name) {
+		// get the basename of the pck file
+		assembly_path = find_dotnet_assembly_path(base_name, search_dirs);
+		if (!assembly_path.is_empty()) {
+			assembly_name = base_name;
+		}
+	}
+	Error err = OK;
 	if (assembly_path.is_empty()) {
+		err = ERR_FILE_NOT_FOUND;
+	} else {
+		err = reload_dotnet_assembly(assembly_path);
+	}
+	if (err != OK) {
+		String assembly_file = assembly_name + ".dll";
 		// We didn't find an assembly, but if there's no C# files, we can just assume it's not a C# project
 		if (!current_project->has_cs_files) {
 			current_project->detected_csharp = false;
-			WARN_PRINT("No assembly file '" + assembly_file + "' found in any directory in " + project_dir + " and no C# files found, assuming it's not a C# project");
+			WARN_PRINT(vformat("No valid assembly file '%s' found in any directory in %s and no C# files found, assuming it's not a C# project", assembly_file, project_dir));
 			return OK;
 		}
-		ERR_FAIL_V_MSG(ERR_FILE_NOT_FOUND, "Could not load dotnet assembly: Assembly file '" + assembly_file + "' not found in any directory in " + project_dir);
+		if (err == ERR_FILE_NOT_FOUND) {
+			ERR_FAIL_V_MSG(ERR_FILE_NOT_FOUND, "Could not load dotnet assembly: Assembly file '" + assembly_file + "' not found in any directory in " + project_dir);
+		}
 	}
-	return reload_dotnet_assembly(assembly_path);
+	return err;
 }
 
 Error GDRESettings::reload_dotnet_assembly(const String &p_path) {
@@ -2942,6 +2958,7 @@ Error GDRESettings::reload_dotnet_assembly(const String &p_path) {
 	}
 	current_project->decompiler = Ref<GodotMonoDecompWrapper>();
 	current_project->assembly_path = p_path;
+	current_project->loaded_assembly_name.clear();
 	ERR_FAIL_COND_V_MSG(current_project->assembly_path.is_empty(), ERR_INVALID_PARAMETER, "Assembly path is empty");
 	ERR_FAIL_COND_V_MSG(!FileAccess::exists(current_project->assembly_path), ERR_FILE_NOT_FOUND, "Assembly file does not exist");
 
@@ -2970,6 +2987,7 @@ Error GDRESettings::reload_dotnet_assembly(const String &p_path) {
 	Ref<GodotMonoDecompWrapper> decompiler = GodotMonoDecompWrapper::create(current_project->assembly_path, originalProjectFiles, { current_project->assembly_path.get_base_dir() }, settings);
 	ERR_FAIL_COND_V_MSG(decompiler.is_null(), ERR_CANT_CREATE, "Failed to load assembly " + current_project->assembly_path + " (Not a valid .NET assembly?)");
 	current_project->decompiler = decompiler;
+	current_project->loaded_assembly_name = p_path.get_file().get_basename();
 
 	auto packed_data = GDREPackedData::get_singleton();
 	DEV_ASSERT(packed_data != nullptr);
@@ -3008,7 +3026,7 @@ Ref<GodotMonoDecompWrapper> GDRESettings::get_dotnet_decompiler() const {
 constexpr const char *DOTNET_ASSEMBLY_NAME_SETTING_4x = "dotnet/project/assembly_name";
 constexpr const char *DOTNET_ASSEMBLY_NAME_SETTING_3x = "mono/project/assembly_name";
 
-String GDRESettings::get_project_dotnet_assembly_name() const {
+String GDRESettings::get_dotnet_assembly_name_from_settings() const {
 	if (!is_pack_loaded()) {
 		return "";
 	}
@@ -3020,6 +3038,16 @@ String GDRESettings::get_project_dotnet_assembly_name() const {
 		return get_project_setting(DOTNET_ASSEMBLY_NAME_SETTING_3x, get_game_name());
 	}
 	return get_project_setting(DOTNET_ASSEMBLY_NAME_SETTING_4x, get_game_name());
+}
+
+String GDRESettings::get_project_dotnet_assembly_name() const {
+	if (!is_pack_loaded()) {
+		return "";
+	}
+	if (current_project->loaded_assembly_name.is_empty()) {
+		return get_dotnet_assembly_name_from_settings();
+	}
+	return current_project->loaded_assembly_name;
 }
 
 bool GDRESettings::has_loaded_dotnet_assembly() const {

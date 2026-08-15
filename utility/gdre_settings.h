@@ -38,6 +38,7 @@ public:
 		bool detected_csharp = false;
 		bool detected_godotsteam_usage = false;
 		String non_standard_header;
+		String loaded_assembly_name;
 		String assembly_path;
 		Ref<GodotMonoDecompWrapper> decompiler;
 		String assembly_temp_dir;
@@ -175,6 +176,10 @@ private:
 	void _get_app_version();
 
 	Error _load_obdb_resources();
+
+	String get_dotnet_assembly_name_from_settings() const;
+
+	String find_dotnet_assembly_path(const String &p_assembly_name, Vector<String> p_search_dirs) const;
 
 protected:
 	static void _bind_methods();
@@ -384,7 +389,6 @@ public:
 	// In case we had to copy the .mono folder to a temporary directory
 	// Used by the GUI to determine if we should display the Assembly picker
 	String get_temp_dotnet_assembly_dir() const;
-	String find_dotnet_assembly_path(Vector<String> p_search_dirs) const;
 
 	Ref<GodotMonoDecompWrapper> get_dotnet_decompiler() const;
 

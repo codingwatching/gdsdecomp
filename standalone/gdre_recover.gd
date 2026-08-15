@@ -658,10 +658,7 @@ func set_assembly_good(good: bool) -> void:
 
 
 func _on_assembly_button_pressed() -> void:
-	var assembly_name = GDRESettings.get_project_dotnet_assembly_name()
 	var filter = "*.dll"
-	if !assembly_name.is_empty():
-		filter = assembly_name + ".dll"
 	var assembly_dir = %Assembly.text.get_base_dir()
 	if assembly_dir.is_empty():
 		assembly_dir = GDRESettings.get_pack_path().get_base_dir()
