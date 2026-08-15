@@ -51,7 +51,7 @@ public class GetFieldInitializerValueVisitor : DepthFirstAstVisitor
 		if (targetMember is IProperty property && Equals(propertyDeclaration.GetSymbol(), property))
 		{
 			var initializer = propertyDeclaration.Initializer;
-			if (!(initializer == null || initializer == Expression.Null))
+			if (initializer != null)
 			{
 				strVal = GetInitializerValue(initializer);
 			}
@@ -74,7 +74,7 @@ public class GetFieldInitializerValueVisitor : DepthFirstAstVisitor
 	public string? GetInitializerValue(Expression initializer)
 	{
 		string? value = null;
-		if (initializer == null || initializer == Expression.Null)
+		if (initializer == null)
 		{
 			return null;
 		}
