@@ -1716,7 +1716,7 @@ public class LiftCollectionInitializers : DepthFirstAstVisitor, IAstTransform
 			}
 		}
 
-		if (!constructorInitializer.IsNull
+		if (constructorInitializer is not null
 			&& constructorInitializer.Descendants.OfType<IdentifierExpression>()
 				.Any(id => string.Equals(id.Identifier, identifier, StringComparison.Ordinal)))
 		{
