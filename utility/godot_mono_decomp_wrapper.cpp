@@ -52,6 +52,7 @@ Error GodotMonoDecompWrapper::_load(const String &p_assembly_path, const Vector<
 			p_settings.RemoveGeneratedJsonContextBody,
 			p_settings.EnableCollectionInitializerLifting,
 			p_settings.EmitILAnnotationComments,
+			p_settings.AutomaticallySearchWorkshopDependencies,
 			(LanguageVersion)p_settings.OverrideLanguageVersion);
 	delete[] originalProjectFiles_c_array;
 	if (new_decompiler_handle == nullptr) {
@@ -331,6 +332,7 @@ bool GodotMonoDecompWrapper::GodotMonoDecompSettings::operator==(const GodotMono
 			RemoveGeneratedJsonContextBody == p_other.RemoveGeneratedJsonContextBody &&
 			EnableCollectionInitializerLifting == p_other.EnableCollectionInitializerLifting &&
 			EmitILAnnotationComments == p_other.EmitILAnnotationComments &&
+			AutomaticallySearchWorkshopDependencies == p_other.AutomaticallySearchWorkshopDependencies &&
 			OverrideLanguageVersion == p_other.OverrideLanguageVersion &&
 			GodotVersionOverride == p_other.GodotVersionOverride;
 }

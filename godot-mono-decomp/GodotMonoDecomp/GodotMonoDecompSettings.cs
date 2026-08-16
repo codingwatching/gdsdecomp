@@ -56,6 +56,11 @@ public class GodotMonoDecompSettings : DecompilerSettings
 	/// </summary>
 	public bool EmitILAnnotationComments { get; set; } = false;
 
+	/// <summary>
+	/// Whether to automatically search for additional assembly search paths for Steam workshop modules.
+	/// </summary>
+	public bool AutomaticallySearchWorkshopDependencies { get; set; } = true;
+
 	private void InitializeDefaultSettings()
 	{
 		UseNestedDirectoriesForNamespaces = true;
@@ -86,6 +91,7 @@ public class GodotMonoDecompSettings : DecompilerSettings
 		settings.RemoveGeneratedJsonContextBody = RemoveGeneratedJsonContextBody;
 		settings.EnableCollectionInitializerLifting = EnableCollectionInitializerLifting;
 		settings.EmitILAnnotationComments = EmitILAnnotationComments;
+		settings.AutomaticallySearchWorkshopDependencies = AutomaticallySearchWorkshopDependencies;
 		return settings;
 	}
 

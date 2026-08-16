@@ -344,6 +344,12 @@ HashMap<String, Ref<GDREConfigSetting>> GDREConfig::_init_default_settings() {
 				"Compile the C# project after decompiling.\nThis is done to prevent editor errors when first opening the project in the editor.\nThis requires that you have the dotnet sdk installed.",
 				true,
 				false)),
+		memnew(GDREConfigSetting(
+				"CSharp/automatically_search_workshop_dependencies",
+				"Automatically find search paths for Steam workshop modules",
+				"Automatically find additional assembly search paths for Steam workshop modules.",
+				true,
+				false)),
 #endif
 		memnew(GDREConfigSetting(
 				"Exporter/GDExtension/make_editor_copy",

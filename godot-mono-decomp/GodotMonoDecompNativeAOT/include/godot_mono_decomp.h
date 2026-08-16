@@ -55,6 +55,7 @@ void* GodotMonoDecomp_CreateGodotModuleDecompiler(
 	bool removeGeneratedJsonContextBody,
 	bool enableCollectionInitializerLifting,
 	bool emitILAnnotationComments,
+	bool automaticallySearchWorkshopDependencies,
 	LanguageVersion OverrideLanguageVersion
 );
 

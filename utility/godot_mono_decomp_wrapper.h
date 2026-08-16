@@ -33,6 +33,7 @@ public:
 		bool EnableCollectionInitializerLifting = true;
 		bool EmitILAnnotationComments = false;
 		int OverrideLanguageVersion = 0;
+		bool AutomaticallySearchWorkshopDependencies = true;
 		String GodotVersionOverride;
 		static GodotMonoDecompSettings get_default_settings();
 		// override operator ==

@@ -220,7 +220,7 @@ public class GodotModuleDecompiler
 		{
 			AssemblyResolver.AddSearchDirectory(path);
 		}
-		if (SteamHelpers.IsAssemblyPathInWorkshopFolder(assemblyPath))
+		if (settings!.AutomaticallySearchWorkshopDependencies && SteamHelpers.IsAssemblyPathInWorkshopFolder(assemblyPath))
 		{
 			foreach (var path in SteamHelpers.GetAdditionalAssemblySearchPathsForWorkshopModule(mod, ReferencePaths ?? []))
 			{
