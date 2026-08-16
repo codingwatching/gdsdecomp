@@ -2984,7 +2984,7 @@ Error GDRESettings::reload_dotnet_assembly(const String &p_path) {
 	Vector<String> originalProjectFiles = get_file_list({ "*.cs" });
 	GodotMonoDecompWrapper::GodotMonoDecompSettings settings = GodotMonoDecompWrapper::GodotMonoDecompSettings::get_default_settings();
 	settings.GodotVersionOverride = current_project->version.is_valid() ? current_project->version->as_text() : "";
-	Ref<GodotMonoDecompWrapper> decompiler = GodotMonoDecompWrapper::create(current_project->assembly_path, originalProjectFiles, { current_project->assembly_path.get_base_dir() }, settings);
+	Ref<GodotMonoDecompWrapper> decompiler = GodotMonoDecompWrapper::create(current_project->assembly_path, originalProjectFiles, settings);
 	ERR_FAIL_COND_V_MSG(decompiler.is_null(), ERR_CANT_CREATE, "Failed to load assembly " + current_project->assembly_path + " (Not a valid .NET assembly?)");
 	current_project->decompiler = decompiler;
 	current_project->loaded_assembly_name = p_path.get_file().get_basename();
