@@ -220,6 +220,13 @@ public class GodotModuleDecompiler
 		{
 			AssemblyResolver.AddSearchDirectory(path);
 		}
+		if (settings!.AutomaticallySearchWorkshopDependencies && SteamHelpers.IsAssemblyPathInWorkshopFolder(assemblyPath))
+		{
+			foreach (var path in SteamHelpers.GetAdditionalAssemblySearchPathsForWorkshopModule(mod, ReferencePaths ?? []))
+			{
+				AssemblyResolver.AddSearchDirectory(path);
+			}
+		}
 		MainModule = new GodotModule(mod, _mainDepInfo, null, Settings, AssemblyResolver);
 		CustomVersionDetected = DetectCustomVersionFromPrerelease(_mainDepInfo);
 
@@ -243,7 +250,7 @@ public class GodotModuleDecompiler
 				.Select(p => Path.GetDirectoryName(p)!)
 				.ToHashSet();
 
-			HashSet<string> otherSubDirs = this.originalProjectFiles?.Select(path => Path.GetDirectoryName(path) ?? "").Where(p => !string.IsNullOrEmpty(p) && !mainModuleSubDirs.Contains(p)).ToHashSet() ?? [];
+			HashSet<string> otherSubDirs = this.originalProjectFiles.Select(path => Path.GetDirectoryName(path) ?? "").Where(p => !string.IsNullOrEmpty(p) && !mainModuleSubDirs.Contains(p)).ToHashSet() ?? [];
 
 			AddSubProjects(assemblyPath, MainModule.depInfo, names, mainModuleSubDirs, otherSubDirs);
 

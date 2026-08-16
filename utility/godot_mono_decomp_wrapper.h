@@ -33,6 +33,8 @@ public:
 		bool EnableCollectionInitializerLifting = true;
 		bool EmitILAnnotationComments = false;
 		int OverrideLanguageVersion = 0;
+		bool AutomaticallySearchWorkshopDependencies = true;
+		Vector<String> AdditionalAssemblySearchPaths;
 		String GodotVersionOverride;
 		static GodotMonoDecompSettings get_default_settings();
 		// override operator ==
@@ -40,7 +42,7 @@ public:
 		bool operator!=(const GodotMonoDecompSettings &p_other) const;
 	};
 
-	static Ref<GodotMonoDecompWrapper> create(const String &assemblyPath, const Vector<String> &originalProjectFiles, const Vector<String> &assemblyReferenceDirs, const GodotMonoDecompSettings &settings);
+	static Ref<GodotMonoDecompWrapper> create(const String &assemblyPath, const Vector<String> &originalProjectFiles, const GodotMonoDecompSettings &settings);
 	static Dictionary get_language_versions();
 
 	bool is_valid() const;
@@ -60,11 +62,10 @@ public:
 	~GodotMonoDecompWrapper();
 
 private:
-	Error _load(const String &assemblyPath, const Vector<String> &originalProjectFiles, const Vector<String> &assemblyReferenceDirs, const GodotMonoDecompSettings &settings);
+	Error _load(const String &assemblyPath, const Vector<String> &originalProjectFiles, const GodotMonoDecompSettings &settings);
 
 	GodotMonoDecompSettings settings;
 	String assembly_path;
 	void *decompilerHandle = nullptr;
 	Vector<String> originalProjectFiles;
-	Vector<String> assemblyReferenceDirs;
 };

@@ -63,6 +63,8 @@ public static class Common
 		}
 		// .NET
 		switch (verMajor){
+			case 11:
+				return LanguageVersion.CSharp15_0;
 			case 10:
 				return LanguageVersion.CSharp14_0;
 			case 9:
@@ -77,8 +79,8 @@ public static class Common
 				return LanguageVersion.CSharp9_0;
 			default:
 			{
-				if (verMajor > 10){
-					return LanguageVersion.CSharp14_0;
+				if (verMajor > 11) {
+					return LanguageVersion.Latest;
 				}
 			}
 				return LanguageVersion.CSharp7_3;

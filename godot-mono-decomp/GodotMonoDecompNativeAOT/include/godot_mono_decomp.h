@@ -27,6 +27,9 @@ LANG_VER_CSharp10_0 = 1000,
 LANG_VER_CSharp11_0 = 1100,
 LANG_VER_Preview = 1100,
 LANG_VER_CSharp12_0 = 1200,
+LANG_VER_CSharp13_0 = 1300,
+LANG_VER_CSharp14_0 = 1400,
+LANG_VER_CSharp15_0 = 1500,
 LANG_VER_Latest = 0x7FFFFFFF
 } LanguageVersion;
 
@@ -55,6 +58,7 @@ void* GodotMonoDecomp_CreateGodotModuleDecompiler(
 	bool removeGeneratedJsonContextBody,
 	bool enableCollectionInitializerLifting,
 	bool emitILAnnotationComments,
+	bool automaticallySearchWorkshopDependencies,
 	LanguageVersion OverrideLanguageVersion
 );
 

@@ -268,6 +268,15 @@ func create_setting_button(setting: GDREConfigSetting) -> Control:
 		label.tooltip_text = setting.get_description()
 		control = make_button_hbox(setting, button, label)
 		button.text_changed.connect(func(val): setting_callback(setting, val, control))
+	elif setting.get_type() == TYPE_PACKED_STRING_ARRAY: # TODO: better handling of this, right now we require the user to input a semicolon-separated list of items
+		button = LineEdit.new()
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.custom_minimum_size = Vector2i(80,0)
+		button.text = ';'.join(value)
+		var label: Label = make_button_label(setting.get_brief_description())
+		label.tooltip_text = 'Seperate items with a semicolon (;).\n' + setting.get_description()
+		control = make_button_hbox(setting, button, label)
+		button.text_changed.connect(func(val): setting_callback(setting, val.split(";"), control))
 
 	button.tooltip_text = setting.get_description()
 	control.tooltip_text = setting.get_description()

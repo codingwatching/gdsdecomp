@@ -70,6 +70,7 @@ static public class Lib
 		bool removeGeneratedJsonContextBody,
 		bool enableCollectionInitializerLifting,
 		bool emitILAnnotationComments,
+		bool automaticallySearchWorkshopDependencies,
 		int OverrideLanguageVersion
 	)
 	{
@@ -86,6 +87,7 @@ static public class Lib
 			RemoveGeneratedJsonContextBody = removeGeneratedJsonContextBody,
 			EnableCollectionInitializerLifting = enableCollectionInitializerLifting,
 			EmitILAnnotationComments = emitILAnnotationComments,
+			AutomaticallySearchWorkshopDependencies = automaticallySearchWorkshopDependencies,
 			OverrideLanguageVersion = OverrideLanguageVersion == 0 ? null : (LanguageVersion)OverrideLanguageVersion,
 			GodotVersionOverride = godotVersionOverrideStr == null ? null : GodotStuff.ParseGodotVersionFromString(godotVersionOverrideStr)
 		};
